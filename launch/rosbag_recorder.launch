@@ -1,0 +1,16 @@
+<launch>
+  <node name="rosbag_recorder"
+    pkg="rosbag" type="record"
+    args="-b 0
+    /ublox/fix
+    /Odometry
+    /Odometry_precede
+    /elevation_mapping/elevation_map_raw
+    /tf
+    /tf_static
+    /jaguar_log
+    /joint_states
+    " output="screen">
+  </node>
+
+</launch>

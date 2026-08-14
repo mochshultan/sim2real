@@ -1,0 +1,4 @@
+<launch>
+  <node name="PublishSimpleGridMap" pkg="jaguar" type="PublishSimpleGridMap" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find jaguar)/config/simple_grid.rviz" />
+</launch>

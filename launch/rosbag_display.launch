@@ -1,0 +1,6 @@
+<launch>
+  <arg name="model" default="jaguar_livox" />
+  <param name="robot_description" textfile="$(find jaguar)/models/$(arg model).urdf" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find jaguar)/config/jaguar_display_livox.rviz" />
+</launch>

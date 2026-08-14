@@ -1,0 +1,31 @@
+<launch>
+  <arg name="model" default="jaguar_livox" />
+  <param name="robot_description" textfile="$(find jaguar)/models/$(arg model).urdf" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+  <include file="$(find jaguar)/launch/msg_MID360.launch">
+    <arg name="multi_topic" default="1"/>
+  </include>
+
+  <node name="imu_filter" pkg="imu_filter_madgwick" type="imu_filter_node" output="screen">
+    <param name="use_mag" value="False"/>
+    <remap from="imu/data_raw" to="/livox/imu_192_168_1_192"/>
+    <remap from="imu/data" to="/livox/imu_filtered"/>
+  </node>
+
+  <node name="livox_imu_transform" pkg="jaguar" type="livox_imu_transform.py" output="screen"/>
+
+  <node name="ps4joy_node" pkg="joy" type="joy_node" output="screen">
+    <remap from="joy" to="ps4joy/joy"/>
+  </node>
+
+  <node pkg="usb_cam" type="usb_cam_node" name="c1_camera" output="screen">
+    <param name="video_device" value="/dev/video0"/>
+    <param name="pixel_format" value="uyvy"/>
+    <param name="image_width" value="1920"/>
+    <param name="image_height" value="1080"/>
+    <param name="camera_name" value="c1_camera"/>
+    <param name="camera_frame_id" value="c1_camera"/>
+    <param name="camera_info_url" value="package://jaguar/config/c1_camera_info.yaml"/>
+  </node>
+</launch>

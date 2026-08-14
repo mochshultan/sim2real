@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<launch>
+  <include file="$(find ublox_gps)/launch/ublox_device.launch">
+    <arg name="node_name" value="ublox"/>
+    <arg name="param_file_name" value="zed_f9r_rover"/>
+  </include>
+
+  <include file="$(find ntrip_client)/launch/ntrip_client.launch">
+    <arg name="host" value="160.16.134.72"/>
+    <arg name="mountpoint" value="CQ-F9P"/>
+    <arg name="port" value="80"/>
+    <arg name="username" value="guest"/>
+    <arg name="password" value="guest"/>
+  </include>
+</launch>

@@ -1,0 +1,91 @@
+<mujoco model="jaguar">
+  <compiler angle="radian"/>
+  <asset>
+    <mesh name="base_link" file="meshes/base_link.STL"/>
+    <mesh name="FR_scapula_link" file="meshes/FR_scapula_link.STL"/>
+    <mesh name="FR_thigh_link" file="meshes/FR_thigh_link.STL"/>
+    <mesh name="FR_calf_link" file="meshes/FR_calf_link.STL"/>
+    <mesh name="FL_scapula_link" file="meshes/FL_scapula_link.STL"/>
+    <mesh name="FL_thigh_link" file="meshes/FL_thigh_link.STL"/>
+    <mesh name="FL_calf_link" file="meshes/FL_calf_link.STL"/>
+    <mesh name="BR_scapula_link" file="meshes/BR_scapula_link.STL"/>
+    <mesh name="BR_thigh_link" file="meshes/BR_thigh_link.STL"/>
+    <mesh name="BR_calf_link" file="meshes/BR_calf_link.STL"/>
+    <mesh name="BL_scapula_link" file="meshes/BL_scapula_link.STL"/>
+    <mesh name="BL_thigh_link" file="meshes/BL_thigh_link.STL"/>
+    <mesh name="BL_calf_link" file="meshes/BL_calf_link.STL"/>
+  </asset>
+  <worldbody>
+    <body name="base_link" pos="0.0 -0.0 1.0">
+      <!-- inertial pos="0.016596 0.0 0.0549872" (original) -->
+      <inertial pos="0.056596 0.0 0.0549872" quat="-0.000645814 0.719334 0.000786826 0.694663" mass="9.62592" diaginertia="0.0412828 0.027749 0.0238199"/>
+      <joint name="base_joint" type="free" limited="false" actuatorfrclimited="false"/>
+      <geom name= "base_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="base_link"/>
+      <site name="base_link"/>
+      <body name="FR_scapula_link" pos="0.203 -0.08 0.062">
+        <inertial pos="0.0597359 0.0085161 4.73197e-05" quat="0.684959 0.00540285 0.00581096 0.728539" mass="1.10756" diaginertia="0.00163307 0.000949242 0.000884778"/>
+        <joint name="FR_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+        <geom name="FR_collar_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="FR_scapula_link"/>
+        <body name="FR_thigh_link" pos="0.0625 -0.016 0">
+          <inertial pos="-0.00546147 -0.0529512 -0.0482987" quat="0.706612 0.0197847 0.019635 0.707052" mass="1.82654" diaginertia="0.00887979 0.00775011 0.0012952"/>
+          <joint name="FR_hip_joint" pos="0 0 0" axis="0 1 0" range="-1.0472 2.618" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+          <geom name="FR_thigh_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="FR_thigh_link"/>
+          <body name="FR_calf_link" pos="0 -0.077 -0.3">
+            <inertial pos="0.00531537 -4.42106e-06 -0.172226" quat="0.707358 0.00441729 0.0044229 0.706827" mass="0.386052" diaginertia="0.00383849 0.00382331 9.99145e-05"/>
+            <joint name="FR_knee_joint" pos="0 0 0" axis="0 1 0" range="-2.8508 -0.7812" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+            <geom name="FR_calf_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="FR_calf_link"/>
+            <geom name="FR_foot_link" size="0.031" pos="0.00263 0 -0.285"/>
+          </body>
+        </body>
+      </body>
+      <body name="FL_scapula_link" pos="0.203 0.08 0.062">
+        <inertial pos="0.0597359 -0.0085161 -4.73197e-05" quat="0.728539 -0.00581096 -0.00540285 0.684959" mass="1.10756" diaginertia="0.00163307 0.000949242 0.000884778"/>
+        <joint name="FL_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+        <geom name="FL_scapula_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="FL_scapula_link"/>
+        <body name="FL_thigh_link" pos="0.0625 0.016 0">
+          <inertial pos="-0.00546147 0.0529459 -0.0482413" quat="0.707051 0.0195003 0.0196257 0.706621" mass="1.82654" diaginertia="0.00887979 0.00774981 0.0012955"/>
+          <joint name="FL_hip_joint" pos="0 0 0" axis="0 1 0" range="-1.0472 2.618" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+          <geom name="FL_thigh_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="FL_thigh_link"/>
+          <body name="FL_calf_link" pos="0 0.077 -0.3">
+            <inertial pos="0.00531537 -4.42106e-06 -0.172226" quat="0.707358 0.00441729 0.0044229 0.706827" mass="0.386052" diaginertia="0.00383849 0.00382331 9.99145e-05"/>
+            <joint name="FL_knee_joint" pos="0 0 0" axis="0 1 0" range="-2.8508 -0.7812" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+            <geom name="FL_calf_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="FL_calf_link"/>
+            <geom name="FL_foot_link" size="0.031" pos="0.00263 0 -0.285"/>
+          </body>
+        </body>
+      </body>
+      <body name="BR_scapula_link" pos="-0.203 -0.08 0.062">
+        <inertial pos="-0.0597359 0.0085161 -4.73197e-05" quat="0.728539 0.00581096 0.00540285 0.684959" mass="1.10756" diaginertia="0.00163307 0.000949242 0.000884778"/>
+        <joint name="BR_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+        <geom name="BR_scapula_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="BR_scapula_link"/>
+        <body name="BR_thigh_link" pos="-0.0625 -0.016 0">
+          <inertial pos="-0.0054815 -0.0529628 -0.0487439" quat="0.707118 0.0197255 0.0196943 0.706546" mass="1.82654" diaginertia="0.00887979 0.00775011 0.0012952"/>
+          <joint name="BR_hip_joint" pos="0 0 0" axis="0 1 0" range="-1.0472 2.618" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+          <geom name="BR_thigh_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="BR_thigh_link"/>
+          <body name="BR_calf_link" pos="0 -0.077 -0.3">
+            <inertial pos="0.00531537 -4.42106e-06 -0.172226" quat="0.707358 0.00441729 0.0044229 0.706827" mass="0.386052" diaginertia="0.00383849 0.00382331 9.99145e-05"/>
+            <joint name="BR_knee_joint" pos="0 0 0" axis="0 1 0" range="-2.8508 -0.7812" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+            <geom name="BR_calf_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="BR_calf_link"/>
+            <geom name="BR_foot_link" size="0.031" pos="0.00263 0 -0.285"/>
+          </body>
+        </body>
+      </body>
+      <body name="BL_scapula_link" pos="-0.203 0.08 0.062">
+        <inertial pos="-0.0597327 -0.0085161 4.73197e-05" quat="0.684959 -0.00540285 -0.00581096 0.728539" mass="1.10756" diaginertia="0.00163307 0.000949242 0.000884778"/>
+        <joint name="BL_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+        <geom name="BL_scapula_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="BL_scapula_link"/>
+        <body name="BL_thigh_link" pos="-0.0625 0.016 0">
+          <inertial pos="-0.00546147 0.0529551 -0.0487439" quat="0.707038 0.0195379 0.0195882 0.706634" mass="1.82654" diaginertia="0.00887979 0.00774981 0.0012955"/>
+          <joint name="BL_hip_joint" pos="0 0 0" axis="0 1 0" range="-1.0472 2.618" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+          <geom name="BL_thigh_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="BL_thigh_link"/>
+          <body name="BL_calf_link" pos="0 0.077 -0.3">
+            <inertial pos="0.00531537 -4.42106e-06 -0.172226" quat="0.707358 0.00441729 0.0044229 0.706827" mass="0.386052" diaginertia="0.00383849 0.00382331 9.99145e-05"/>
+            <joint name="BL_knee_joint" pos="0 0 0" axis="0 1 0" range="-2.8508 -0.7812" actuatorfrcrange="-60 60" armature="2.0e-2"/>
+            <geom name="BL_calf_link" type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="BL_calf_link"/>
+            <geom name="BL_foot_link" size="0.031" pos="0.00263 0 -0.285"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
