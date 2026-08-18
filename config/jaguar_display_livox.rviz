@@ -62,42 +62,32 @@ Visualization Manager:
       Enabled: true
       Links:
         All Links Enabled: true
-        BL_calf_link:
+        Bl_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BL_foot_link:
+        Bl_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BL_scapula_link:
+        Bl_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BL_thigh_link:
+        Br_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BR_calf_link:
+        Br_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BR_foot_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        BR_scapula_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        BR_thigh_link:
+        Br_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -105,42 +95,32 @@ Visualization Manager:
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
-        FL_calf_link:
+        Fl_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FL_foot_link:
+        Fl_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FL_scapula_link:
+        Fl_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FL_thigh_link:
+        Fr_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FR_calf_link:
+        Fr_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FR_foot_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        FR_scapula_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        FR_thigh_link:
+        Fr_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false

@@ -1,0 +1,103 @@
+Mass properties of Base_body
+     Configuration: Default
+     Coordinate system: Coordinate System1
+
+Density = 2700.000000 kilograms per cubic meter
+
+Mass = 5.268777 kilograms
+
+Volume = 0.001951 cubic meters
+
+Surface area = 0.694700 square meters
+
+Center of mass: ( meters )
+	X = 0.055662
+	Y = 0.002236
+	Z = 0.072783
+
+Principal axes of inertia and principal moments of inertia: ( kilograms * square meters )
+Taken at the center of mass.
+	 Ix = ( 0.997840, -0.015929,  0.063730)   	Px = 0.034072
+	 Iy = ( 0.016400,  0.999842, -0.006872)   	Py = 0.102447
+	 Iz = (-0.063610,  0.007903,  0.997944)   	Pz = 0.119056
+
+Moments of inertia: ( kilograms * square meters )
+Taken at the center of mass and aligned with the output coordinate system.
+	Lxx = 0.034434	Lxy = -0.001078	Lxz = 0.005402
+	Lyx = -0.001078	Lyy = 0.102430	Lyz = -0.000200
+	Lzx = 0.005402	Lzy = -0.000200	Lzz = 0.118710
+
+Moments of inertia: ( kilograms * square meters )
+Taken at the output coordinate system.
+	Ixx = 0.062371	Ixy = -0.000423	Ixz = 0.026747
+	Iyx = -0.000423	Iyy = 0.146665	Iyz = 0.000657
+	Izx = 0.026747	Izy = 0.000657	Izz = 0.135060
+
+
+
+Mass properties of Fr_coxa_roll
+     Configuration: Default
+     Coordinate system: Coordinate System1
+
+Mass (user-overridden) = 0.353000 kilograms
+
+Volume = 0.000070 cubic meters
+
+Surface area = 0.049708 square meters
+
+Center of mass: ( meters )
+	X = -0.010910
+	Y = 0.008379
+	Z = -0.000082
+
+Principal axes of inertia and principal moments of inertia: ( kilograms * square meters )
+Taken at the center of mass.
+	 Ix = ( 0.888314,  0.459129, -0.009919)   	Px = 0.000178
+	 Iy = (-0.458908,  0.888289,  0.018585)   	Py = 0.000308
+	 Iz = ( 0.017343, -0.011957,  0.999778)   	Pz = 0.000318
+
+Moments of inertia: ( kilograms * square meters )
+Taken at the center of mass and aligned with the output coordinate system.
+	Lxx = 0.000205	Lxy = 0.000053	Lxz = -0.000001
+	Lyx = 0.000053	Lyy = 0.000280	Lyz = 0.000000
+	Lzx = -0.000001	Lzy = 0.000000	Lzz = 0.000318
+
+Moments of inertia: ( kilograms * square meters )
+Taken at the output coordinate system.
+	Ixx = 0.000230	Ixy = 0.000021	Ixz = -0.000001
+	Iyx = 0.000021	Iyy = 0.000322	Iyz = -0.000001
+	Izx = -0.000001	Izy = -0.000001	Izz = 0.000385
+
+Mass properties of Fr_hip_pitch
+     Configuration: Default
+     Coordinate system: Coordinate System1
+
+Mass (user-overridden) = 0.650000 kilograms
+
+Volume = 0.000368 cubic meters
+
+Surface area = 0.154321 square meters
+
+Center of mass: ( meters )
+	X = -0.035579
+	Y = -0.089273
+	Z = 0.026371
+
+Principal axes of inertia and principal moments of inertia: ( kilograms * square meters )
+Taken at the center of mass.
+	 Ix = ( 0.749118,  0.404131, -0.524881)   	Px = 0.001118
+	 Iy = (-0.346344,  0.914368,  0.209707)   	Py = 0.002835
+	 Iz = ( 0.564683,  0.024694,  0.824938)   	Pz = 0.003493
+
+Moments of inertia: ( kilograms * square meters )
+Taken at the center of mass and aligned with the output coordinate system.
+	Lxx = 0.002081	Lxy = 0.000511	Lxz = -0.000982
+	Lyx = 0.000511	Lyy = 0.002555	Lyz = -0.000378
+	Lzx = -0.000982	Lzy = -0.000378	Lzz = 0.002809
+
+Moments of inertia: ( kilograms * square meters )
+Taken at the output coordinate system.
+	Ixx = 0.007713	Ixy = 0.002575	Ixz = -0.001591
+	Iyx = 0.002575	Iyy = 0.003829	Iyz = -0.001908
+	Izx = -0.001591	Izy = -0.001908	Izz = 0.008812
+

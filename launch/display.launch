@@ -1,5 +1,5 @@
 <launch>
-  <arg name="model" default="jaguar_dae" />
+  <arg name="model" default="nxp_jaguar" />
   <arg name="gui" default="false" />
 
   <param name="robot_description" textfile="$(find jaguar)/models/$(arg model).urdf" />

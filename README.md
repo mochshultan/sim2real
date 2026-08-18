@@ -14,6 +14,7 @@ Framework lengkap untuk deployment model kontrol Reinforcement Learning (RL) has
 6. [Konfigurasi & Panduan Joystick (Hardware & Virtual)](#6-konfigurasi--panduan-joystick-hardware--virtual)
 7. [SOP Prosedur Deployment Hardware (Langkah Demi Langkah)](#7-sop-prosedur-deployment-hardware-langkah-demi-langkah)
 8. [Fitur Keselamatan & E-Stop](#8-fitur-keselamatan--e-stop)
+9. [Validasi & Visualisasi MuJoCo Sim-to-Sim](#9-validasi--visualisasi-mujoco-sim-to-sim)
 
 ---
 
@@ -225,3 +226,32 @@ python3 scripts/nxp_jaguar_controller.py
    - Jika sinyal IMU atau CAN terputus, controller otomatis menghentikan aksi.
 3. **Pemeriksaan Overheat**:
    - Jika suhu motor melebihi **$75^\circ\text{C}$**, sistem akan mencetak peringatan darurat.
+
+---
+
+## 9. Validasi & Visualisasi MuJoCo Sim-to-Sim
+
+Framework ini menyertakan simulator independen berbasis **MuJoCo** untuk memverifikasi model kontrol RL sebelum dijalankan di hardware fisik.
+
+### 🎮 Fitur Sim-to-Sim MuJoCo:
+- **Model 3D NXP Jaguar Autentik**: Menggunakan geometri CAD STL asli (`Base_body.STL`, `*_coxa_roll.STL`, `*_hip_pitch.STL`, `*_tibia_pitch.STL`).
+- **4 Pilihan Medan (*Terrain*)**: `flat` (datar), `rough` (bergelombang natural), `stairs` (tangga piramida), dan `obstacles` (batu pijakan).
+- **Auto-Follow Camera**: Kamera 3D viewer otomatis mengikuti robot ke mana pun berjalan.
+- **Kontrol Keyboard Non-Blocking & Gamepad**:
+  - `1` $\rightarrow$ Standby / Folded Pose
+  - `2` $\rightarrow$ Minimum-Jerk Standup Trajectory (2.0 detik)
+  - `3` $\rightarrow$ Walk Mode (RL Policy Active)
+  - `W` / `S` $\rightarrow$ Maju / Mundur ($v_x$)
+  - `A` / `D` $\rightarrow$ Geser Kiri / Kanan ($v_y$)
+  - `Q` / `E` $\rightarrow$ Putar Kiri / Kanan ($\omega_z$)
+  - `SPACE` $\rightarrow$ Stop Kecepatan ($v_x=0, v_y=0, \omega_z=0$)
+
+### 🚀 Cara Menjalankan:
+```bash
+# Opsi 1: Direct Python Runner
+python3 sim2sim/sim2sim_mujoco.py --terrain flat
+python3 sim2sim/sim2sim_mujoco.py --terrain rough
+
+# Opsi 2: Menggunakan ROS 2 Launch
+ros2 launch jaguar_control sim2sim_mujoco.launch.py terrain:=flat
+```

@@ -68,7 +68,7 @@ class RobotCommand:
 class Jaguar:
     def __init__(self):
         self.xml_fullpath = os.path.abspath('models/scene.xml')
-        self.urdf_fullpath = os.path.abspath('models/jaguar_dae.urdf')
+        self.urdf_fullpath = os.path.abspath('models/nxp_jaguar.urdf')
         self.joint_params = jaguar_utils.get_urdf_joint_params(self.urdf_fullpath, P.JOINT_NAME)
 
         self.main_thread = None

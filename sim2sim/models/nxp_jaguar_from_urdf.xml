@@ -1,0 +1,83 @@
+<mujoco model="NXP_Jaguar">
+  <compiler angle="radian"/>
+
+  <asset>
+    <mesh name="Base_body" content_type="model/stl" file="../meshes/Base_body.STL"/>
+    <mesh name="Fr_coxa_roll" content_type="model/stl" file="../meshes/Fr_coxa_roll.STL"/>
+    <mesh name="Fr_hip_pitch" content_type="model/stl" file="../meshes/Fr_hip_pitch.STL"/>
+    <mesh name="Fr_tibia_pitch" content_type="model/stl" file="../meshes/Fr_tibia_pitch.STL"/>
+    <mesh name="Fl_coxa_roll" content_type="model/stl" file="../meshes/Fl_coxa_roll.STL"/>
+    <mesh name="Fl_hip_pitch" content_type="model/stl" file="../meshes/Fl_hip_pitch.STL"/>
+    <mesh name="Fl_tibia_pitch" content_type="model/stl" file="../meshes/Fl_tibia_pitch.STL"/>
+    <mesh name="Br_coxa_roll" content_type="model/stl" file="../meshes/Br_coxa_roll.STL"/>
+    <mesh name="Br_hip_pitch" content_type="model/stl" file="../meshes/Br_hip_pitch.STL"/>
+    <mesh name="Br_tibia_pitch" content_type="model/stl" file="../meshes/Br_tibia_pitch.STL"/>
+    <mesh name="Bl_coxa_roll" content_type="model/stl" file="../meshes/Bl_coxa_roll.STL"/>
+    <mesh name="Bl_hip_pitch" content_type="model/stl" file="../meshes/Bl_hip_pitch.STL"/>
+    <mesh name="Bl_tibia_pitch" content_type="model/stl" file="../meshes/Bl_tibia_pitch.STL"/>
+  </asset>
+
+  <worldbody>
+    <geom type="mesh" rgba="0.3 0.3 0.3 1" mesh="Base_body"/>
+    <body name="Fr_coxa_link" pos="0.14 -0.0722 0.0755">
+      <inertial pos="-0.04075 -0.01975 0" quat="0 0.707107 0 0.707107" mass="0.353" diaginertia="0.000359 0.000291 0.000259"/>
+      <joint name="Fr_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.4 0.4" actuatorfrcrange="-14 14"/>
+      <geom type="mesh" rgba="1 0.2 0.2 1" mesh="Fr_coxa_roll"/>
+      <body name="Fr_thigh_link" pos="0.053 -0.005 0">
+        <inertial pos="-0.035579 -0.089273 0.026371" quat="0 0.886328 0 0.463058" mass="0.65" diaginertia="0.00349229 0.002555 0.00139771"/>
+        <joint name="Fr_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-3.14 3.14" actuatorfrcrange="-14 14"/>
+        <geom type="mesh" rgba="0.7 0 0 1" mesh="Fr_hip_pitch"/>
+        <body name="Fr_tibia_link" pos="-0.157 -0.0935 0.088">
+          <inertial pos="0.060866 -0.017421 -0.080173" quat="0.666658 -0.235727 -0.235727 0.666658" mass="0.18" diaginertia="0.000726 0.000718529 4.14708e-05"/>
+          <joint name="Fr_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-14 14"/>
+          <geom type="mesh" rgba="1 0.6 0.6 1" mesh="Fr_tibia_pitch"/>
+        </body>
+      </body>
+    </body>
+    <body name="Fl_coxa_link" pos="0.14 0.0722 0.0755">
+      <inertial pos="-0.04075 -0.01975 0" quat="0 0.707107 0 0.707107" mass="0.353" diaginertia="0.000309 0.000275 0.0002"/>
+      <joint name="Fl_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.4 0.4" actuatorfrcrange="-14 14"/>
+      <geom type="mesh" rgba="0.2 1 0.2 1" mesh="Fl_coxa_roll"/>
+      <body name="Fl_thigh_link" pos="0.053 -0.005 0">
+        <inertial pos="-0.035334 0.08886 0.026193" quat="0 0.886484 0 0.46276" mass="0.65" diaginertia="0.00347027 0.002547 0.00137673"/>
+        <joint name="Fl_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-3.14 3.14" actuatorfrcrange="-14 14"/>
+        <geom type="mesh" rgba="0 0.7 0 1" mesh="Fl_hip_pitch"/>
+        <body name="Fl_tibia_link" pos="-0.157 0.0935 0.088">
+          <inertial pos="0.060954 0.017516 -0.080316" quat="0.666573 -0.235968 -0.235968 0.666573" mass="0.18" diaginertia="0.000726 0.000717925 4.10753e-05"/>
+          <joint name="Fl_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-14 14"/>
+          <geom type="mesh" rgba="0.6 1 0.6 1" mesh="Fl_tibia_pitch"/>
+        </body>
+      </body>
+    </body>
+    <body name="Br_coxa_link" pos="-0.14 -0.0722 0.0755">
+      <inertial pos="-0.04248 0.013241 -7.9e-05" quat="0 0.707107 0 0.707107" mass="0.353" diaginertia="0.000311 0.000302 0.000175"/>
+      <joint name="Br_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.4 0.4" actuatorfrcrange="-14 14"/>
+      <geom type="mesh" rgba="0.2 0.2 1 1" mesh="Br_coxa_roll"/>
+      <body name="Br_thigh_link" pos="-0.053 -0.005 0">
+        <inertial pos="-0.035579 -0.089273 0.026371" quat="0 0.886291 0 0.463128" mass="0.65" diaginertia="0.00347458 0.002545 0.00139042"/>
+        <joint name="Br_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-3.14 3.14" actuatorfrcrange="-14 14"/>
+        <geom type="mesh" rgba="0 0 0.7 1" mesh="Br_hip_pitch"/>
+        <body name="Br_tibia_link" pos="-0.157 -0.0935 0.088">
+          <inertial pos="0.060866 -0.017421 -0.080173" quat="0.666658 -0.235727 -0.235727 0.666658" mass="0.18" diaginertia="0.000726 0.000718529 4.14708e-05"/>
+          <joint name="Br_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-14 14"/>
+          <geom type="mesh" rgba="0.6 0.6 1 1" mesh="Br_tibia_pitch"/>
+        </body>
+      </body>
+    </body>
+    <body name="Bl_coxa_link" pos="-0.14 0.0722 0.0755">
+      <inertial pos="-0.042207 -0.013241 7.9e-05" quat="0 0.707107 0 0.707107" mass="0.353" diaginertia="0.000309 0.000275 0.0002"/>
+      <joint name="Bl_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.4 0.4" actuatorfrcrange="-14 14"/>
+      <geom type="mesh" rgba="1 1 0.2 1" mesh="Bl_coxa_roll"/>
+      <body name="Bl_thigh_link" pos="-0.053 -0.005 0">
+        <inertial pos="-0.035334 0.08886 0.026193" quat="0 0.886484 0 0.46276" mass="0.65" diaginertia="0.00347027 0.002547 0.00137673"/>
+        <joint name="Bl_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-3.14 3.14" actuatorfrcrange="-14 14"/>
+        <geom type="mesh" rgba="0.7 0.7 0 1" mesh="Bl_hip_pitch"/>
+        <body name="Bl_tibia_link" pos="-0.157 0.0935 0.088">
+          <inertial pos="0.060954 0.017516 -0.080316" quat="0.666573 -0.235968 -0.235968 0.666573" mass="0.18" diaginertia="0.000726 0.000717925 4.10753e-05"/>
+          <joint name="Bl_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-14 14"/>
+          <geom type="mesh" rgba="1 1 0.6 1" mesh="Bl_tibia_pitch"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

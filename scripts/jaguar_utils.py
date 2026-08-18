@@ -38,7 +38,7 @@ def get_urdf_joint_params(urdf_path, joint_names):
     return joint_params
 
 def test_get_urdf_joint_params():
-    urdf_fullpath = os.path.join(os.path.dirname(__file__), "../models/jaguar_dae.urdf")
+    urdf_fullpath = os.path.join(os.path.dirname(__file__), "../models/nxp_jaguar.urdf")
 
     joint_names = [
             'BL_collar_joint', 'BL_hip_joint', 'BL_knee_joint',

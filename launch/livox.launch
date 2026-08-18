@@ -1,5 +1,5 @@
 <launch>
-  <arg name="model" default="jaguar_livox" />
+  <arg name="model" default="nxp_jaguar" />
   <param name="robot_description" textfile="$(find jaguar)/models/$(arg model).urdf" />
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 

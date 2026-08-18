@@ -60,54 +60,54 @@ Visualization Manager:
       Links:
         All Links Enabled:
           {}
-        BL_calf_link:
+        Bl_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        BL_scapula_link:
+        Bl_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        BL_thigh_link:
+        Bl_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        BR_calf_link:
+        Br_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        BR_scapula_link:
+        Br_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        BR_thigh_link:
+        Br_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
-        FL_calf_link:
+        Fl_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        FL_scapula_link:
+        Fl_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        FL_thigh_link:
+        Fl_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        FR_calf_link:
+        Fr_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        FR_scapula_link:
+        Fr_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        FR_thigh_link:
+        Fr_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false

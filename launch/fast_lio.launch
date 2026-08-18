@@ -27,18 +27,18 @@
       self_see_default_padding: 0.04
       self_see_default_scale: 1.0
       self_see_links:
-      - name: FR_scapula_link
-      - name: FR_thigh_link
-      - name: FR_calf_link
-      - name: FL_scapula_link
-      - name: FL_thigh_link
-      - name: FL_calf_link
-      - name: BR_scapula_link
-      - name: BR_thigh_link
-      - name: BR_calf_link
-      - name: BL_scapula_link
-      - name: BL_thigh_link
-      - name: BL_calf_link
+      - name: Fr_coxa_link
+      - name: Fr_thigh_link
+      - name: Fr_tibia_link
+      - name: Fl_coxa_link
+      - name: Fl_thigh_link
+      - name: Fl_tibia_link
+      - name: Br_coxa_link
+      - name: Br_thigh_link
+      - name: Br_tibia_link
+      - name: Bl_coxa_link
+      - name: Bl_thigh_link
+      - name: Bl_tibia_link
     </rosparam>
   </node>
 

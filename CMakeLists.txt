@@ -28,11 +28,14 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install directories (config, launch, models)
+# Install directories (config, launch, models, urdf, meshes, sim2sim)
 install(DIRECTORY
   config
   launch
   models
+  urdf
+  meshes
+  sim2sim
   DESTINATION share/${PROJECT_NAME}
 )
 

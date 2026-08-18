@@ -1,0 +1,131 @@
+<mujoco model="nxp_jaguar">
+  <compiler angle="radian" meshdir="../../models/meshes"/>
+  <asset>
+    <mesh name="base_link" file="base_link.STL"/>
+    <mesh name="FR_scapula_link" file="FR_scapula_link.STL"/>
+    <mesh name="FR_thigh_link" file="FR_thigh_link.STL"/>
+    <mesh name="FR_calf_link" file="FR_calf_link.STL"/>
+    <mesh name="FL_scapula_link" file="FL_scapula_link.STL"/>
+    <mesh name="FL_thigh_link" file="FL_thigh_link.STL"/>
+    <mesh name="FL_calf_link" file="FL_calf_link.STL"/>
+    <mesh name="BR_scapula_link" file="BR_scapula_link.STL"/>
+    <mesh name="BR_thigh_link" file="BR_thigh_link.STL"/>
+    <mesh name="BR_calf_link" file="BR_calf_link.STL"/>
+    <mesh name="BL_scapula_link" file="BL_scapula_link.STL"/>
+    <mesh name="BL_thigh_link" file="BL_thigh_link.STL"/>
+    <mesh name="BL_calf_link" file="BL_calf_link.STL"/>
+  </asset>
+
+  <default>
+    <joint limited="true" armature="0.01" damping="0.5" frictionloss="0.05"/>
+    <geom contype="1" conaffinity="1" condim="3" friction="0.8 0.05 0.05"/>
+  </default>
+
+  <worldbody>
+    <body name="base_link" pos="0.0 0.0 0.35">
+      <inertial pos="0.0 0.0 0.0" mass="7.5" diaginertia="0.035 0.045 0.065"/>
+      <joint name="base_joint" type="free" limited="false"/>
+      <geom name="base_link" type="mesh" rgba="0.25 0.25 0.25 1" mesh="base_link"/>
+      <site name="imu_site" pos="0 0 0"/>
+
+      <!-- Front-Right Leg -->
+      <body name="FR_scapula_link" pos="0.203 -0.08 0.0">
+        <inertial pos="0.02 -0.01 0.0" mass="0.8" diaginertia="0.001 0.001 0.001"/>
+        <joint name="FR_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854"/>
+        <geom name="FR_collar_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="FR_scapula_link"/>
+        <body name="FR_thigh_link" pos="0.0625 -0.016 0">
+          <inertial pos="0.0 -0.03 -0.05" mass="1.2" diaginertia="0.005 0.005 0.001"/>
+          <joint name="FR_hip_joint" pos="0 0 0" axis="0 1 0" range="-2.8 1.5"/>
+          <geom name="FR_thigh_link" type="mesh" rgba="0.2 0.2 0.2 1" mesh="FR_thigh_link"/>
+          <body name="FR_calf_link" pos="0 -0.077 -0.20">
+            <inertial pos="0.0 0.0 -0.1" mass="0.3" diaginertia="0.002 0.002 0.0001"/>
+            <joint name="FR_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8"/>
+            <geom name="FR_calf_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="FR_calf_link"/>
+            <geom name="FR_foot" type="sphere" size="0.025" pos="0 0 -0.15" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <site name="FR_foot_site" pos="0 0 -0.15"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Front-Left Leg -->
+      <body name="FL_scapula_link" pos="0.203 0.08 0.0">
+        <inertial pos="0.02 0.01 0.0" mass="0.8" diaginertia="0.001 0.001 0.001"/>
+        <joint name="FL_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854"/>
+        <geom name="FL_collar_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="FL_scapula_link"/>
+        <body name="FL_thigh_link" pos="0.0625 0.016 0">
+          <inertial pos="0.0 0.03 -0.05" mass="1.2" diaginertia="0.005 0.005 0.001"/>
+          <joint name="FL_hip_joint" pos="0 0 0" axis="0 1 0" range="-2.8 1.5"/>
+          <geom name="FL_thigh_link" type="mesh" rgba="0.2 0.2 0.2 1" mesh="FL_thigh_link"/>
+          <body name="FL_calf_link" pos="0 0.077 -0.20">
+            <inertial pos="0.0 0.0 -0.1" mass="0.3" diaginertia="0.002 0.002 0.0001"/>
+            <joint name="FL_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8"/>
+            <geom name="FL_calf_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="FL_calf_link"/>
+            <geom name="FL_foot" type="sphere" size="0.025" pos="0 0 -0.15" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <site name="FL_foot_site" pos="0 0 -0.15"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Back-Right Leg -->
+      <body name="BR_scapula_link" pos="-0.203 -0.08 0.0">
+        <inertial pos="-0.02 -0.01 0.0" mass="0.8" diaginertia="0.001 0.001 0.001"/>
+        <joint name="BR_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854"/>
+        <geom name="BR_scapula_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="BR_scapula_link"/>
+        <body name="BR_thigh_link" pos="-0.0625 -0.016 0">
+          <inertial pos="0.0 -0.03 -0.05" mass="1.2" diaginertia="0.005 0.005 0.001"/>
+          <joint name="BR_hip_joint" pos="0 0 0" axis="0 1 0" range="-2.8 1.5"/>
+          <geom name="BR_thigh_link" type="mesh" rgba="0.2 0.2 0.2 1" mesh="BR_thigh_link"/>
+          <body name="BR_calf_link" pos="0 -0.077 -0.20">
+            <inertial pos="0.0 0.0 -0.1" mass="0.3" diaginertia="0.002 0.002 0.0001"/>
+            <joint name="BR_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8"/>
+            <geom name="BR_calf_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="BR_calf_link"/>
+            <geom name="BR_foot" type="sphere" size="0.025" pos="0 0 -0.15" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <site name="BR_foot_site" pos="0 0 -0.15"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- Back-Left Leg -->
+      <body name="BL_scapula_link" pos="-0.203 0.08 0.0">
+        <inertial pos="-0.02 0.01 0.0" mass="0.8" diaginertia="0.001 0.001 0.001"/>
+        <joint name="BL_collar_joint" pos="0 0 0" axis="1 0 0" range="-0.7854 0.7854"/>
+        <geom name="BL_scapula_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="BL_scapula_link"/>
+        <body name="BL_thigh_link" pos="-0.0625 0.016 0">
+          <inertial pos="0.0 0.03 -0.05" mass="1.2" diaginertia="0.005 0.005 0.001"/>
+          <joint name="BL_hip_joint" pos="0 0 0" axis="0 1 0" range="-2.8 1.5"/>
+          <geom name="BL_thigh_link" type="mesh" rgba="0.2 0.2 0.2 1" mesh="BL_thigh_link"/>
+          <body name="BL_calf_link" pos="0 0.077 -0.20">
+            <inertial pos="0.0 0.0 -0.1" mass="0.3" diaginertia="0.002 0.002 0.0001"/>
+            <joint name="BL_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8"/>
+            <geom name="BL_calf_link" type="mesh" rgba="0.85 0.45 0.1 1" mesh="BL_calf_link"/>
+            <geom name="BL_foot" type="sphere" size="0.025" pos="0 0 -0.15" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <site name="BL_foot_site" pos="0 0 -0.15"/>
+          </body>
+        </body>
+      </body>
+
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="FR_collar_joint" joint="FR_collar_joint" ctrlrange="-17 17"/>
+    <motor name="FR_hip_joint"    joint="FR_hip_joint"    ctrlrange="-17 17"/>
+    <motor name="FR_knee_joint"   joint="FR_knee_joint"   ctrlrange="-17 17"/>
+    <motor name="FL_collar_joint" joint="FL_collar_joint" ctrlrange="-17 17"/>
+    <motor name="FL_hip_joint"    joint="FL_hip_joint"    ctrlrange="-17 17"/>
+    <motor name="FL_knee_joint"   joint="FL_knee_joint"   ctrlrange="-17 17"/>
+    <motor name="BR_collar_joint" joint="BR_collar_joint" ctrlrange="-17 17"/>
+    <motor name="BR_hip_joint"    joint="BR_hip_joint"    ctrlrange="-17 17"/>
+    <motor name="BR_knee_joint"   joint="BR_knee_joint"   ctrlrange="-17 17"/>
+    <motor name="BL_collar_joint" joint="BL_collar_joint" ctrlrange="-17 17"/>
+    <motor name="BL_hip_joint"    joint="BL_hip_joint"    ctrlrange="-17 17"/>
+    <motor name="BL_knee_joint"   joint="BL_knee_joint"   ctrlrange="-17 17"/>
+  </actuator>
+
+  <sensor>
+    <gyro name="body_gyro" site="imu_site"/>
+    <accelerometer name="body_acc" site="imu_site"/>
+    <framequat name="body_quat" objtype="site" objname="imu_site"/>
+    <framelinvel name="body_vel" objtype="site" objname="imu_site"/>
+  </sensor>
+</mujoco>

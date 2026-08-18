@@ -1,0 +1,985 @@
+<?xml version="1.0" ?>
+<robot name="NXP_Jaguar">
+  
+  <link name="dummy_link"/>
+  
+  <!-- </link> -->
+  
+  <link name="base_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Base_body.STL"/>
+        
+      </geometry>
+      
+      <!-- <geometry>
+        <box size="0.5 0.3 0.1"/>
+      </geometry> -->
+      
+      <material name="">
+        
+        <color rgba="0.3 0.3 0.3 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Base_body.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="0.055662 0.002236 0.087783"/>
+      
+      <mass value="5.200000"/>
+      
+      <!-- <mass value="10.200000" /> -->
+      
+      <inertia ixx="0.033984" ixy="0.000000" ixz="0.000000" iyy="0.101093" iyz="-0.000198" izz="0.117161"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <joint name="dummy_joint" type="fixed">
+    
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+    
+    <parent link="dummy_link"/>
+    
+    <child link="base_link"/>
+    
+  </joint>
+  
+  <link name="Fr_coxa_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fr_coxa_roll.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="1.0 0.2 0.2 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fr_coxa_roll.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz=" -0.040750 -0.019750 0.000000"/>
+      
+      <mass value="0.353000"/>
+      
+      <inertia ixx="0.000259" ixy="0.000000" ixz="0.000000" iyy="0.000291" iyz="0.000000" izz="0.000359"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="-1 0 0" , limit lower="-0.40" upper="0.40" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Fr_roll_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="0.14 -0.0722 0.0755"/>
+    
+    <parent link="base_link"/>
+    
+    <child link="Fr_coxa_link"/>
+    
+    <axis xyz="1 0 0"/>
+    
+    <!-- <limit lower="1.45" upper="0.4" effort="14" velocity="20" /> -->
+    
+    <limit effort="14" lower="-0.40" upper="0.40" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Fr_thigh_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fr_hip_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.7 0.0 0.0 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fr_hip_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="-0.035579 -0.089273 0.026371"/>
+      
+      <mass value="0.6500000"/>
+      
+      <inertia ixx="0.002081" ixy="0.000000" ixz="0.000982" iyy="0.002555" iyz="0.000000" izz="0.002809"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- Arah gerak Fr_hip_pitch_joint sudah mirip A1 (0 1 0) -->
+  
+  <joint name="Fr_hip_pitch_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="0.053 -0.005 0.000"/>
+    
+    <parent link="Fr_coxa_link"/>
+    
+    <child link="Fr_thigh_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Fr_tibia_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fr_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="1.0 0.6 0.6 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fr_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="0.060866 -0.017421 -0.080173"/>
+      
+      <mass value="0.1800000"/>
+      
+      <inertia ixx="0.000451" ixy="0.000000" ixz="0.000331" iyy="0.000726" iyz="0.000000" izz="0.000309"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- Arah gerak Fr_knee_joint sudah mirip A1 (0 1 0) -->
+  
+  <joint name="Fr_knee_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.157 -0.0935 0.088"/>
+    
+    <parent link="Fr_thigh_link"/>
+    
+    <child link="Fr_tibia_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Fl_coxa_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fl_coxa_roll.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.2 1.0 0.2 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fl_coxa_roll.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz=" -0.040750 -0.019750 0.000000"/>
+      
+      <mass value="0.353000"/>
+      
+      <inertia ixx="0.000200" ixy="0.000000" ixz="0.000000" iyy="0.000275" iyz="0.000000" izz="0.000309"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="-1 0 0" , limit lower="-0.40" upper="0.40" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Fl_roll_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="0.14 0.0722 0.0755"/>
+    
+    <parent link="base_link"/>
+    
+    <child link="Fl_coxa_link"/>
+    
+    <axis xyz="1 0 0"/>
+    
+    <!-- <limit lower="1.45" upper="0.4" effort="14" velocity="20" /> -->
+    
+    <limit effort="14" lower="-0.40" upper="0.40" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Fl_thigh_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fl_hip_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.0 0.7 0.0 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fl_hip_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="-0.035334 0.088860 0.026193"/>
+      
+      <mass value="0.6500000"/>
+      
+      <inertia ixx="0.002061" ixy="0.000000" ixz="0.000982" iyy="0.002547" iyz="0.000000" izz="0.002786"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-3.14" upper="3.14" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Fl_hip_pitch_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="0.053 -0.005 0.000"/>
+    
+    <parent link="Fl_coxa_link"/>
+    
+    <child link="Fl_thigh_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Fl_tibia_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fl_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.6 1.0 0.6 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Fl_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="0.060954 0.017516 -0.080316"/>
+      
+      <mass value="0.1800000"/>
+      
+      <inertia ixx="0.000450" ixy="0.000000" ixz="0.000331" iyy="0.000726" iyz="0.000000" izz="0.000309"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-2.80" upper="0.10" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Fl_knee_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.157 0.0935 0.088"/>
+    
+    <parent link="Fl_thigh_link"/>
+    
+    <child link="Fl_tibia_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Br_coxa_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Br_coxa_roll.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.2 0.2 1.0 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Br_coxa_roll.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="-0.042480 0.013241 -0.000079"/>
+      
+      <mass value="0.353000"/>
+      
+      <inertia ixx="0.000175" ixy="0.000000" ixz="0.000000" iyy="0.000302" iyz="0.000000" izz="0.000311"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="-1 0 0" , limit lower="-0.40" upper="0.40" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Br_roll_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.14 -0.0722 0.0755"/>
+    
+    <parent link="base_link"/>
+    
+    <child link="Br_coxa_link"/>
+    
+    <axis xyz="1 0 0"/>
+    
+    <!-- <limit lower="1.45" upper="0.4" effort="14" velocity="20" /> -->
+    
+    <limit effort="14" lower="-0.40" upper="0.40" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Br_thigh_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Br_hip_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.0 0.0 0.7 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Br_hip_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="-0.035579 -0.089273 0.026371"/>
+      
+      <mass value="0.6500000"/>
+      
+      <inertia ixx="0.002070" ixy="0.000000" ixz="0.000977" iyy="0.002545" iyz="0.000000" izz="0.002795"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- Arah gerak Br_hip_pitch_joint sudah mirip A1 (0 1 0) -->
+  
+  <joint name="Br_hip_pitch_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.053 -0.005 0.000"/>
+    
+    <parent link="Br_coxa_link"/>
+    
+    <child link="Br_thigh_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Br_tibia_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Br_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.6 0.6 1.0 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Br_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="0.060866 -0.017421 -0.080173"/>
+      
+      <mass value="0.1800000"/>
+      
+      <inertia ixx="0.000451" ixy="0.000000" ixz="0.000331" iyy="0.000726" iyz="0.000000" izz="0.000309"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- Arah gerak Br_knee_joint sudah mirip A1 (0 1 0) -->
+  
+  <joint name="Br_knee_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.157 -0.0935 0.088"/>
+    
+    <parent link="Br_thigh_link"/>
+    
+    <child link="Br_tibia_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Bl_coxa_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Bl_coxa_roll.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="1.0 1.0 0.2 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Bl_coxa_roll.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="-0.042207 -0.013241 0.000079"/>
+      
+      <mass value="0.353000"/>
+      
+      <inertia ixx="0.000200" ixy="0.000000" ixz="0.000000" iyy="0.000275" iyz="0.000000" izz="0.000309"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="-1 0 0" , limit lower="-0.40" upper="0.40" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Bl_roll_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.14 0.0722 0.0755"/>
+    
+    <parent link="base_link"/>
+    
+    <child link="Bl_coxa_link"/>
+    
+    <axis xyz="1 0 0"/>
+    
+    <!-- <limit lower="1.45" upper="0.4" effort="14" velocity="20" /> -->
+    
+    <limit effort="14" lower="-0.40" upper="0.40" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Bl_thigh_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Bl_hip_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="0.7 0.7 0.0 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Bl_hip_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="-0.035334 0.088860 0.026193"/>
+      
+      <mass value="0.6500000"/>
+      
+      <inertia ixx="0.002061" ixy="0.000000" ixz="0.000982" iyy="0.002547" iyz="0.000000" izz="0.002786"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-3.14" upper="3.14" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Bl_hip_pitch_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.053 -0.005 0.000"/>
+    
+    <parent link="Bl_coxa_link"/>
+    
+    <child link="Bl_thigh_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    
+  </joint>
+  
+  <link name="Bl_tibia_link">
+    
+    <visual>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Bl_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+      <material name="">
+        
+        <color rgba="1.0 1.0 0.6 1"/>
+        
+      </material>
+      
+    </visual>
+    
+    <collision>
+      
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      
+      <geometry>
+        
+        <mesh filename="../meshes/Bl_tibia_pitch.STL"/>
+        
+      </geometry>
+      
+    </collision>
+    
+    <inertial>
+      
+      <origin rpy="0 0 0" xyz="0.060954 0.017516 -0.080316"/>
+      
+      <mass value="0.1800000"/>
+      
+      <inertia ixx="0.000450" ixy="0.000000" ixz="0.000331" iyy="0.000726" iyz="0.000000" izz="0.000309"/>
+      
+    </inertial>
+    
+  </link>
+  
+  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-2.80" upper="0.10" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  
+  <joint name="Bl_knee_joint" type="revolute">
+    
+    <origin rpy="0 0 0" xyz="-0.157 0.0935 0.088"/>
+    
+    <parent link="Bl_thigh_link"/>
+    
+    <child link="Bl_tibia_link"/>
+    
+    <axis xyz="0 1 0"/>
+    
+    <!-- <limit lower="0.00" upper="1.70" effort="14" velocity="20" /> -->
+    
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
+    
+  </joint>
+  
+  <link name="imu_link"/>
+  
+  <joint name="imu_joint" type="fixed">
+    
+    <parent link="base_link"/>
+    
+    <child link="imu_link"/>
+    
+    <origin rpy="3.141592653589793 0 0" xyz="0 0 0.1"/>
+    
+  </joint>
+  
+  <gazebo reference="imu_link">
+    
+    <sensor name="imu_sensor" type="imu">
+      
+      <always_on>true</always_on>
+      
+      <update_rate>100</update_rate>
+      
+      <visualize>true</visualize>
+      
+      <topic>imu</topic>
+      
+      <gz_frame_id>imu_link</gz_frame_id>
+      
+    </sensor>
+    
+  </gazebo>
+  
+  <gazebo>
+    
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    
+  </gazebo>
+  
+  <!-- <gazebo>
+    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin"> <parameters>/home/shullgtx/TEEP/quadruped/NXP-Jaguar/nxp_jaguar_v3/nxp_jaguar/src/nxp_jaguar_descriptions/config/control.yaml</parameters>
+    </plugin>
+  </gazebo> -->
+  
+  <gazebo>
+    
+    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+      
+      <parameters>/home/shullgtx/TEEP/quadruped/NXP-Jaguar/nxp_jaguar_v3/nxp_jaguar/src/nxp_jaguar_descriptions/config/control.yaml</parameters>
+      
+      <ros>
+        
+        <remapping>/position_controller/commands:=/position_controller/commands_translated</remapping>
+        
+      </ros>
+      
+    </plugin>
+    
+  </gazebo>
+  
+  <ros2_control name="gz_ros2_control" type="system">
+    
+    <hardware>
+      
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      
+    </hardware>
+    
+    <joint name="Fr_roll_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Fr_hip_pitch_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Fr_knee_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Br_roll_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Br_hip_pitch_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Br_knee_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Fl_roll_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Fl_hip_pitch_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Fl_knee_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Bl_roll_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Bl_hip_pitch_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+    <joint name="Bl_knee_joint">
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position"/>
+      
+      <state_interface name="velocity"/>
+      
+    </joint>
+    
+  </ros2_control>
+  
+</robot>

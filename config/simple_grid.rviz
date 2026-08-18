@@ -82,42 +82,32 @@ Visualization Manager:
       Enabled: true
       Links:
         All Links Enabled: true
-        BL_calf_link:
+        Bl_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BL_foot_link:
+        Bl_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BL_scapula_link:
+        Bl_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BL_thigh_link:
+        Br_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BR_calf_link:
+        Br_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        BR_foot_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        BR_scapula_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        BR_thigh_link:
+        Br_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -125,42 +115,32 @@ Visualization Manager:
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
-        FL_calf_link:
+        Fl_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FL_foot_link:
+        Fl_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FL_scapula_link:
+        Fl_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FL_thigh_link:
+        Fr_coxa_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FR_calf_link:
+        Fr_thigh_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        FR_foot_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        FR_scapula_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        FR_thigh_link:
+        Fr_tibia_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -189,37 +169,29 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        BL_calf_link:
+        Bl_coxa_link:
           Value: false
-        BL_foot_link:
+        Bl_thigh_link:
           Value: false
-        BL_scapula_link:
+        Bl_tibia_link:
           Value: false
-        BL_thigh_link:
+        Br_coxa_link:
           Value: false
-        BR_calf_link:
+        Br_thigh_link:
           Value: false
-        BR_foot_link:
+        Br_tibia_link:
           Value: false
-        BR_scapula_link:
+        Fl_coxa_link:
           Value: false
-        BR_thigh_link:
+        Fl_thigh_link:
           Value: false
-        FL_calf_link:
+        Fl_tibia_link:
           Value: false
-        FL_foot_link:
+        Fr_coxa_link:
           Value: false
-        FL_scapula_link:
+        Fr_thigh_link:
           Value: false
-        FL_thigh_link:
-          Value: false
-        FR_calf_link:
-          Value: false
-        FR_foot_link:
-          Value: false
-        FR_scapula_link:
-          Value: false
-        FR_thigh_link:
+        Fr_tibia_link:
           Value: false
         base_link:
           Value: true
@@ -238,26 +210,22 @@ Visualization Manager:
           {}
         odom:
           base_link:
-            BL_scapula_link:
-              BL_thigh_link:
-                BL_calf_link:
-                  BL_foot_link:
-                    {}
-            BR_scapula_link:
-              BR_thigh_link:
-                BR_calf_link:
-                  BR_foot_link:
-                    {}
-            FL_scapula_link:
-              FL_thigh_link:
-                FL_calf_link:
-                  FL_foot_link:
-                    {}
-            FR_scapula_link:
-              FR_thigh_link:
-                FR_calf_link:
-                  FR_foot_link:
-                    {}
+            Bl_coxa_link:
+              Bl_thigh_link:
+                Bl_tibia_link:
+                  {}
+            Br_coxa_link:
+              Br_thigh_link:
+                Br_tibia_link:
+                  {}
+            Fl_coxa_link:
+              Fl_thigh_link:
+                Fl_tibia_link:
+                  {}
+            Fr_coxa_link:
+              Fr_thigh_link:
+                Fr_tibia_link:
+                  {}
       Update Interval: 0
       Value: true
     - Class: rviz/Marker
