@@ -5,20 +5,20 @@ RobStride RS00 Motors mapped across 2 CAN buses (can0 & can1).
 
 N_JOINTS = 12
 
-# CAN Bus Interface assignment
+# CAN Bus Interface assignment: can0 = Sisi Kanan (FR, BR), can1 = Sisi Kiri (FL, BL)
 DEVICE = [
-    "can0", "can0", "can0",  # BL (Back-Left)
-    "can0", "can0", "can0",  # BR (Back-Right)
-    "can1", "can1", "can1",  # FL (Front-Left)
-    "can1", "can1", "can1",  # FR (Front-Right)
+    "can1", "can1", "can1",  # BL (Back-Left)  -> can1
+    "can0", "can0", "can0",  # BR (Back-Right) -> can0
+    "can1", "can1", "can1",  # FL (Front-Left) -> can1
+    "can0", "can0", "can0",  # FR (Front-Right)-> can0
 ]
 
-# CAN Motor Node IDs
+# CAN Motor Node IDs (ID 1,2,3: Front; ID 4,5,6: Back)
 CAN_ID = [
-    10, 11, 12,  # BL: collar, hip, knee
-    7,  8,  9,   # BR: collar, hip, knee
-    4,  5,  6,   # FL: collar, hip, knee
-    1,  2,  3,   # FR: collar, hip, knee
+    4, 5, 6,  # BL: collar, hip, knee (can1)
+    4, 5, 6,  # BR: collar, hip, knee (can0)
+    1, 2, 3,  # FL: collar, hip, knee (can1)
+    1, 2, 3,  # FR: collar, hip, knee (can0)
 ]
 
 # Motor Model (NXP Jaguar uses RobStride RS00)
