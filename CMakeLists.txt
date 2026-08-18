@@ -17,6 +17,7 @@ find_package(nav_msgs REQUIRED)
 # Install Python scripts as executable nodes
 install(PROGRAMS
   scripts/nxp_jaguar_controller.py
+  scripts/can_hardware_node.py
   scripts/check_states.py
   scripts/check_joints.py
   scripts/jaguar_main.py

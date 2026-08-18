@@ -5,6 +5,7 @@ import math
 
 legitimate_motors = [
                     "CyberGear",
+                    "RobStride00",
                     "RobStride01",
                     "RobStride02",
                     "RobStride03",
@@ -22,6 +23,20 @@ CyberGear_PARAMS = {
         "KD_MAX" : 5.0,
         "T_MIN" : -12.0,
         "T_MAX" : 12.0,
+        "AXIS_DIRECTION" : 1
+        }
+
+RobStride00_PARAMS = {
+        "P_MIN" : -4 * math.pi,
+        "P_MAX" : 4 * math.pi,
+        "V_MIN" : -33.0,
+        "V_MAX" : 33.0,
+        "KP_MIN" : 0.0,
+        "KP_MAX" : 500.0,
+        "KD_MIN" : 0.0,
+        "KD_MAX" : 5.0,
+        "T_MIN" : -17.0,
+        "T_MAX" : 17.0,
         "AXIS_DIRECTION" : 1
         }
 
@@ -141,6 +156,8 @@ class CanMotorController:
         assert motor_type in legitimate_motors, "Motor Type not in list of accepted motors."
         if motor_type == "CyberGear":
             self.motorParams = copy.deepcopy(CyberGear_PARAMS)
+        elif motor_type == "RobStride00":
+            self.motorParams = copy.deepcopy(RobStride00_PARAMS)
         elif motor_type == "RobStride01":
             self.motorParams = copy.deepcopy(RobStride01_PARAMS)
         elif motor_type == "RobStride02":

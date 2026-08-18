@@ -52,8 +52,24 @@ ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
 # ==============================================================================
+# ==============================================================================
 # 2. 48-DIMENSIONAL OBSERVATION VECTOR BUILDER
 # ==============================================================================
+ROS_NAME_TO_ISAAC_IDX = {
+    'FR_collar_joint': 0, 'Fr_roll_joint': 0,
+    'FL_collar_joint': 1, 'Fl_roll_joint': 1,
+    'BR_collar_joint': 2, 'Br_roll_joint': 2,
+    'BL_collar_joint': 3, 'Bl_roll_joint': 3,
+    'FR_hip_joint': 4,    'Fr_hip_pitch_joint': 4,
+    'FL_hip_joint': 5,    'Fl_hip_pitch_joint': 5,
+    'BR_hip_joint': 6,    'Br_hip_pitch_joint': 6,
+    'BL_hip_joint': 7,    'Bl_hip_pitch_joint': 7,
+    'FR_knee_joint': 8,   'Fr_knee_joint': 8,
+    'FL_knee_joint': 9,   'Fl_knee_joint': 9,
+    'BR_knee_joint': 10,  'Br_knee_joint': 10,
+    'BL_knee_joint': 11,  'Bl_knee_joint': 11,
+}
+
 class JaguarObservationBuilder:
     def __init__(self):
         self.last_action = torch.zeros((1, 12), dtype=torch.float32)
@@ -63,24 +79,24 @@ class JaguarObservationBuilder:
         Builds exact 48D Observation Vector for DreamWaQ Actor:
         [0:3]   Linear Velocity (base frame)
         [3:6]   Angular Velocity (base frame)
-        [6:9]   Projected Gravity Vector
+        [6:9]   Projected Gravity Vector (R^T * [0, 0, -1] -> [0, 0, -1] when upright)
         [9:12]  Velocity Commands [vx, vy, wz]
         [12:24] Relative Joint Positions (joint_pos - default_pos)
         [24:36] Joint Velocities
         [36:48] Last Action
         """
         qx, qy, qz, qw = quat
-        # Gravity projection in body frame
-        gx = 2.0 * (qx * qz - qw * qy)
-        gy = 2.0 * (qy * qz + qw * qx)
-        gz = 1.0 - 2.0 * (qx * qx + qy * qy)
+        # Gravity projection in body frame (Isaac Lab / Isaac Gym standard: R^T * [0, 0, -1])
+        gx = -2.0 * (qx * qz - qw * qy)
+        gy = -2.0 * (qy * qz + qw * qx)
+        gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
 
         rel_joint_pos = joint_pos - DEFAULT_JOINT_POS
 
         obs_vec = np.concatenate([
             lin_vel,                     # 3D: vx, vy, vz
             ang_vel,                     # 3D: wx, wy, wz
-            [gx, gy, gz],                # 3D: projected gravity
+            [gx, gy, gz],                # 3D: projected gravity (nominal [0, 0, -1])
             cmd,                         # 3D: vx_cmd, vy_cmd, wz_cmd
             rel_joint_pos,               # 12D: q - q0
             joint_vel,                   # 12D: q_dot
@@ -124,6 +140,11 @@ class NXPJaguarControllerNode(Node):
         self.imu_received = False
         self.joints_received = False
 
+        # Standup interpolation variables
+        self.transition_start_pos = DEFAULT_JOINT_POS.copy()
+        self.transition_start_time = 0.0
+        self.transition_duration = 2.0  # seconds
+
         # QoS Profiles
         sensor_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -131,8 +152,9 @@ class NXPJaguarControllerNode(Node):
             depth=1,
         )
 
-        # Subscribers
+        # Subscribers (support both /imu/data and /Imu_data)
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
+        self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(JointState, "/joint_states", self._joint_state_cb, 10)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 10)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
@@ -165,41 +187,54 @@ class NXPJaguarControllerNode(Node):
     def _joint_state_cb(self, msg: JointState):
         with self.state_lock:
             # Map input joint states from message to Isaac Lab joint order
-            for i, name in enumerate(ISAAC_JOINT_NAMES):
-                if name in msg.name:
-                    idx = msg.name.index(name)
-                    self.joint_pos[i] = msg.position[idx]
-                    if len(msg.velocity) > idx:
-                        self.joint_vel[i] = msg.velocity[idx]
-                elif len(msg.position) == 12:
-                    # If unnamed array in ROS order (BL, BR, FL, FR), remap directly
-                    ros_idx = ISAAC_TO_ROS[i]
+            matched = False
+            if msg.name:
+                for idx, name in enumerate(msg.name):
+                    if name in ROS_NAME_TO_ISAAC_IDX:
+                        isaac_idx = ROS_NAME_TO_ISAAC_IDX[name]
+                        if len(msg.position) > idx:
+                            self.joint_pos[isaac_idx] = msg.position[idx]
+                        if len(msg.velocity) > idx:
+                            self.joint_vel[isaac_idx] = msg.velocity[idx]
+                        matched = True
+            if not matched and len(msg.position) == 12:
+                # If unnamed array in ROS order (BL, BR, FL, FR), remap to Isaac order
+                for i in range(12):
+                    ros_idx = ROS_TO_ISAAC[i]
                     self.joint_pos[i] = msg.position[ros_idx]
                     if len(msg.velocity) > ros_idx:
                         self.joint_vel[i] = msg.velocity[ros_idx]
             self.joints_received = True
 
     def _joy_cb(self, msg: Joy):
+        now = self.get_clock().now().nanoseconds / 1e9
         if len(msg.buttons) > 1:
             # Button 0 (X / Cross): Stand Up
             if msg.buttons[0] == 1 and self.state == "STANDBY":
                 self.state = "STANDUP"
-                self.get_logger().info("State Transition -> STANDUP")
+                self.transition_start_time = now
+                with self.state_lock:
+                    self.transition_start_pos = self.joint_pos.copy()
+                self.get_logger().info("State Transition -> STANDUP (Interpolating to nominal pose)")
             # Button 1 (Circle / B): Start RL Walking
             elif msg.buttons[1] == 1 and self.state in ["STANDUP", "STANDBY"]:
                 self.state = "WALK"
-                self.get_logger().info("State Transition -> WALK (Policy Active)")
+                self.get_logger().info("State Transition -> WALK (RL Policy Active)")
             # Button 2 (Square / X): Emergency Standby
             elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
                 self.state = "STANDBY"
                 self.get_logger().warn("E-STOP Pressed -> STANDBY")
 
         # Joystick axes mapped to command velocities
-        if len(msg.axes) >= 3:
+        if len(msg.axes) >= 2:
             with self.state_lock:
                 self.cmd_vel[0] = msg.axes[1] * 1.0   # Left stick vertical: vx
                 self.cmd_vel[1] = msg.axes[0] * 0.5   # Left stick horizontal: vy
-                self.cmd_vel[2] = msg.axes[2] * 1.2   # Right stick horizontal: wz
+                # Right stick horizontal: wz (axis 3 for Xbox/PS4, or axis 2 fallback)
+                if len(msg.axes) > 3:
+                    self.cmd_vel[2] = msg.axes[3] * 1.2
+                elif len(msg.axes) >= 3:
+                    self.cmd_vel[2] = msg.axes[2] * 1.2
 
     def _control_loop(self):
         if not self.imu_received:
@@ -213,16 +248,22 @@ class NXPJaguarControllerNode(Node):
             lin_v = self.body_lin_vel.copy()
             cmd = self.cmd_vel.copy()
 
-        # Tilt Safety Protection: Emergency Cutoff if robot tilts > 60 degrees
-        rot_matrix_z = 1.0 - 2.0 * (quat[0]**2 + quat[1]**2)
-        if rot_matrix_z < 0.5:
-            self.get_logger().error("EMERGENCY TILT DETECTED (>60 deg)! Resetting to STANDBY.")
+        # Tilt Safety Protection: Emergency Cutoff if robot tilts > 60 degrees (gz > -0.5 when upright is -1.0)
+        gz_body = -(1.0 - 2.0 * (quat[0]**2 + quat[1]**2))
+        if gz_body > -0.5:
+            self.get_logger().error(f"EMERGENCY TILT DETECTED (gz={gz_body:.2f} > -0.5, tilt > 60 deg)! Resetting to STANDBY.")
             self.state = "STANDBY"
+
+        now = self.get_clock().now().nanoseconds / 1e9
 
         if self.state == "STANDBY":
             target_pos = DEFAULT_JOINT_POS.copy()
         elif self.state == "STANDUP":
-            target_pos = DEFAULT_JOINT_POS.copy()
+            elapsed = now - self.transition_start_time
+            alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
+            target_pos = (1.0 - alpha) * self.transition_start_pos + alpha * DEFAULT_JOINT_POS
+            if alpha >= 1.0:
+                target_pos = DEFAULT_JOINT_POS.copy()
         elif self.state == "WALK":
             # 1. Build 48-Dimensional Observation Vector
             obs = self.obs_builder.build_observation(lin_v, ang_v, quat, cmd, pos, vel)

@@ -20,6 +20,21 @@ ISAAC_JOINT_NAMES = [
     "Fr_knee_joint", "Fl_knee_joint", "Br_knee_joint", "Bl_knee_joint",
 ]
 
+ROS_NAME_TO_ISAAC_IDX = {
+    'FR_collar_joint': 0, 'Fr_roll_joint': 0,
+    'FL_collar_joint': 1, 'Fl_roll_joint': 1,
+    'BR_collar_joint': 2, 'Br_roll_joint': 2,
+    'BL_collar_joint': 3, 'Bl_roll_joint': 3,
+    'FR_hip_joint': 4,    'Fr_hip_pitch_joint': 4,
+    'FL_hip_joint': 5,    'Fl_hip_pitch_joint': 5,
+    'BR_hip_joint': 6,    'Br_hip_pitch_joint': 6,
+    'BL_hip_joint': 7,    'Bl_hip_pitch_joint': 7,
+    'FR_knee_joint': 8,   'Fr_knee_joint': 8,
+    'FL_knee_joint': 9,   'Fl_knee_joint': 9,
+    'BR_knee_joint': 10,  'Br_knee_joint': 10,
+    'BL_knee_joint': 11,  'Bl_knee_joint': 11,
+}
+
 DEFAULT_JOINT_POS = np.array([
     0.0,  0.0,  0.0,  0.0,   # Rolls
    -1.5, -1.5, -1.5, -1.5,   # Hip Pitches
@@ -48,8 +63,10 @@ class StateCheckerNode(Node):
         )
 
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
+        self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(JointState, "/joint_states", self._joint_cb, 10)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_cb, 10)
+        self.create_subscription(Joy, "/joy", self._joy_cb, 10)
 
         # 4 Hz terminal refresh
         self.timer = self.create_timer(0.25, self._display_dashboard)
@@ -59,13 +76,33 @@ class StateCheckerNode(Node):
         self.ang_vel = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z], dtype=np.float32)
         self.imu_count += 1
 
+    def _joy_cb(self, msg: Joy):
+        if len(msg.axes) >= 2:
+            self.cmd_vel[0] = msg.axes[1] * 1.0
+            self.cmd_vel[1] = msg.axes[0] * 0.5
+            if len(msg.axes) > 3:
+                self.cmd_vel[2] = msg.axes[3] * 1.2
+            elif len(msg.axes) >= 3:
+                self.cmd_vel[2] = msg.axes[2] * 1.2
+            self.cmd_count += 1
+
     def _joint_cb(self, msg: JointState):
-        for i, name in enumerate(ISAAC_JOINT_NAMES):
-            if name in msg.name:
-                idx = msg.name.index(name)
-                self.joint_pos[i] = msg.position[idx]
-                if len(msg.velocity) > idx:
-                    self.joint_vel[i] = msg.velocity[idx]
+        matched = False
+        if msg.name:
+            for idx, name in enumerate(msg.name):
+                if name in ROS_NAME_TO_ISAAC_IDX:
+                    isaac_idx = ROS_NAME_TO_ISAAC_IDX[name]
+                    if len(msg.position) > idx:
+                        self.joint_pos[isaac_idx] = msg.position[idx]
+                    if len(msg.velocity) > idx:
+                        self.joint_vel[isaac_idx] = msg.velocity[idx]
+                    matched = True
+        if not matched and len(msg.position) == 12:
+            for i in range(12):
+                ros_idx = ROS_TO_ISAAC[i]
+                self.joint_pos[i] = msg.position[ros_idx]
+                if len(msg.velocity) > ros_idx:
+                    self.joint_vel[i] = msg.velocity[ros_idx]
         self.joint_count += 1
 
     def _cmd_cb(self, msg: Twist):
@@ -74,9 +111,10 @@ class StateCheckerNode(Node):
 
     def _display_dashboard(self):
         qx, qy, qz, qw = self.quat
-        gx = 2.0 * (qx * qz - qw * qy)
-        gy = 2.0 * (qy * qz + qw * qx)
-        gz = 1.0 - 2.0 * (qx * qx + qy * qy)
+        # Isaac Lab standard projected gravity (R^T * [0, 0, -1] -> [0, 0, -1] when upright)
+        gx = -2.0 * (qx * qz - qw * qy)
+        gy = -2.0 * (qy * qz + qw * qx)
+        gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
 
         rel_pos = self.joint_pos - DEFAULT_JOINT_POS
 
@@ -92,7 +130,7 @@ class StateCheckerNode(Node):
         print("1. BASE VELOCITY & GRAVITY PROJECTION:")
         print(f"   • Base Lin Vel  [0:3] : [{self.lin_vel[0]:+6.2f}, {self.lin_vel[1]:+6.2f}, {self.lin_vel[2]:+6.2f}] m/s")
         print(f"   • Base Ang Vel  [3:6] : [{self.ang_vel[0]:+6.2f}, {self.ang_vel[1]:+6.2f}, {self.ang_vel[2]:+6.2f}] rad/s")
-        print(f"   • Proj Gravity  [6:9] : [{gx:+6.2f}, {gy:+6.2f}, {gz:+6.2f}] (Upright should be [0.0, 0.0, 1.0])")
+        print(f"   • Proj Gravity  [6:9] : [{gx:+6.2f}, {gy:+6.2f}, {gz:+6.2f}] (Upright is [0.0, 0.0, -1.0])")
         print(f"   • Velocity Cmd [9:12] : [{self.cmd_vel[0]:+6.2f}, {self.cmd_vel[1]:+6.2f}, {self.cmd_vel[2]:+6.2f}]")
         print("-" * 80)
 
@@ -115,10 +153,10 @@ class StateCheckerNode(Node):
         print("3. AUTOMATED SANITY CHECKS:")
         imu_ok = (self.imu_count > 0)
         joints_ok = (self.joint_count > 0)
-        grav_ok = (abs(gz - 1.0) < 0.25)
+        grav_ok = (abs(gz - (-1.0)) < 0.25)
         standing_error = np.max(np.abs(rel_pos))
 
-        print(f"   [{'OK' if imu_ok else 'FAIL'}] IMU Stream Active: {'Received' if imu_ok else 'Waiting for /imu/data'}")
+        print(f"   [{'OK' if imu_ok else 'FAIL'}] IMU Stream Active: {'Received' if imu_ok else 'Waiting for /imu/data or /Imu_data'}")
         print(f"   [{'OK' if joints_ok else 'FAIL'}] Joint State Stream: {'Received 12 joints' if joints_ok else 'Waiting for /joint_states'}")
         print(f"   [{'OK' if grav_ok else 'WARN'}] Robot Orientation: {'Upright' if grav_ok else 'Tilted / Inverted'}")
         print(f"   [{'OK' if standing_error < 0.3 else 'WARN'}] Max Deviation from Stand Pose: {standing_error:.3f} rad")
