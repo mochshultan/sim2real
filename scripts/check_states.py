@@ -36,9 +36,9 @@ ROS_NAME_TO_ISAAC_IDX = {
 }
 
 DEFAULT_JOINT_POS = np.array([
-    0.0,  0.0,  0.0,  0.0,   # Rolls
-   -1.5, -1.5, -1.5, -1.5,   # Hip Pitches
-    1.5,  1.5,  1.5,  1.5,   # Knees
+    0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
+   -1.50, -1.50, -1.40, -1.40,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.40,  1.40,  1.60,  1.60,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 class StateCheckerNode(Node):
@@ -72,8 +72,24 @@ class StateCheckerNode(Node):
         self.timer = self.create_timer(0.25, self._display_dashboard)
 
     def _imu_cb(self, msg: Imu):
-        self.quat = np.array([msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w], dtype=np.float32)
-        self.ang_vel = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z], dtype=np.float32)
+        # Raw IMU is mounted upside down on chassis (Rotated 180 deg around X-axis: rpy="pi 0 0")
+        # Transformation: q_body = q_raw * q_mount_inv where q_mount is roll(pi)
+        qx = msg.orientation.x
+        qy = msg.orientation.y
+        qz = msg.orientation.z
+        qw = msg.orientation.w
+
+        body_qx = qw
+        body_qy = qz
+        body_qz = -qy
+        body_qw = -qx
+
+        self.quat = np.array([body_qx, body_qy, body_qz, body_qw], dtype=np.float32)
+        self.ang_vel = np.array([
+            msg.angular_velocity.x,
+            -msg.angular_velocity.y,
+            -msg.angular_velocity.z,
+        ], dtype=np.float32)
         self.imu_count += 1
 
     def _joy_cb(self, msg: Joy):

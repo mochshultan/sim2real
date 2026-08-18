@@ -23,11 +23,11 @@ MUJOCO_JOINT_NAMES = [
 MUJOCO_TO_ISAAC = [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11]
 ISAAC_TO_MUJOCO = [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
 
-# Nominal Standing Angles (q0) in Isaac Lab Joint Order (-1.5 rad Hip, +1.5 rad Knee)
+# Nominal Standing Angles (q0) in Isaac Lab Joint Order (FR, FL, BR, BL)
 DEFAULT_JOINT_POS_ISAAC = np.array([
-    0.0,  0.0,  0.0,  0.0,   # Rolls
-   -1.5, -1.5, -1.5, -1.5,   # Hips
-    1.5,  1.5,  1.5,  1.5,   # Knees
+    0.0,   0.0,   0.0,   0.0,    # Rolls (FR, FL, BR, BL)
+   -1.50, -1.50, -1.40, -1.40,   # Hips (FR, FL, BR, BL)
+    1.40,  1.40,  1.60,  1.60,   # Knees (FR, FL, BR, BL)
 ], dtype=np.float32)
 
 def quat_rotate_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:

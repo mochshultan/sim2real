@@ -41,11 +41,11 @@ ROS_JOINT_NAMES = [
 ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
 ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
-# Default Standing Pose (Matching NXP_JAGUAR_CFG in Isaac Lab)
+# Default Standing Pose (Matching NXP_JAGUAR_CFG in Isaac Lab: Front Hips -1.5, Back Hips -1.4, Front Knees 1.4, Back Knees 1.6)
 DEFAULT_JOINT_POS = np.array([
-    0.0,  0.0,  0.0,  0.0,   # Rolls
-   -1.5, -1.5, -1.5, -1.5,   # Hip Pitches
-    1.5,  1.5,  1.5,  1.5,   # Knees
+    0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
+   -1.50, -1.50, -1.40, -1.40,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.40,  1.40,  1.60,  1.60,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 ACTION_SCALE = 0.25      # Policy action scaling factor
@@ -170,11 +170,23 @@ class NXPJaguarControllerNode(Node):
 
     def _imu_cb(self, msg: Imu):
         with self.state_lock:
-            self.body_quat = np.array([
-                msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w
-            ], dtype=np.float32)
+            # Raw IMU is mounted upside down on chassis (Rotated 180 deg around X-axis: rpy="pi 0 0")
+            # Transformation: q_body = q_raw * q_mount_inv where q_mount is roll(pi)
+            qx = msg.orientation.x
+            qy = msg.orientation.y
+            qz = msg.orientation.z
+            qw = msg.orientation.w
+
+            body_qx = qw
+            body_qy = qz
+            body_qz = -qy
+            body_qw = -qx
+
+            self.body_quat = np.array([body_qx, body_qy, body_qz, body_qw], dtype=np.float32)
             self.body_ang_vel = np.array([
-                msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z
+                msg.angular_velocity.x,
+                -msg.angular_velocity.y,
+                -msg.angular_velocity.z,
             ], dtype=np.float32)
             self.imu_received = True
 
