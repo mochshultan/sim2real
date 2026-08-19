@@ -2,7 +2,7 @@ import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 
 def generate_launch_description():
@@ -28,7 +28,12 @@ def generate_launch_description():
     with_hardware_arg = DeclareLaunchArgument(
         "with_hardware",
         default_value="true",
-        description="Launch RS00 CAN hardware driver node",
+        description="Launch CAN hardware driver node",
+    )
+    use_cpp_hardware_arg = DeclareLaunchArgument(
+        "use_cpp_hardware",
+        default_value="true",
+        description="Use C++ Hard Real-Time driver (robstride_can_node) instead of Python",
     )
     with_controller_arg = DeclareLaunchArgument(
         "with_controller",
@@ -40,6 +45,7 @@ def generate_launch_description():
     with_imu = LaunchConfiguration("with_imu")
     with_joy = LaunchConfiguration("with_joy")
     with_hardware = LaunchConfiguration("with_hardware")
+    use_cpp_hardware = LaunchConfiguration("use_cpp_hardware")
     with_controller = LaunchConfiguration("with_controller")
 
     # 1. IMU Driver Node
@@ -65,13 +71,28 @@ def generate_launch_description():
         condition=IfCondition(with_joy),
     )
 
-    # 3. RS00 CAN Hardware Driver Node
-    hardware_node = Node(
+    # 3A. RobStride C++ Hard Real-Time CAN Node (Default, Deterministic 200 Hz)
+    cpp_hardware_node = Node(
+        package="jaguar_control",
+        executable="robstride_can_node",
+        name="robstride_can_hardware",
+        output="screen",
+        parameters=[{
+            "rate_hz": 200,
+            "default_kp": 25.0,
+            "default_kd": 1.0,
+            "rt_priority": 80,
+        }],
+        condition=IfCondition(use_cpp_hardware) and IfCondition(with_hardware),
+    )
+
+    # 3B. RobStride Python CAN Hardware Driver Node (Fallback)
+    py_hardware_node = Node(
         package="jaguar_control",
         executable="can_hardware_node.py",
         name="jaguar_can_hardware",
         output="screen",
-        condition=IfCondition(with_hardware),
+        condition=UnlessCondition(use_cpp_hardware) and IfCondition(with_hardware),
     )
 
     # 4. NXP Jaguar Sim-to-Real RL Controller Node
@@ -91,9 +112,11 @@ def generate_launch_description():
         with_imu_arg,
         with_joy_arg,
         with_hardware_arg,
+        use_cpp_hardware_arg,
         with_controller_arg,
         imu_node,
         joy_node,
-        hardware_node,
+        cpp_hardware_node,
+        py_hardware_node,
         controller_node,
     ])

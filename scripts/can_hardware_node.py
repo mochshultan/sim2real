@@ -21,7 +21,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String, Float32MultiArray
 
 import parameters as P
-from xiaomimotor_lib import CanMotorController
+from robstride_motor_lib import RobStrideMotorController
 
 # Remapping dictionary: Isaac / ROS joint name to ROS CAN array index [0..11]
 # ROS order: BL (0..2), BR (3..5), FL (6..8), FR (9..11)
@@ -119,7 +119,7 @@ class CanHardwareDriverNode(Node):
 
         # 1. Instantiate Motor Controllers
         for i in indices:
-            self.motors[i] = CanMotorController(
+            self.motors[i] = RobStrideMotorController(
                 bus=P.DEVICE[i],
                 motor_id=P.CAN_ID[i],
                 motor_type=P.MOTOR_TYPE[i],

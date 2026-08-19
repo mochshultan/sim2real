@@ -12,7 +12,7 @@ import threading
 import numpy as np
 
 import parameters as P
-from xiaomimotor_lib import CanMotorController
+from robstride_motor_lib import RobStrideMotorController
 
 class PassiveJointChecker:
     def __init__(self):
@@ -34,7 +34,7 @@ class PassiveJointChecker:
             indices = [i for i, dev in enumerate(P.DEVICE) if dev == bus_name]
             for i in indices:
                 try:
-                    self.motors[i] = CanMotorController(
+                    self.motors[i] = RobStrideMotorController(
                         bus=P.DEVICE[i],
                         motor_id=P.CAN_ID[i],
                         motor_type=P.MOTOR_TYPE[i],
