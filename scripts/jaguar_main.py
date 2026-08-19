@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation
 
 import jaguar_utils
 import parameters as P
-from xiaomimotor_lib import CanMotorController
+from robstride_motor_lib import RobStrideMotorController
 
 import rospy
 from std_msgs.msg import String, Float32MultiArray
@@ -471,7 +471,7 @@ class Jaguar:
     def can_thread_func(self, bus_name, motor_indices):
         print(f"[{bus_name}] Setting up {len(motor_indices)} motors...")
         for i in motor_indices:
-            self.motors[i] = CanMotorController(bus=P.DEVICE[i], motor_id=P.CAN_ID[i], motor_type=P.MOTOR_TYPE[i], motor_dir=P.MOTOR_DIR[i])
+            self.motors[i] = RobStrideMotorController(bus=P.DEVICE[i], motor_id=P.CAN_ID[i], motor_type=P.MOTOR_TYPE[i], motor_dir=P.MOTOR_DIR[i])
 
         print(f"[{bus_name}] Enabling Motors...")
         for i in motor_indices:

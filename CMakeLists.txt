@@ -18,12 +18,16 @@ find_package(nav_msgs REQUIRED)
 install(PROGRAMS
   scripts/nxp_jaguar_controller.py
   scripts/can_hardware_node.py
+  scripts/robstride_motor_lib.py
+  scripts/robstride_motor_test.py
+  scripts/test_sit_stand.py
   scripts/check_states.py
   scripts/check_joints.py
   scripts/jaguar_main.py
   scripts/jaguar_utils.py
   scripts/parameters.py
-  scripts/xiaomimotor_lib.py
+  scripts/scan_robostride_ids.py
+  scripts/set_robostride_zero.py
   scripts/bringup_canbus.sh
   DESTINATION lib/${PROJECT_NAME}
 )
