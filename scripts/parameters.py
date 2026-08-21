@@ -39,15 +39,15 @@ MOTOR_DIR = [
 
 # Zero-calibration angular offsets
 # Offsets calibrated from actual manual sit pose so that sitting position = 0.0 rad:
-# BL: collar=+0.3994, hip=+4.9934, knee=+0.0313
-# BR: collar=-0.1206, hip=-1.3447, knee=+0.0186
-# FL: collar=+0.3469, hip=-1.2389, knee=+0.0174
-# FR: collar=-1.6822, hip=-1.1756, knee=+0.1321
+# BL: collar=+0.3756, hip=-1.3275, knee=-0.1064
+# BR: collar=-0.3894, hip=-1.3267, knee=-0.0259
+# FL: collar=+0.3407, hip=-1.2098, knee=+0.0013
+# FR: collar=-0.2571, hip=-1.1695, knee=-0.1402
 MOTOR_OFFSET_ANGLE = [
-     0.3994,  4.9934,  0.0313,  # BL (can1)
-    -0.1206, -1.3447,  0.0186,  # BR (can0)
-     0.3469, -1.2389,  0.0174,  # FL (can1)
-    -1.6822, -1.1756,  0.1321,  # FR (can0)
+     0.3756, -1.3275, -0.1064,  # BL (can1)
+    -0.3894, -1.3267, -0.0259,  # BR (can0)
+      0.3407, -1.2098,  0.0013,  # FL (can1)
+    -0.2571, -1.1695, -0.1402,  # FR (can0)
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
