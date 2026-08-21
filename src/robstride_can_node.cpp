@@ -227,13 +227,24 @@ private:
       }
       joint_state_pub_->publish(js_msg);
 
-      // 3. Deterministic Sleep using CLOCK_MONOTONIC
+      // 3. Deterministic Sleep & Deadline Overrun Watchdog
       next_period.tv_nsec += period_ns;
       while (next_period.tv_nsec >= 1000000000) {
         next_period.tv_nsec -= 1000000000;
         next_period.tv_sec += 1;
       }
-      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_period, nullptr);
+
+      struct timespec now_ts;
+      clock_gettime(CLOCK_MONOTONIC, &now_ts);
+      long diff_ns = (now_ts.tv_sec - next_period.tv_sec) * 1000000000L + (now_ts.tv_nsec - next_period.tv_nsec);
+
+      if (diff_ns > 0) {
+        // Deadline missed! Cycle took longer than period_ns (5 ms for 200 Hz)
+        overrun_count_++;
+        next_period = now_ts;  // Catch up to current time to avoid burst catch-ups
+      } else {
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_period, nullptr);
+      }
     }
   }
 
@@ -247,6 +258,11 @@ private:
     }
     diag_pub_->publish(diag_msg);
 
+    if (overrun_count_ > 0) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+        "⚠️ [CAN Real-Time Overrun] Loop missed 200 Hz deadline %lu times! Check CPU load.", overrun_count_.load());
+    }
+
     std_msgs::msg::String status_msg;
     if (hw_manager_.isEmergencyStopped()) {
       status_msg.data = "EMERGENCY_STOPPED";
@@ -259,6 +275,7 @@ private:
   }
 
   std::atomic<bool> running_;
+  std::atomic<uint64_t> overrun_count_{0};
   RobStrideHardwareManager hw_manager_;
   int loop_hz_;
   double default_kp_;

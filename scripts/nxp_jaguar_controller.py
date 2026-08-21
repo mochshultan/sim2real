@@ -6,6 +6,7 @@ Deploys Isaac Lab 3.0 TorchScript Policy (DreamWaQ) to RobStride RS00 Hardware.
 
 import os
 import math
+import time
 import threading
 import numpy as np
 import torch
@@ -169,6 +170,14 @@ class NXPJaguarControllerNode(Node):
         self.debug_pub = self.create_publisher(Float32MultiArray, "/jaguar/state_debug", 10)
         self.status_pub = self.create_publisher(String, "/jaguar/status", 10)
 
+        # Performance & Frequency Watchdog variables
+        self.last_loop_time = time.perf_counter()
+        self.actual_freq = 50.0
+        self.compute_latency_ms = 0.0
+        self.lag_counter = 0
+        self.last_warn_time = 0.0
+        self.dt_history = []
+
         # 50 Hz Control Timer Loop (20 ms dt)
         self.timer = self.create_timer(CONTROL_DT, self._control_loop)
         self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY")
@@ -272,6 +281,17 @@ class NXPJaguarControllerNode(Node):
                     self.cmd_vel[2] = msg.axes[2] * 1.2
 
     def _control_loop(self):
+        t_start = time.perf_counter()
+        dt = t_start - self.last_loop_time
+        self.last_loop_time = t_start
+
+        # Track rolling frequency over last 25 cycles
+        if 0.001 < dt < 1.0:
+            self.dt_history.append(dt)
+            if len(self.dt_history) > 25:
+                self.dt_history.pop(0)
+            self.actual_freq = 1.0 / (sum(self.dt_history) / len(self.dt_history))
+
         if not self.imu_received:
             return
 
@@ -336,9 +356,40 @@ class NXPJaguarControllerNode(Node):
         cmd_msg.effort = [0.0] * 12
         self.joint_cmd_pub.publish(cmd_msg)
 
+        t_end = time.perf_counter()
+        self.compute_latency_ms = (t_end - t_start) * 1000.0
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+
+        # Frequency & Compute Latency Watchdog / Warnings
+        if self.compute_latency_ms > 20.0 or self.actual_freq < 45.0:
+            self.lag_counter += 1
+            if now_sec - self.last_warn_time > 1.0:
+                self.get_logger().warn(
+                    f"⚠️ [TIMING WARNING] Controller Compute Lag! "
+                    f"Latency: {self.compute_latency_ms:.2f} ms (Budget: 20.0 ms) | "
+                    f"Actual Freq: {self.actual_freq:.1f} Hz (Target: 50.0 Hz)"
+                )
+                self.last_warn_time = now_sec
+
+            # Critical Safety Fallback: If severe lag occurs in WALK mode (compute > 45ms or freq < 25Hz for 5 consecutive loops)
+            if self.state == "WALK" and (self.compute_latency_ms > 45.0 or self.actual_freq < 25.0):
+                if self.lag_counter >= 5:
+                    self.get_logger().error(
+                        f"🚨 [CRITICAL WATCHDOG] Persistent compute lag ({self.compute_latency_ms:.1f} ms, {self.actual_freq:.1f} Hz)! "
+                        f"Safety fallback triggered -> Resetting to STANDUP."
+                    )
+                    self.state = "STANDUP"
+                    self.transition_start_time = now_sec
+                    with self.state_lock:
+                        self.transition_start_pos = self.joint_pos.copy()
+                        self.cmd_vel[:] = 0.0
+                    self.lag_counter = 0
+        else:
+            self.lag_counter = max(0, self.lag_counter - 1)
+
         # Publish Status String
         status_msg = String()
-        status_msg.data = f"State: {self.state} | Cmd: [{cmd[0]:.2f}, {cmd[1]:.2f}, {cmd[2]:.2f}]"
+        status_msg.data = f"State: {self.state} | Cmd: [{cmd[0]:.2f}, {cmd[1]:.2f}, {cmd[2]:.2f}] | Freq: {self.actual_freq:.1f} Hz | Latency: {self.compute_latency_ms:.1f} ms"
         self.status_pub.publish(status_msg)
 
 

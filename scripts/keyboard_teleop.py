@@ -202,12 +202,31 @@ class KeyboardTeleopNode(Node):
             else:
                 state_badge = f"{C_YELLOW}[ 🪑 {state_str} ]{C_RESET}"
 
+            # Parse Freq & Latency from controller feedback if available
+            health_badge = f"{C_WHITE}Menunggu data RL...{C_RESET}"
+            if "Freq:" in self.controller_feedback and "Latency:" in self.controller_feedback:
+                try:
+                    parts = self.controller_feedback.split("|")
+                    freq_part = [p for p in parts if "Freq:" in p][0].replace("Freq:", "").replace("Hz", "").strip()
+                    lat_part = [p for p in parts if "Latency:" in p][0].replace("Latency:", "").replace("ms", "").strip()
+                    freq_val = float(freq_part)
+                    lat_val = float(lat_part)
+
+                    if freq_val >= 47.0 and lat_val <= 20.0:
+                        health_badge = f"{C_GREEN}🟢 OK: {freq_val:.1f} Hz (Latensi Model: {lat_val:.1f} ms / Budget 20 ms){C_RESET}"
+                    elif freq_val >= 40.0:
+                        health_badge = f"{C_YELLOW}🟡 WARNING: {freq_val:.1f} Hz (Latensi Model: {lat_val:.1f} ms){C_RESET}"
+                    else:
+                        health_badge = f"{C_RED}🔴 CRITICAL LAG: {freq_val:.1f} Hz (Latensi Model: {lat_val:.1f} ms > 20 ms!){C_RESET}"
+                except Exception:
+                    health_badge = f"{C_WHITE}{self.controller_feedback}{C_RESET}"
+
             output = []
             output.append(f"{C_CLEAR}{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
             output.append(f"{C_BOLD}{C_CYAN}  🐾 NXP JAGUAR: KEYBOARD CONTROLLER & TELEOP (ROS 2){C_RESET}")
             output.append(f"{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
             output.append(f" Status Mode Robot   : {state_badge}")
-            output.append(f" Feedback Controller : {C_WHITE}{self.controller_feedback}{C_RESET}")
+            output.append(f" Kesehatan Frekuensi : {health_badge}")
             output.append(f" Orientasi IMU (RPY) : Roll: {self.imu_rpy[0]:+5.1f}° | Pitch: {self.imu_rpy[1]:+5.1f}° | Yaw: {self.imu_rpy[2]:+5.1f}°")
             output.append(f" Perintah Terakhir   : {self.last_key_action}")
             output.append(f"{C_BOLD}{C_WHITE}------------------------------------------------------------------------{C_RESET}")
