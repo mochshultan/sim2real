@@ -35,10 +35,10 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose (Kaki belakang lebih tegak: Hip -1.40 rad, Knee +1.60 rad; Kaki depan: Hip -1.50 rad, Knee +1.40 rad)
+# Standing pose (Kaki belakang: Hip -1.40 rad, Knee +1.36 rad; Kaki depan: Hip -1.50 rad, Knee +1.40 rad)
 STAND_POSE = np.array([
-    0.0, -1.40,  1.60,  # BL: collar, hip, knee (belakang tegak & menopang)
-    0.0, -1.40,  1.60,  # BR: collar, hip, knee (belakang tegak & menopang)
+    0.0, -1.40,  1.36,  # BL: collar, hip, knee (belakang optimal menopang)
+    0.0, -1.40,  1.36,  # BR: collar, hip, knee (belakang optimal menopang)
     0.0, -1.50,  1.40,  # FL: collar, hip, knee (depan standar)
     0.0, -1.50,  1.40,  # FR: collar, hip, knee (depan standar)
 ], dtype=np.float64)
@@ -101,7 +101,7 @@ class SitStandController:
 
         # Control parameters
         self.kp = 25.0          # Nominal stiffness matching parameters.py (25.0)
-        self.kd = 1.0           # Damping
+        self.kd = 1.5           # Damping
         self.duration = 4.0     # Smooth 4-second transition duration
         self.control_dt = 0.02  # 50 Hz control loop (20 ms)
 
@@ -191,6 +191,8 @@ class SitStandController:
                     self.motors[i].enable_motor()
                     time.sleep(0.01)
                     self.motors[i].set_run_mode("CONTROL_MODE")
+                    if P.MOTOR_OFFSET_ANGLE[i]:
+                        self.motors[i].set_angle_offset(P.MOTOR_OFFSET_ANGLE[i])
                 except Exception as e:
                     print(f"[ERROR] Gagal menghubungkan Motor #{P.CAN_ID[i]} pada {bus_name}: {e}")
 
@@ -291,7 +293,9 @@ class SitStandController:
         with self.lock:
             # Capture actual current joint positions as starting trajectory points
             self.start_pos = self.joint_pos.copy()
-            self.target_pos = target_pose.copy()
+            # Calculate shortest angular path to prevent 360-degree motor spinning
+            diff = (target_pose - self.start_pos + np.pi) % (2 * np.pi) - np.pi
+            self.target_pos = self.start_pos + diff
             self.target_state = target_state_name
             self.state = "TRANSITIONING"
             self.is_passive = False

@@ -45,11 +45,11 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 # Standby Joint Angles (Folded/Sitting position = 0.0 rad)
 SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 
-# Default Standing Pose (Matching NXP_JAGUAR_CFG in Isaac Lab: Front Hips -1.5, Back Hips -1.4, Front Knees 1.4, Back Knees 1.6)
+# Default Standing Pose (Matching NXP_JAGUAR_CFG in Isaac Lab: Front Hips -1.5, Back Hips -1.4, Front Knees 1.4, Back Knees 1.36)
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
    -1.50, -1.50, -1.40, -1.40,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.40,  1.40,  1.60,  1.60,   # Knees (Fr, Fl, Br, Bl)
+    1.40,  1.40,  1.36,  1.36,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 ACTION_SCALE = 0.25      # Policy action scaling factor

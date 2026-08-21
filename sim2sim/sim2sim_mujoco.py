@@ -486,11 +486,11 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
                     if is_zero_cmd:
                         kp_now, kd_now = 32.0, 1.8
                     else:
-                        kp_now, kd_now = 25.0, 1.0
+                        kp_now, kd_now = 25.0, 1.5
                 elif in_transition or teleop.state == "STANDUP":
                     kp_now, kd_now = 35.0, 2.0
                 else:
-                    kp_now, kd_now = 15.0, 1.0
+                    kp_now, kd_now = 15.0, 1.5
 
                 curr_pos_m = mj_data.qpos[7:19]
                 curr_vel_m = mj_data.qvel[6:18]

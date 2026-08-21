@@ -43,6 +43,8 @@ class PassiveJointChecker:
                     self.motors[i].enable_motor()
                     time.sleep(0.02)
                     self.motors[i].set_run_mode("CONTROL_MODE")
+                    if P.MOTOR_OFFSET_ANGLE[i]:
+                        self.motors[i].set_angle_offset(P.MOTOR_OFFSET_ANGLE[i])
                 except Exception as e:
                     print(f"Error connecting to Motor #{P.CAN_ID[i]} on {bus_name}: {e}")
 

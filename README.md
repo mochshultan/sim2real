@@ -137,7 +137,7 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 - **Real-Time Priority**: `SCHED_FIFO` Priority `80`
 - **Action Scale**: `0.25` ($q_{\text{des}} = q_0 + 0.25 \times a_{\text{policy}}$)
 - **Stiffness ($K_p$)**: `25.0`
-- **Damping ($K_d$)**: `1.0`
+- **Damping ($K_d$)**: `1.5`
 
 ---
 

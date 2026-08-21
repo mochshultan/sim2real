@@ -38,7 +38,7 @@ ROS_NAME_TO_ISAAC_IDX = {
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
    -1.50, -1.50, -1.40, -1.40,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.40,  1.40,  1.60,  1.60,   # Knees (Fr, Fl, Br, Bl)
+    1.40,  1.40,  1.36,  1.36,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 class StateCheckerNode(Node):

@@ -80,7 +80,7 @@ def generate_launch_description():
         parameters=[{
             "rate_hz": 200,
             "default_kp": 25.0,
-            "default_kd": 1.0,
+            "default_kd": 1.5,
             "rt_priority": 80,
         }],
         condition=IfCondition(use_cpp_hardware) and IfCondition(with_hardware),

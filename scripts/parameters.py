@@ -37,10 +37,18 @@ MOTOR_DIR = [
     -1,  1,  1,  # FR
 ]
 
-MOTOR_OFFSET_THRE = [None] * 12
-
-# Zero-calibration angular offsets (Already calibrated to 0 via mechanical zero)
-MOTOR_OFFSET_ANGLE = [0.0] * 12
+# Zero-calibration angular offsets
+# Offsets calibrated from actual manual sit pose so that sitting position = 0.0 rad:
+# BL: collar=+0.3994, hip=+4.9934, knee=+0.0313
+# BR: collar=-0.1206, hip=-1.3447, knee=+0.0186
+# FL: collar=+0.3469, hip=-1.2389, knee=+0.0174
+# FR: collar=-1.6822, hip=-1.1756, knee=+0.1321
+MOTOR_OFFSET_ANGLE = [
+     0.3994,  4.9934,  0.0313,  # BL (can1)
+    -0.1206, -1.3447,  0.0186,  # BR (can0)
+     0.3469, -1.2389,  0.0174,  # FL (can1)
+    -1.6822, -1.1756,  0.1321,  # FR (can0)
+]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
 JOINT_NAME = [
@@ -60,18 +68,18 @@ STANDBY_ANGLE = [
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0:
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.40, Knee: +1.60
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.40, Knee: +1.36 (Tuned)
 #   FL & FR (Front Legs): Roll: 0.0, Hip: -1.50, Knee: +1.40
 DEFAULT_ANGLE = [
-     0.0, -1.40,  1.60,  # BL
-     0.0, -1.40,  1.60,  # BR
+     0.0, -1.40,  1.36,  # BL
+     0.0, -1.40,  1.36,  # BR
      0.0, -1.50,  1.40,  # FL
      0.0, -1.50,  1.40,  # FR
 ]
 
 # PD Control Gains for RS00 Motors
 KP_GAIN = [25.0] * 12
-KD_GAIN = [1.0] * 12
+KD_GAIN = [1.5] * 12
 
 # Isaac Lab RL Policy Control Parameters
 ACTION_SCALE = 0.25
