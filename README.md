@@ -273,6 +273,9 @@ ros2 launch jaguar_control sim2real.launch.py
 
 ## 9. Tool Diagnostik & Kalibrasi Hardware
 
+> 📘 **Panduan Lengkap Kalibrasi Nol & Offset (English & 繁體中文):**  
+> Lihat dokumen lengkap [**`ZERO_CALIBRATION_GUIDE.md`**](file:///home/erc/sim2real/ZERO_CALIBRATION_GUIDE.md) untuk penjelasan detail konsep Relax Pose, Sit Pose, dan tabel offset 12 motor.
+
 Semua tool utilitas pendukung tersedia di folder `scripts/`:
 
 * **Scan Motor ID di CAN Bus:**
@@ -280,7 +283,7 @@ Semua tool utilitas pendukung tersedia di folder `scripts/`:
   python3 scripts/scan_robostride_ids.py
   ```
 * **Kalibrasi Posisi Nol Mekanikal (Zero Calibration):**
-  *(Jalankan saat posisi kaki terlipat/duduk sempurna)*
+  *(Posisikan kaki pada **Posisi Relax**, lalu jalankan)*
   ```bash
   python3 scripts/set_robostride_zero.py
   ```
