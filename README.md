@@ -1,64 +1,94 @@
-# 🐾 NXP Jaguar Quadruped: Sim-to-Real Deployment & ROS 2 Control Framework
-**Reinforcement Learning Control: Isaac Lab 3.0 (DreamWaQ) ➡️ RobStride RS00 Hardware via ROS 2**
+# 🐾 NXP Jaguar Quadruped: Sim-to-Real Deployment (Branch: `cpp`)
+**Reinforcement Learning Control: Isaac Lab 3.0 (DreamWaQ) ➡️ RobStride RS00 via ROS 2 (C++ Hard Real-Time Driver)**
 
-Framework lengkap untuk deployment model kontrol Reinforcement Learning (RL) hasil pelatihan **Isaac Lab 3.0** ke hardware fisik robot quadruped **NXP Jaguar** menggunakan **ROS 2**.
+---
+
+## 📌 Ringkasan Branch `cpp`
+Branch ini mengimplementasikan **Hard Real-Time C++ CAN Driver (`robstride_can_node`)** berbasis Linux SocketCAN native dengan prioritas thread real-time (**`SCHED_FIFO`, Priority 80**). Dirancang khusus untuk meminimalkan latensi komunikasi (< 1 ms), menghilangkan *jitter* timer Python GIL, dan menjamin frekuensi loop deterministik **200 Hz** untuk pengendalian 12 motor RobStride RS00 secara simultan.
 
 ---
 
 ## 📑 Daftar Isi
-1. [Prasyarat & Lingkungan Sistem](#1-prasyarat--lingkungan-sistem)
-2. [Struktur & Dimensi State Observasi Policy (48 Dimensi)](#2-struktur--dimensi-state-observasi-policy-48-dimensi)
-3. [Verifikasi & Mekanisme Remapping State Robot ke Policy](#3-verifikasi--mekanisme-remapping-state-robot-ke-policy)
-4. [Tabel Pemetaan & Urutan Joint (Isaac Lab vs ROS Hardware)](#4-tabel-pemetaan--urutan-joint-isaac-lab-vs-ros-hardware)
-5. [Parameter Aktuator & Gain Kontrol (RobStride RS00)](#5-parameter-aktuator--gain-kontrol-robstride-rs00)
-6. [Konfigurasi & Panduan Joystick (Hardware & Virtual)](#6-konfigurasi--panduan-joystick-hardware--virtual)
-7. [SOP Prosedur Deployment Hardware (Langkah Demi Langkah)](#7-sop-prosedur-deployment-hardware-langkah-demi-langkah)
-8. [Fitur Keselamatan & E-Stop](#8-fitur-keselamatan--e-stop)
-9. [Validasi & Visualisasi MuJoCo Sim-to-Sim](#9-validasi--visualisasi-mujoco-sim-to-sim)
+1. [Arsitektur Sistem (High-Level ke Low-Level C++)](#1-arsitektur-sistem-high-level-ke-low-level-c)
+2. [Rincian Komponen Low-Level C++ Driver](#2-rincian-komponen-low-level-c-driver)
+3. [Spesifikasi Observasi Policy RL (48-Dimensi)](#3-spesifikasi-observasi-policy-rl-48-dimensi)
+4. [Mekanisme Remapping Joint (Isaac Lab vs ROS Hardware)](#4-mekanisme-remapping-joint-isaac-lab-vs-ros-hardware)
+5. [Tabel Pemetaan Joint, ID Motor, dan CAN Bus](#5-tabel-pemetaan-joint-id-motor-dan-can-bus)
+6. [Gain Kontrol & Parameter Aktuator RobStride](#6-gain-kontrol--parameter-aktuator-robstride)
+7. [Panduan Teleoperasi Joystick (Hardware & Virtual)](#7-panduan-teleoperasi-joystick-hardware--virtual)
+8. [🚀 SOP Urutan Eksekusi Menjalankan Robot (Langkah Demi Langkah)](#8--sop-urutan-eksekusi-menjalankan-robot-langkah-demi-langkah)
+9. [Tool Diagnostik & Kalibrasi Hardware](#9-tool-diagnostik--kalibrasi-hardware)
+10. [Fitur Keselamatan & E-Stop](#10-fitur-keselamatan--e-stop)
+11. [Validasi Sim-to-Sim MuJoCo](#11-validasi-sim-to-sim-mujoco)
 
 ---
 
-## 1. Prasyarat & Lingkungan Sistem
+## 1. Arsitektur Sistem (High-Level ke Low-Level C++)
 
-- **Sistem Operasi**: Ubuntu 22.04 LTS (x86_64 / Intel N150)
-- **Distribusi ROS 2**: ROS 2 Humble Hawksbill (`/opt/ros/humble`)
-- **Python Dependencies**:
-  - `torch >= 2.0.0` (PyTorch CPU untuk inferensi model JIT `policy.pt`)
-  - `onnxruntime`
-  - `python-can` (SocketCAN driver)
-  - `numpy`, `scipy`
+```
+[ HIGH-LEVEL: RL Policy ]
+      │  Model: TorchScript JIT (`policy.pt`) dilatih di Isaac Lab 3.0 (DreamWaQ)
+      │  Frekuensi: 50 Hz (dt = 0.02 s) | Input: 48-Dim Observasi | Output: 12-Dim Target Δq
+      ▼
+[ MID-LEVEL: ROS 2 Controller Node (`scripts/nxp_jaguar_controller.py`) ]
+      │  • Membaca IMU (`/Imu_data`), Joy/Teleop (`/joy`, `/cmd_vel`), dan Joint States (`/robot_joint_states`)
+      │  • Finite State Machine: STANDBY ──(Btn A)──> STANDUP ──(Btn B)──> WALK ──(Btn X)──> E-STOP
+      │  • Remapping: Isaac Order (Roll->Hip->Knee) ⇄ ROS Hardware Order (BL->BR->FL->FR)
+      │  • Menghitung Desired Angle: q_des = q_nominal + 0.25 * action
+      │  • Publish ke: `/joint_command` (std_msgs/Float64MultiArray)
+      ▼
+[ LOW-LEVEL: C++ Hard Real-Time CAN Node (`src/robstride_can_node.cpp`) ]
+      │  • Multithreaded Engine: Dual SocketCAN Threads (`can0` & `can1`) via `robstride_can_bus.hpp`
+      │  • Real-Time Scheduler: Linux `SCHED_FIFO` (Priority 80)
+      │  • Protocol: RobStride RS00 Frame Bit-Packing (`robstride_protocol.hpp`)
+      │  • Deterministik: Loop Timer 200 Hz (dt = 0.005 s) tanpa overhead Python GIL
+      │  • Publish state aktual ke: `/robot_joint_states` (sensor_msgs/JointState)
+      ▼
+[ HARDWARE: 12x RobStride RS00 Motor & Hiwonder 9-DOF IMU ]
+```
 
 ---
 
-## 2. Struktur & Dimensi State Observasi Policy (48 Dimensi)
+## 2. Rincian Komponen Low-Level C++ Driver
 
-Model neural network (*actor policy*) yang diekspor dari Isaac Lab menerima vektor observasi berukuran tepat **48 dimensi**:
+Modul C++ berlokasi di [`include/jaguar_control/`](file:///home/erc/sim2real/include/jaguar_control/) dan [`src/`](file:///home/erc/sim2real/src/):
 
-| Rentang Indeks | Nama State | Dimensi | Satuan | Deskripsi & Rumus |
+| File | Kelas / Fungsi Utama | Deskripsi Teknis |
+| :--- | :--- | :--- |
+| **`robstride_protocol.hpp`** | `RobStrideProtocol` | Konversi float $\leftrightarrow$ uint16 bit-packing (Posisi, Kecepatan, $K_p$, $K_d$, Torsi feedforward), enkapsulasi frame CAN 29-bit extended ID. |
+| **`robstride_can_bus.hpp`** | `RobStrideCANBus` | Abstraksi native Linux POSIX SocketCAN (`AF_CAN`, `SOCK_RAW`), pengiriman non-blocking dan pembacaan multithreaded dengan filter CAN ID. |
+| **`robstride_hardware_manager.hpp`** | `RobStrideHardwareManager` | Mengatur dual bus CAN paralel (`can0` untuk Belakang, `can1` untuk Depan), soft-ramp trajectory generator saat startup, interpolasi target sudut, dan kompensasi offset nol mekanikal. |
+| **`robstride_can_node.cpp`** | `RobStrideCANNode` (ROS 2) | Node utama ROS 2: thread deterministik 200 Hz, subscriber `/joint_command`, publisher `/robot_joint_states`, dan handler real-time priority `SCHED_FIFO`. |
+
+---
+
+## 3. Spesifikasi Observasi Policy RL (48-Dimensi)
+
+Model neural network (*actor policy*) menerima vektor observasi berukuran tepat **48 dimensi**:
+
+| Rentang Indeks | Nama State | Dimensi | Satuan | Deskripsi & Nilai Nominal |
 | :---: | :--- | :---: | :---: | :--- |
 | `[0 : 3]` | **`base_lin_vel`** | 3 | $\text{m/s}$ | Kecepatan linier badan robot dalam *body frame* $[v_x, v_y, v_z]$ |
 | `[3 : 6]` | **`base_ang_vel`** | 3 | $\text{rad/s}$ | Kecepatan sudut gyro dalam *body frame* $[\omega_x, \omega_y, \omega_z]$ |
-| `[6 : 9]` | **`projected_gravity`** | 3 | unit | Proyeksi vektor gravitasi $[g_x, g_y, g_z]$ ($[0, 0, -1]$ saat tegak) |
+| `[6 : 9]` | **`projected_gravity`** | 3 | unit | Vektor gravitasi proyeksi $[g_x, g_y, g_z]$ ($[0, 0, -1]$ saat tegak) |
 | `[9 : 12]` | **`velocity_commands`** | 3 | $\text{m/s, rad/s}$ | Perintah joystick user $[v_x^{\text{cmd}}, v_y^{\text{cmd}}, \omega_z^{\text{cmd}}]$ |
 | `[12 : 24]` | **`joint_pos_rel`** | 12 | $\text{rad}$ | Posisi sudut sendi relatif terhadap nominal: $(q_i - q_{0, i})$ |
 | `[24 : 36]` | **`joint_vel`** | 12 | $\text{rad/s}$ | Kecepatan sudut 12 sendi motor $\dot{q}_i$ |
-| `[36 : 48]` | **`actions`** | 12 | $\text{rad}$ | Output aksi policy pada timestep sebelumnya $a_{t-1}$ (*last action*) |
+| `[36 : 48]` | **`actions`** | 12 | $\text{rad}$ | Aksi policy pada langkah sebelumnya $a_{t-1}$ (*last action*) |
 
 $$\text{Total Dimensi Observasi} = 3 + 3 + 3 + 3 + 12 + 12 + 12 = \mathbf{48}$$
 
 ---
 
-## 3. Verifikasi & Mekanisme Remapping State Robot ke Policy
+## 4. Mekanisme Remapping Joint (Isaac Lab vs ROS Hardware)
 
-### ⚠️ Mengapa Remapping Wajib Dilakukan?
-Terdapat perbedaan fundamental dalam urutan pengelompokan joint antara **Hardware Driver CAN** dan **Isaac Lab RL Policy**:
-- **Driver Hardware CAN**: Mengelompokkan sendi **per kaki** (`BL`, `BR`, `FL`, `FR`).
-- **Policy Isaac Lab**: Mengelompokkan sendi **per tipe sendi** (semua `Roll`, semua `Hip`, semua `Knee`).
+* **Driver Motor CAN Hardware**: Dikelompokkan **per kaki** (`BL`, `BR`, `FL`, `FR`).
+* **Policy Isaac Lab**: Dikelompokkan **per tipe sendi** (semua `Roll`, semua `Hip`, semua `Knee`).
 
 ```
-[Driver Motor CAN Hardware]                  [Model RL Policy Isaac Lab 3.0]
+[Driver Motor CAN Hardware (C++ / ROS)]      [Model RL Policy Isaac Lab 3.0]
 Dikelompokkan per KAKI (BL, BR, FL, FR)      Dikelompokkan per TIPE SENDI (Rolls, Hips, Knees)
-─────────────────────────────────────        ────────────────────────────────────────────────
+───────────────────────────────────────      ────────────────────────────────────────────────
  0: BL_collar_joint                           0: Fr_roll_joint   (Roll Depan Kanan)
  1: BL_hip_joint                              1: Fl_roll_joint   (Roll Depan Kiri)
  2: BL_knee_joint                             2: Br_roll_joint   (Roll Belakang Kanan)
@@ -73,29 +103,17 @@ Dikelompokkan per KAKI (BL, BR, FL, FR)      Dikelompokkan per TIPE SENDI (Rolls
 11: FR_knee_joint                            11: Bl_knee_joint   (Knee Belakang Kiri)
 ```
 
-### 🔬 Bukti Statistik Normalizer `policy.pt`
-Dari ekstraksi buffer `obs_normalizer` pada `policy.pt`:
-- **Indeks [6 : 9] (Gravity)**: Mean $= [0.0039, -0.0009, \mathbf{-0.9989}]$ $\rightarrow$ Robot tegak adalah $[0, 0, -1]$.
-- **Indeks [12 : 15] (4 Roll)**: $\sigma \approx 0.13\text{ rad}$ (seragam 4 roll).
-- **Indeks [16 : 19] (4 Hip)**: $\sigma \approx 0.16\text{ rad}$ (seragam 4 hip).
-- **Indeks [20 : 23] (4 Knee)**: $\sigma \approx 0.12\text{ rad}$ (seragam 4 knee).
-
-### 🛡️ Proteksi 2-Lapis Remapping di Controller:
-1. **Lapis 1 - String Name Lookup**: Mengaitkan nama joint pesan ROS (`FR_collar_joint` / `Fr_roll_joint`) langsung ke indeks tensor Isaac `[0..11]`.
-2. **Lapis 2 - Matriks Permutasi Indeks (Fallback)**:
-   ```python
-   # Dari CAN Hardware (BL, BR, FL, FR) -> Urutan Isaac (Roll, Hip, Knee):
-   ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
-
-   # Dari output Policy Isaac -> Dikembalikan ke motor CAN Hardware:
-   ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
-   ```
+Matriks permutasi yang diterapkan pada `scripts/nxp_jaguar_controller.py`:
+```python
+ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
+ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
+```
 
 ---
 
-## 4. Tabel Pemetaan & Urutan Joint (Isaac Lab vs ROS Hardware)
+## 5. Tabel Pemetaan Joint, ID Motor, dan CAN Bus
 
-| Indeks Isaac Lab | Nama Joint (Isaac Lab) | Posisi Standby ($q_0$) | Indeks ROS | Nama Joint di ROS CAN (`parameters.py`) | ID Motor | CAN Bus |
+| Indeks Isaac | Nama Joint (Isaac Lab) | Sudut Standby ($q_0$) | Indeks ROS | Nama Joint di ROS (`parameters.py`) | ID Motor | CAN Bus |
 | :---: | :--- | :---: | :---: | :--- | :---: | :---: |
 | **0** | `Fr_roll_joint` (Depan Kanan Roll) | $0.0\text{ rad}$ | **9** | `FR_collar_joint` | 1 | `can1` |
 | **1** | `Fl_roll_joint` (Depan Kiri Roll) | $0.0\text{ rad}$ | **6** | `FL_collar_joint` | 4 | `can1` |
@@ -112,35 +130,30 @@ Dari ekstraksi buffer `obs_normalizer` pada `policy.pt`:
 
 ---
 
-## 5. Parameter Aktuator & Gain Kontrol (RobStride RS00)
+## 6. Gain Kontrol & Parameter Aktuator RobStride
 
-- **Frekuensi Kontrol Policy**: `50 Hz` ($\Delta t = 0.02\text{ s}$)
-- **Frekuensi Loop CAN Hardware**: `200 Hz`
+- **Frekuensi Policy Controller**: `50 Hz` ($\Delta t = 0.02\text{ s}$)
+- **Frekuensi C++ Hardware Node**: `200 Hz` ($\Delta t = 0.005\text{ s}$)
+- **Real-Time Priority**: `SCHED_FIFO` Priority `80`
 - **Action Scale**: `0.25` ($q_{\text{des}} = q_0 + 0.25 \times a_{\text{policy}}$)
-- **Stiffness Gain ($K_p$)**: `25.0`
-- **Damping Gain ($K_d$)**: `1.0`
+- **Stiffness ($K_p$)**: `25.0`
+- **Damping ($K_d$)**: `1.0`
 
 ---
 
-## 6. Konfigurasi & Panduan Joystick (Hardware & Virtual)
+## 7. Panduan Teleoperasi Joystick (Hardware & Virtual)
 
-### 🎮 1. Joystick Fisik yang Didukung
-Controller membaca device standar `/dev/input/js0` melalui package `joy`:
-- **PlayStation 4 / DualShock 4** (USB / Bluetooth)
-- **Xbox 360 / Xbox One / Series** (USB / Bluetooth)
-- **Logitech F710 / Gamesir / General HID Gamepad**
+Controller membaca gamepad standar (`/dev/input/js0`) via package ROS 2 `joy`.
 
-### 🕹️ 2. Pemetaan Tombol & Stik Analog (Mapping)
-
-#### 🔘 Tombol Perintah (State Machine):
-| Tombol PS4 | Tombol Xbox | Indeks ROS (`msg.buttons`) | Aksi Robot |
+### 🔘 Tombol Perintah (State Machine):
+| Tombol PS4 | Tombol Xbox | Indeks ROS | Aksi State Robot |
 | :---: | :---: | :---: | :--- |
-| **`X` (Cross)** | **`A`** | `Button 0` | **`STANDUP`**: Robot perlahan berdiri ke sudut nominal $q_0$ (Roll: $0.0$, Hip: $-1.5$, Knee: $+1.5\text{ rad}$) selama 2 detik. |
-| **`Lingkaran` (Circle)** | **`B`** | `Button 1` | **`WALK`**: Mengaktifkan model Policy RL PPO (50 Hz). |
-| **`Kotak` (Square)** | **`X`** | `Button 2` | **`E-STOP / STANDBY`**: Menghentikan gerakan policy seketika dan duduk. |
+| **`X` (Cross)** | **`A`** | `Button 0` | **`STANDUP`**: Transisi halus berdiri ke posisi nominal $q_0$ selama 2 detik. |
+| **`Lingkaran`** | **`B`** | `Button 1` | **`WALK`**: Mengaktifkan model Policy RL PPO (50 Hz). |
+| **`Kotak`** | **`X`** | `Button 2` | **`E-STOP / STANDBY`**: Menghentikan policy seketika dan duduk. |
 
-#### 🕹️ Stik Analog (Pergerakan Robot):
-| Input Analog | Axis Index | Rentang Nilai | Perintah Gerak |
+### 🕹️ Stik Analog (Pergerakan Robot):
+| Input Analog | Axis Index | Rentang | Perintah Gerak |
 | :--- | :---: | :---: | :--- |
 | **Stik Kiri Vertikal** | `axes[1]` | $[-1.0, 1.0]$ | Kecepatan Maju / Mundur ($v_x$) |
 | **Stik Kiri Horizontal** | `axes[0]` | $[-0.5, 0.5]$ | Kecepatan Geser Samping / Strafe ($v_y$) |
@@ -148,110 +161,132 @@ Controller membaca device standar `/dev/input/js0` melalui package `joy`:
 
 ---
 
-### 💻 3. Alternatif: Virtual Joystick (Jika Tanpa Gamepad Fisik)
-
-#### Opsi A: Virtual Gamepad CLI (Headless)
-Jalankan script virtual controller di terminal:
-```bash
-python3 /home/erc/virtual_gamepad_headless.py
-```
-*Perintah interaktif:*
-- Ketik `a` + Enter $\rightarrow$ Stand Up
-- Ketik `b` + Enter $\rightarrow$ Walk (RL Active)
-- Ketik `x` + Enter $\rightarrow$ Emergency Standby
-- Ketik `ly 0.5` + Enter $\rightarrow$ Maju $0.5\text{ m/s}$
-
-#### Opsi B: Publish Manual via ROS 2 `/cmd_vel`
-```bash
-# Perintah maju 0.4 m/s:
-ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.4, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" -r 20
-```
-
----
-
-## 7. SOP Prosedur Deployment Hardware (Langkah Demi Langkah)
+## 8. 🚀 SOP Urutan Eksekusi Menjalankan Robot (Langkah Demi Langkah)
 
 > [!IMPORTANT]
-> **Tahap Persiapan Keselamatan (Wajib Gantung Robot)**:
-> 1. Gantung robot pada tali pengaman (*rig / gantry*) hingga ke-4 kaki menggantung bebas di udara.
-> 2. Pastikan baterai 24V / 6S terpasang aman dan saklar utama motor siap dinyalakan.
+> **Prosedur Keselamatan Wajib**:
+> 1. Gantung robot pada rig pengaman (*gantry*) hingga ke-4 kaki menggantung bebas di udara sebelum pengujian.
+> 2. Pastikan baterai 24V terhubung dan tombol emergency siap ditekan kapan saja.
 
 ---
 
-### 🚀 Urutan Terminal Eksekusi:
+### 🔨 Langkah Awal: Build Node C++ (Wajib Dilakukan Sekali)
+```bash
+cd /home/erc/sim2real
+colcon build --packages-select jaguar_control --symlink-install
+source install/setup.bash
+```
 
-#### 🔹 Terminal 1: Inisialisasi Bus CAN Motor (can0 & can1)
+---
+
+### OPSI A: Eksekusi Multi-Terminal (Sangat Direkomendasikan untuk Debugging & Observasi)
+
+Buka 5 tab terminal terpisah dan jalankan perintah secara berurutan:
+
+#### 🔹 Terminal 1: Inisialisasi Bus CAN (1 Mbps)
 ```bash
 cd /home/erc/sim2real
 sudo ./scripts/bringup_canbus.sh
 ```
+*Verifikasi: Pastikan `can0` dan `can1` aktif dengan bitrate 1000000.*
 
-#### 🔹 Terminal 2: Jalankan Driver IMU (/dev/ttyUSB0)
+#### 🔹 Terminal 2: Jalankan Driver IMU
 ```bash
-source /opt/ros/humble/setup.bash
-source /home/erc/nxp_jaguar/install/setup.bash
-ros2 run serial_imu talker
+cd /home/erc/sim2real
+./scripts/bringup_imu.sh
 ```
+*Verifikasi: Muncul pesan publishing IMU di topik `/Imu_data`.*
 
-#### 🔹 Terminal 3: Jalankan Driver CAN Motor RS00 (200 Hz)
+#### 🔹 Terminal 3: Jalankan Driver C++ Hard Real-Time Node (200 Hz)
 ```bash
 cd /home/erc/sim2real
 source /opt/ros/humble/setup.bash
-python3 scripts/can_hardware_node.py
+source install/setup.bash
+ros2 run jaguar_control robstride_can_node
 ```
-*(Node ini menginisialisasi 12 motor RS00, menerapkan sudut offset kalibrasi nol, dan melakukan soft ramp ke posisi STANDBY).*
+*Output: C++ driver mengaktifkan thread SCHED_FIFO, mendeteksi 12 motor RS00, dan siap menerima target joint.*
 
-#### 🔹 Terminal 4: Buka Live Dashboard Diagnostik Sensor & State
+#### 🔹 Terminal 4: Buka Live Dashboard Diagnostik Sensor
 ```bash
 cd /home/erc/sim2real
 source /opt/ros/humble/setup.bash
 python3 scripts/check_states.py
 ```
-*(Verifikasi manual: Gerakkan kaki robot satu per satu di udara dan pastikan baris sudut pada tabel bergerak sesuai nama sendi yang digerakkan)*.
+*Verifikasi: Tabel live menampilkan 12 sudut sendi secara real-time dan orientasi IMU.*
 
-#### 🔹 Terminal 5: Jalankan Controller Utama RL Sim-to-Real
+#### 🔹 Terminal 5: Jalankan Controller Utama Sim-to-Real RL
 ```bash
 cd /home/erc/sim2real
 source /opt/ros/humble/setup.bash
-python3 scripts/nxp_jaguar_controller.py
+source install/setup.bash
+ros2 run jaguar_control nxp_jaguar_controller.py
+```
+
+#### 🎮 Menggerakkan Robot:
+1. Tekan tombol **`A` / `X` (Cross)** pada gamepad $\rightarrow$ Robot akan berdiri secara mulus (*Standup*).
+2. Tekan tombol **`B` / `Circle`** pada gamepad $\rightarrow$ Robot masuk mode *Walk* (Policy RL aktif).
+3. Gerakkan **Stik Analog Kiri** maju/mundur untuk mengontrol kecepatan.
+4. Tekan tombol **`X` / `Square`** kapan saja untuk *Emergency Stop / Duduk*.
+
+---
+
+### OPSI B: One-Click Launch (ROS 2 Launch Full System)
+
+Menjalankan seluruh pipeline (IMU, Joy, C++ CAN Node 200 Hz, dan RL Controller) dalam 1 perintah:
+```bash
+# 1. Pastikan CAN bus sudah aktif:
+sudo /home/erc/sim2real/scripts/bringup_canbus.sh
+
+# 2. Jalankan launch file (secara default menggunakan C++ hardware driver):
+source /opt/ros/humble/setup.bash
+source /home/erc/nxp_jaguar/install/setup.bash
+source /home/erc/sim2real/install/setup.bash
+ros2 launch jaguar_control sim2real.launch.py
 ```
 
 ---
 
-## 8. Fitur Keselamatan & E-Stop
+## 9. Tool Diagnostik & Kalibrasi Hardware
 
-1. **Auto E-Stop Kemiringan (*Tilt Protection*)**:
-   - Jika kemiringan robot melebihi **$60^\circ$** ($g_z > -0.5$), controller secara otomatis memutus gerak policy dan kembali ke `STANDBY`.
-2. **Proteksi Hilang Koneksi Sensor (*Sensor Timeout Guard*)**:
-   - Jika sinyal IMU atau CAN terputus, controller otomatis menghentikan aksi.
-3. **Pemeriksaan Overheat**:
-   - Jika suhu motor melebihi **$75^\circ\text{C}$**, sistem akan mencetak peringatan darurat.
+Semua tool utilitas pendukung tersedia di folder `scripts/`:
+
+* **Scan Motor ID di CAN Bus:**
+  ```bash
+  python3 scripts/scan_robostride_ids.py
+  ```
+* **Kalibrasi Posisi Nol Mekanikal (Zero Calibration):**
+  *(Jalankan saat posisi kaki terlipat/duduk sempurna)*
+  ```bash
+  python3 scripts/set_robostride_zero.py
+  ```
+* **Test Transisi Duduk-Berdiri Mandiri (Tanpa RL):**
+  ```bash
+  python3 scripts/test_sit_stand.py
+  ```
+* **Inspeksi Sudut Sendi Pasif:**
+  ```bash
+  python3 scripts/check_joints.py
+  ```
 
 ---
 
-## 9. Validasi & Visualisasi MuJoCo Sim-to-Sim
+## 10. Fitur Keselamatan & E-Stop
 
-Framework ini menyertakan simulator independen berbasis **MuJoCo** untuk memverifikasi model kontrol RL sebelum dijalankan di hardware fisik.
+1. **Auto E-Stop Kemiringan (*Tilt Protection*)**: Jika kemiringan robot melebihi **$60^\circ$** ($g_z > -0.5$), controller otomatis memutus aksi policy dan robot kembali duduk.
+2. **Sensor Timeout Watchdog**: Jika sinyal IMU atau CAN terputus lebih dari 0.1 detik, sistem langsung menghentikan motor.
+3. **Thermal Guard**: Peringatan darurat jika suhu motor melebihi **$75^\circ\text{C}$**.
 
-### 🎮 Fitur Sim-to-Sim MuJoCo:
-- **Model 3D NXP Jaguar Autentik**: Menggunakan geometri CAD STL asli (`Base_body.STL`, `*_coxa_roll.STL`, `*_hip_pitch.STL`, `*_tibia_pitch.STL`).
-- **4 Pilihan Medan (*Terrain*)**: `flat` (datar), `rough` (bergelombang natural), `stairs` (tangga piramida), dan `obstacles` (batu pijakan).
-- **Auto-Follow Camera**: Kamera 3D viewer otomatis mengikuti robot ke mana pun berjalan.
-- **Kontrol Keyboard Non-Blocking & Gamepad**:
-  - `1` $\rightarrow$ Standby / Folded Pose
-  - `2` $\rightarrow$ Minimum-Jerk Standup Trajectory (2.0 detik)
-  - `3` $\rightarrow$ Walk Mode (RL Policy Active)
-  - `W` / `S` $\rightarrow$ Maju / Mundur ($v_x$)
-  - `A` / `D` $\rightarrow$ Geser Kiri / Kanan ($v_y$)
-  - `Q` / `E` $\rightarrow$ Putar Kiri / Kanan ($\omega_z$)
-  - `SPACE` $\rightarrow$ Stop Kecepatan ($v_x=0, v_y=0, \omega_z=0$)
+---
 
-### 🚀 Cara Menjalankan:
+## 11. Validasi Sim-to-Sim MuJoCo
+
+Sebelum deploy ke robot fisik, validasi model RL dapat dilakukan di simulator MuJoCo:
 ```bash
-# Opsi 1: Direct Python Runner
 python3 sim2sim/sim2sim_mujoco.py --terrain flat
 python3 sim2sim/sim2sim_mujoco.py --terrain rough
-
-# Opsi 2: Menggunakan ROS 2 Launch
-ros2 launch jaguar_control sim2sim_mujoco.launch.py terrain:=flat
 ```
+*Kontrol keyboard di MuJoCo:*
+* `1`: Standby (Folded)
+* `2`: Stand Up (Minimum-jerk trajectory)
+* `3`: Walk (RL Policy aktif)
+* `W/S/A/D/Q/E`: Pergerakan badan robot
