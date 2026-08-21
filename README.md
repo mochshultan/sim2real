@@ -141,23 +141,43 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
 ---
 
-## 7. Panduan Teleoperasi Joystick (Hardware & Virtual)
+## 7. Panduan Teleoperasi (Keyboard Controller & Gamepad)
 
-Controller membaca gamepad standar (`/dev/input/js0`) via package ROS 2 `joy`.
+Robot dapat dikontrol baik menggunakan **Keyboard Terminal Interaktif** maupun **Gamepad Fisik / Joystick**.
 
-### 🔘 Tombol Perintah (State Machine):
-| Tombol PS4 | Tombol Xbox | Indeks ROS | Aksi State Robot |
-| :---: | :---: | :---: | :--- |
-| **`X` (Cross)** | **`A`** | `Button 0` | **`STANDUP`**: Transisi halus berdiri ke posisi nominal $q_0$ selama 2 detik. |
-| **`Lingkaran`** | **`B`** | `Button 1` | **`WALK`**: Mengaktifkan model Policy RL PPO (50 Hz). |
-| **`Kotak`** | **`X`** | `Button 2` | **`E-STOP / STANDBY`**: Menghentikan policy seketika dan duduk. |
+---
 
-### 🕹️ Stik Analog (Pergerakan Robot):
-| Input Analog | Axis Index | Rentang | Perintah Gerak |
-| :--- | :---: | :---: | :--- |
-| **Stik Kiri Vertikal** | `axes[1]` | $[-1.0, 1.0]$ | Kecepatan Maju / Mundur ($v_x$) |
-| **Stik Kiri Horizontal** | `axes[0]` | $[-0.5, 0.5]$ | Kecepatan Geser Samping / Strafe ($v_y$) |
-| **Stik Kanan Horizontal** | `axes[3]` / `axes[2]` | $[-1.2, 1.2]$ | Kecepatan Putar Badan / Yaw ($\omega_z$) |
+### 💻 A. Keyboard Controller Interaktif (`scripts/keyboard_teleop.py`)
+Jalankan node keyboard interaktif:
+```bash
+ros2 run jaguar_control keyboard_teleop.py
+# atau: python3 scripts/keyboard_teleop.py
+```
+
+#### ⌨️ Pemetaan Tombol Keyboard:
+| Tombol | Fungsi / Aksi Robot | Penjelasan |
+| :---: | :--- | :--- |
+| **`1`** | **`🪑 DUDUK / STANDBY`** | Robot transisi perlahan duduk ke sudut terlipat $0.0\text{ rad}$ dan mereset kecepatan. |
+| **`2`** | **`🧍 BERDIRI / STANDUP`** | Robot berdiri mulus (*S-curve interpolation* 2 detik) ke sudut nominal $q_0$. |
+| **`3`** | **`🐾 JALAN / WALK (RL)`** | Mengaktifkan inferensi neural network model RL Isaac Lab (50 Hz). |
+| **`W`** | **Maju ($+v_x$)** | Tambah kecepatan maju $+0.1\text{ m/s}$ (maks $+1.2\text{ m/s}$). |
+| **`S`** | **Mundur ($-v_x$)** | Tambah kecepatan mundur $-0.1\text{ m/s}$ (maks $-0.8\text{ m/s}$). |
+| **`A`** | **Geser Kiri ($+v_y$)** | Tambah kecepatan strafe kiri $+0.1\text{ m/s}$ (maks $+0.5\text{ m/s}$). |
+| **`D`** | **Geser Kanan ($-v_y$)** | Tambah kecepatan strafe kanan $-0.1\text{ m/s}$ (maks $-0.5\text{ m/s}$). |
+| **`Q`** | **Putar Kiri ($+\omega_z$)** | Tambah kecepatan yaw kiri $+0.2\text{ rad/s}$ (maks $+1.2\text{ rad/s}$). |
+| **`E`** | **Putar Kanan ($-\omega_z$)** | Tambah kecepatan yaw kanan $-0.2\text{ rad/s}$ (maks $-1.2\text{ rad/s}$). |
+| **`X`** | **Brake / Stop Kecepatan** | Nolkan kecepatan ($v_x=0, v_y=0, \omega_z=0$) tanpa mematikan mode Walk. |
+| **`SPACE`** | **🚨 EMERGENCY STOP** | Seketika memutus pergerakan, reset kecepatan, dan transisi ke `STANDBY` (Duduk). |
+
+---
+
+### 🎮 B. Gamepad / Joystick Fisik (`/dev/input/js0`)
+Jika menggunakan Gamepad PS4 / Xbox / Logitech:
+* **`A` / `X` (Cross)** $\rightarrow$ Berdiri (*Standup*)
+* **`B` / `Circle`** $\rightarrow$ Mode Jalan RL (*Walk*)
+* **`X` / `Square`** $\rightarrow$ Duduk / Emergency Standby
+* **Stik Kiri Vertikal / Horizontal** $\rightarrow$ Kecepatan linier $v_x, v_y$
+* **Stik Kanan Horizontal** $\rightarrow$ Kecepatan sudut $\omega_z$
 
 ---
 
@@ -181,21 +201,19 @@ source install/setup.bash
 
 ### OPSI A: Eksekusi Multi-Terminal (Sangat Direkomendasikan untuk Debugging & Observasi)
 
-Buka 5 tab terminal terpisah dan jalankan perintah secara berurutan:
+Buka terminal terpisah dan jalankan secara berurutan:
 
 #### 🔹 Terminal 1: Inisialisasi Bus CAN (1 Mbps)
 ```bash
 cd /home/erc/sim2real
 sudo ./scripts/bringup_canbus.sh
 ```
-*Verifikasi: Pastikan `can0` dan `can1` aktif dengan bitrate 1000000.*
 
 #### 🔹 Terminal 2: Jalankan Driver IMU
 ```bash
 cd /home/erc/sim2real
 ./scripts/bringup_imu.sh
 ```
-*Verifikasi: Muncul pesan publishing IMU di topik `/Imu_data`.*
 
 #### 🔹 Terminal 3: Jalankan Driver C++ Hard Real-Time Node (200 Hz)
 ```bash
@@ -204,7 +222,6 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 run jaguar_control robstride_can_node
 ```
-*Output: C++ driver mengaktifkan thread SCHED_FIFO, mendeteksi 12 motor RS00, dan siap menerima target joint.*
 
 #### 🔹 Terminal 4: Buka Live Dashboard Diagnostik Sensor
 ```bash
@@ -212,7 +229,6 @@ cd /home/erc/sim2real
 source /opt/ros/humble/setup.bash
 python3 scripts/check_states.py
 ```
-*Verifikasi: Tabel live menampilkan 12 sudut sendi secara real-time dan orientasi IMU.*
 
 #### 🔹 Terminal 5: Jalankan Controller Utama Sim-to-Real RL
 ```bash
@@ -222,11 +238,19 @@ source install/setup.bash
 ros2 run jaguar_control nxp_jaguar_controller.py
 ```
 
-#### 🎮 Menggerakkan Robot:
-1. Tekan tombol **`A` / `X` (Cross)** pada gamepad $\rightarrow$ Robot akan berdiri secara mulus (*Standup*).
-2. Tekan tombol **`B` / `Circle`** pada gamepad $\rightarrow$ Robot masuk mode *Walk* (Policy RL aktif).
-3. Gerakkan **Stik Analog Kiri** maju/mundur untuk mengontrol kecepatan.
-4. Tekan tombol **`X` / `Square`** kapan saja untuk *Emergency Stop / Duduk*.
+#### 🔹 Terminal 6: Jalankan Keyboard Teleoperation (Untuk Mengontrol Robot)
+```bash
+cd /home/erc/sim2real
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run jaguar_control keyboard_teleop.py
+```
+
+#### 🎮 Urutan Menjalankan Robot:
+1. Tekan tombol **`2`** pada terminal keyboard $\rightarrow$ Robot perlahan berdiri tegak (*Standup*).
+2. Tekan tombol **`3`** pada terminal keyboard $\rightarrow$ Mode jalan aktif (*Walk* - RL Policy PPO 50 Hz).
+3. Gunakan tombol **`W` / `S` / `A` / `D` / `Q` / `E`** untuk mengarahkan robot.
+4. Tekan tombol **`1`** untuk duduk perlahan, atau **`SPACE`** untuk *Emergency Stop*.
 
 ---
 
@@ -237,12 +261,13 @@ Menjalankan seluruh pipeline (IMU, Joy, C++ CAN Node 200 Hz, dan RL Controller) 
 # 1. Pastikan CAN bus sudah aktif:
 sudo /home/erc/sim2real/scripts/bringup_canbus.sh
 
-# 2. Jalankan launch file (secara default menggunakan C++ hardware driver):
+# 2. Jalankan launch file:
 source /opt/ros/humble/setup.bash
 source /home/erc/nxp_jaguar/install/setup.bash
 source /home/erc/sim2real/install/setup.bash
 ros2 launch jaguar_control sim2real.launch.py
 ```
+*(Buka tab terminal baru untuk menjalankan `ros2 run jaguar_control keyboard_teleop.py`)*
 
 ---
 

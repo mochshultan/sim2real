@@ -53,6 +53,7 @@ install(TARGETS
 # Install Python scripts as executable nodes
 install(PROGRAMS
   scripts/nxp_jaguar_controller.py
+  scripts/keyboard_teleop.py
   scripts/can_hardware_node.py
   scripts/robstride_motor_lib.py
   scripts/robstride_motor_test.py

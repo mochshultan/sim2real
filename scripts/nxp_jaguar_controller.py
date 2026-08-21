@@ -41,6 +41,9 @@ ROS_JOINT_NAMES = [
 ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
 ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
+# Standby Joint Angles (Folded/Sitting position = 0.0 rad)
+SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
+
 # Default Standing Pose (Matching NXP_JAGUAR_CFG in Isaac Lab: Front Hips -1.5, Back Hips -1.4, Front Knees 1.4, Back Knees 1.6)
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
@@ -51,7 +54,6 @@ DEFAULT_JOINT_POS = np.array([
 ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
-# ==============================================================================
 # ==============================================================================
 # 2. 48-DIMENSIONAL OBSERVATION VECTOR BUILDER
 # ==============================================================================
@@ -111,6 +113,8 @@ class JaguarObservationBuilder:
 # ==============================================================================
 # 3. ROS 2 CONTROLLER NODE
 # ==============================================================================
+from std_msgs.msg import Bool
+
 class NXPJaguarControllerNode(Node):
     def __init__(self):
         super().__init__("nxp_jaguar_controller")
@@ -129,19 +133,19 @@ class NXPJaguarControllerNode(Node):
         self.state_lock = threading.Lock()
 
         # State Variables
-        self.joint_pos = DEFAULT_JOINT_POS.copy()
+        self.joint_pos = SIT_JOINT_POS.copy()
         self.joint_vel = np.zeros(12, dtype=np.float32)
         self.body_quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
         self.body_ang_vel = np.zeros(3, dtype=np.float32)
         self.body_lin_vel = np.zeros(3, dtype=np.float32)
         self.cmd_vel = np.zeros(3, dtype=np.float32)
 
-        self.state = "STANDBY"   # States: STANDBY -> STANDUP -> WALK
+        self.state = "STANDBY"   # States: STANDBY (Sit) -> STANDUP -> WALK -> SITDOWN
         self.imu_received = False
         self.joints_received = False
 
-        # Standup interpolation variables
-        self.transition_start_pos = DEFAULT_JOINT_POS.copy()
+        # Transition interpolation variables
+        self.transition_start_pos = SIT_JOINT_POS.copy()
         self.transition_start_time = 0.0
         self.transition_duration = 2.0  # seconds
 
@@ -152,12 +156,13 @@ class NXPJaguarControllerNode(Node):
             depth=1,
         )
 
-        # Subscribers (support both /imu/data and /Imu_data)
+        # Subscribers
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(JointState, "/joint_states", self._joint_state_cb, 10)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 10)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
+        self.create_subscription(Bool, "/jaguar/emergency_stop", self._estop_cb, 10)
 
         # Publishers
         self.joint_cmd_pub = self.create_publisher(JointState, "/joint_commands", 10)
@@ -167,6 +172,13 @@ class NXPJaguarControllerNode(Node):
         # 50 Hz Control Timer Loop (20 ms dt)
         self.timer = self.create_timer(CONTROL_DT, self._control_loop)
         self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY")
+
+    def _estop_cb(self, msg: Bool):
+        if msg.data:
+            with self.state_lock:
+                self.state = "STANDBY"
+                self.cmd_vel[:] = 0.0
+            self.get_logger().warn("🚨 EMERGENCY STOP RECEIVED via topic! Resetting state to STANDBY (DUDUK).")
 
     def _imu_cb(self, msg: Imu):
         with self.state_lock:
@@ -221,21 +233,32 @@ class NXPJaguarControllerNode(Node):
     def _joy_cb(self, msg: Joy):
         now = self.get_clock().now().nanoseconds / 1e9
         if len(msg.buttons) > 1:
-            # Button 0 (X / Cross): Stand Up
-            if msg.buttons[0] == 1 and self.state == "STANDBY":
+            # Button 0 (X / Cross / Key '2'): Stand Up (Berdiri)
+            if msg.buttons[0] == 1 and self.state in ["STANDBY", "SITDOWN"]:
                 self.state = "STANDUP"
                 self.transition_start_time = now
                 with self.state_lock:
                     self.transition_start_pos = self.joint_pos.copy()
-                self.get_logger().info("State Transition -> STANDUP (Interpolating to nominal pose)")
-            # Button 1 (Circle / B): Start RL Walking
-            elif msg.buttons[1] == 1 and self.state in ["STANDUP", "STANDBY"]:
+                    self.cmd_vel[:] = 0.0
+                self.get_logger().info("State Transition -> STANDUP (Berdiri perlahan)")
+            # Button 1 (Circle / B / Key '3'): Start RL Walking (Jalan RL)
+            elif msg.buttons[1] == 1 and self.state in ["STANDUP", "STANDBY", "SITDOWN"]:
                 self.state = "WALK"
                 self.get_logger().info("State Transition -> WALK (RL Policy Active)")
-            # Button 2 (Square / X): Emergency Standby
+            # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
-                self.state = "STANDBY"
-                self.get_logger().warn("E-STOP Pressed -> STANDBY")
+                if self.state in ["STANDUP", "WALK"]:
+                    self.state = "SITDOWN"
+                    self.transition_start_time = now
+                    with self.state_lock:
+                        self.transition_start_pos = self.joint_pos.copy()
+                        self.cmd_vel[:] = 0.0
+                    self.get_logger().info("State Transition -> SITDOWN (Duduk perlahan)")
+                else:
+                    self.state = "STANDBY"
+                    with self.state_lock:
+                        self.cmd_vel[:] = 0.0
+                    self.get_logger().info("State -> STANDBY (Duduk / Folded)")
 
         # Joystick axes mapped to command velocities
         if len(msg.axes) >= 2:
@@ -269,13 +292,24 @@ class NXPJaguarControllerNode(Node):
         now = self.get_clock().now().nanoseconds / 1e9
 
         if self.state == "STANDBY":
-            target_pos = DEFAULT_JOINT_POS.copy()
+            target_pos = SIT_JOINT_POS.copy()
         elif self.state == "STANDUP":
             elapsed = now - self.transition_start_time
             alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
-            target_pos = (1.0 - alpha) * self.transition_start_pos + alpha * DEFAULT_JOINT_POS
+            # Smooth S-curve interpolation
+            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
+            target_pos = (1.0 - smooth_alpha) * self.transition_start_pos + smooth_alpha * DEFAULT_JOINT_POS
             if alpha >= 1.0:
                 target_pos = DEFAULT_JOINT_POS.copy()
+        elif self.state == "SITDOWN":
+            elapsed = now - self.transition_start_time
+            alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
+            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
+            target_pos = (1.0 - smooth_alpha) * self.transition_start_pos + smooth_alpha * SIT_JOINT_POS
+            if alpha >= 1.0:
+                self.state = "STANDBY"
+                target_pos = SIT_JOINT_POS.copy()
+                self.get_logger().info("SITDOWN Complete -> State: STANDBY")
         elif self.state == "WALK":
             # 1. Build 48-Dimensional Observation Vector
             obs = self.obs_builder.build_observation(lin_v, ang_v, quat, cmd, pos, vel)
@@ -306,6 +340,7 @@ class NXPJaguarControllerNode(Node):
         status_msg = String()
         status_msg.data = f"State: {self.state} | Cmd: [{cmd[0]:.2f}, {cmd[1]:.2f}, {cmd[2]:.2f}]"
         self.status_pub.publish(status_msg)
+
 
 
 def main(args=None):
