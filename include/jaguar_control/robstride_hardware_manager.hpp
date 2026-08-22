@@ -74,24 +74,24 @@ public:
     joint_configs_.resize(N_JOINTS);
 
     // BL (can1)
-    joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.0013, -0.40,  0.40, 20.0, 17.0, {}};
-    joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  0.3526, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  1.2297, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3599, -0.40,  0.40, 20.0, 17.0, {}};
+    joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  1.2489, -3.14,  3.14, 20.0, 17.0, {}};
+    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.0002, -0.10,  2.80, 20.0, 17.0, {}};
 
     // BR (can0)
-    joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.3914, -0.40,  0.40, 20.0, 17.0, {}};
-    joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2865, -3.14,  3.14, 20.0, 17.0, {}};
+    joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.3553, -0.40,  0.40, 20.0, 17.0, {}};
+    joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2251, -3.14,  3.14, 20.0, 17.0, {}};
     joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, -0.0002, -0.10,  2.80, 20.0, 17.0, {}};
 
     // FL (can1)
-    joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1,  0.0006, -0.40,  0.40, 20.0, 17.0, {}};
-    joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1, -0.3519, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1,  1.2339, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3741, -0.40,  0.40, 20.0, 17.0, {}};
+    joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1,  1.2638, -3.14,  3.14, 20.0, 17.0, {}};
+    joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1,  0.0002, -0.10,  2.80, 20.0, 17.0, {}};
 
     // FR (can0)
-    joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1,  0.3001, -0.40,  0.40, 20.0, 17.0, {}};
-    joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1,  1.2025, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1,  0.1018, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1,  0.3361, -0.40,  0.40, 20.0, 17.0, {}};
+    joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1,  1.2377, -3.14,  3.14, 20.0, 17.0, {}};
+    joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1,  0.0708, -0.10,  2.80, 20.0, 17.0, {}};
 
     for (size_t i = 0; i < N_JOINTS; ++i) {
       joint_configs_[i].motor_params.direction = joint_configs_[i].direction;
