@@ -48,18 +48,18 @@ These values are calibrated for all 12 RoboStride RS00 motors:
 
 | Joint Name | CAN Bus | CAN ID | Direction (`dir`) | Joint Offset (`rad`) | Angle (`deg`) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **BL_collar_joint** | `can1` | `#4` | `+1` | **`+0.3599 rad`** | $+20.6^\circ$ |
-| **BL_hip_joint** | `can1` | `#5` | `-1` | **`-1.2489 rad`** | $-71.6^\circ$ |
-| **BL_knee_joint** | `can1` | `#6` | `-1` | **`-0.0002 rad`** | $-0.0^\circ$ |
-| **BR_collar_joint** | `can0` | `#4` | `+1` | **`-0.3553 rad`** | $-20.4^\circ$ |
-| **BR_hip_joint** | `can0` | `#5` | `+1` | **`-1.2251 rad`** | $-70.2^\circ$ |
-| **BR_knee_joint** | `can0` | `#6` | `+1` | **`+0.0002 rad`** | $+0.0^\circ$ |
-| **FL_collar_joint** | `can1` | `#1` | `-1` | **`+0.3741 rad`** | $+21.4^\circ$ |
-| **FL_hip_joint** | `can1` | `#2` | `-1` | **`-1.2638 rad`** | $-72.4^\circ$ |
-| **FL_knee_joint** | `can1` | `#3` | `-1` | **`-0.0002 rad`** | $-0.0^\circ$ |
-| **FR_collar_joint** | `can0` | `#1` | `-1` | **`-0.3361 rad`** | $-19.3^\circ$ |
-| **FR_hip_joint** | `can0` | `#2` | `+1` | **`-1.2377 rad`** | $-70.9^\circ$ |
-| **FR_knee_joint** | `can0` | `#3` | `+1` | **`-0.0708 rad`** | $-4.1^\circ$ |
+| **BL_collar_joint** | `can1` | `#4` | `+1` | **`+0.3676 rad`** | $+21.1^\circ$ |
+| **BL_hip_joint** | `can1` | `#5` | `-1` | **`-1.2600 rad`** | $-72.2^\circ$ |
+| **BL_knee_joint** | `can1` | `#6` | `-1` | **`+0.1237 rad`** | $+7.1^\circ$ |
+| **BR_collar_joint** | `can0` | `#4` | `+1` | **`-0.3638 rad`** | $-20.8^\circ$ |
+| **BR_hip_joint** | `can0` | `#5` | `+1` | **`-1.2773 rad`** | $-73.2^\circ$ |
+| **BR_knee_joint** | `can0` | `#6` | `+1` | **`-0.0247 rad`** | $-1.4^\circ$ |
+| **FL_collar_joint** | `can1` | `#1` | `-1` | **`+0.3557 rad`** | $+20.4^\circ$ |
+| **FL_hip_joint** | `can1` | `#2` | `-1` | **`-1.2592 rad`** | $-72.1^\circ$ |
+| **FL_knee_joint** | `can1` | `#3` | `-1` | **`+0.0090 rad`** | $+0.5^\circ$ |
+| **FR_collar_joint** | `can0` | `#1` | `-1` | **`-0.2932 rad`** | $-16.8^\circ$ |
+| **FR_hip_joint** | `can0` | `#2` | `+1` | **`-1.1618 rad`** | $-66.6^\circ$ |
+| **FR_knee_joint** | `can0` | `#3` | `+1` | **`-0.0539 rad`** | $-3.1^\circ$ |
 
 ---
 
@@ -68,10 +68,10 @@ These values are calibrated for all 12 RoboStride RS00 motors:
 #### Python: `scripts/parameters.py`
 ```python
 MOTOR_OFFSET_ANGLE = [
-     0.3599, -1.2489, -0.0002,  # BL (can1: Collar, Hip, Knee)
-    -0.3553, -1.2251,  0.0002,  # BR (can0: Collar, Hip, Knee)
-     0.3741, -1.2638, -0.0002,  # FL (can1: Collar, Hip, Knee)
-    -0.3361, -1.2377, -0.0708,  # FR (can0: Collar, Hip, Knee)
+     0.3845, -1.2983, -0.0788,  # BL (can1: Collar, Hip, Knee)
+    -0.4017, -1.2976, -0.0339,  # BR (can0: Collar, Hip, Knee)
+     0.3526, -1.2427,  0.0033,  # FL (can1: Collar, Hip, Knee)
+    -0.3181, -1.2067, -0.0627,  # FR (can0: Collar, Hip, Knee)
 ]
 ```
 
@@ -79,24 +79,24 @@ MOTOR_OFFSET_ANGLE = [
 *(Note: C++ uses opposite sign because C++ calculates `pos = raw - cfg.angle_offset`)*
 ```cpp
 // BL (can1)
-joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3599, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  1.2489, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.0002, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3845, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  1.2983, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.0788, -0.10,  2.80, 20.0, 17.0, {}};
 
 // BR (can0)
-joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.3553, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2251, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, -0.0002, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.4017, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2976, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1,  0.0339, -0.10,  2.80, 20.0, 17.0, {}};
 
 // FL (can1)
-joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3741, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1,  1.2638, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1,  0.0002, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1,  1.2427, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1, -0.0033, -0.10,  2.80, 20.0, 17.0, {}};
 
 // FR (can0)
-joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1,  0.3361, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1,  1.2377, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1,  0.0708, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1,  0.3181, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1,  1.2067, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1,  0.0627, -0.10,  2.80, 20.0, 17.0, {}};
 ```
 
 ---
@@ -174,18 +174,18 @@ $$\theta_{\text{joint}} = (\theta_{\text{raw}} \times \text{MOTOR\_DIR}) + \text
 
 | 關節名稱 (Joint Name) | CAN 總線 | 電機 ID | 旋轉方向 (`dir`) | **關節偏移量 (`rad`)** | 角度值 (`deg`) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **BL_collar_joint**（左後側展） | `can1` | `#4` | `+1` | **`+0.3599 rad`** | $+20.6^\circ$ |
-| **BL_hip_joint**（左後大腿） | `can1` | `#5` | `-1` | **`-1.2489 rad`** | $-71.6^\circ$ |
-| **BL_knee_joint**（左後小腿） | `can1` | `#6` | `-1` | **`-0.0002 rad`** | $-0.0^\circ$ |
-| **BR_collar_joint**（右後側展） | `can0` | `#4` | `+1` | **`-0.3553 rad`** | $-20.4^\circ$ |
-| **BR_hip_joint**（右後大腿） | `can0` | `#5` | `+1` | **`-1.2251 rad`** | $-70.2^\circ$ |
-| **BR_knee_joint**（右後小腿） | `can0` | `#6` | `+1` | **`+0.0002 rad`** | $+0.0^\circ$ |
-| **FL_collar_joint**（左前側展） | `can1` | `#1` | `-1` | **`+0.3741 rad`** | $+21.4^\circ$ |
-| **FL_hip_joint**（左前大腿） | `can1` | `#2` | `-1` | **`-1.2638 rad`** | $-72.4^\circ$ |
-| **FL_knee_joint**（左前小腿） | `can1` | `#3` | `-1` | **`-0.0002 rad`** | $-0.0^\circ$ |
-| **FR_collar_joint**（右前側展） | `can0` | `#1` | `-1` | **`-0.3361 rad`** | $-19.3^\circ$ |
-| **FR_hip_joint**（右前大腿） | `can0` | `#2` | `+1` | **`-1.2377 rad`** | $-70.9^\circ$ |
-| **FR_knee_joint**（右前小腿） | `can0` | `#3` | `+1` | **`-0.0708 rad`** | $-4.1^\circ$ |
+| **BL_collar_joint**（左後側展） | `can1` | `#4` | `+1` | **`+0.3676 rad`** | $+21.1^\circ$ |
+| **BL_hip_joint**（左後大腿） | `can1` | `#5` | `-1` | **`-1.2600 rad`** | $-72.2^\circ$ |
+| **BL_knee_joint**（左後小腿） | `can1` | `#6` | `-1` | **`+0.1237 rad`** | $+7.1^\circ$ |
+| **BR_collar_joint**（右後側展） | `can0` | `#4` | `+1` | **`-0.3638 rad`** | $-20.8^\circ$ |
+| **BR_hip_joint**（右後大腿） | `can0` | `#5` | `+1` | **`-1.2773 rad`** | $-73.2^\circ$ |
+| **BR_knee_joint**（右後小腿） | `can0` | `#6` | `+1` | **`-0.0247 rad`** | $-1.4^\circ$ |
+| **FL_collar_joint**（左前側展） | `can1` | `#1` | `-1` | **`+0.3557 rad`** | $+20.4^\circ$ |
+| **FL_hip_joint**（左前大腿） | `can1` | `#2` | `-1` | **`-1.2592 rad`** | $-72.1^\circ$ |
+| **FL_knee_joint**（左前小腿） | `can1` | `#3` | `-1` | **`+0.0090 rad`** | $+0.5^\circ$ |
+| **FR_collar_joint**（右前側展） | `can0` | `#1` | `-1` | **`-0.2932 rad`** | $-16.8^\circ$ |
+| **FR_hip_joint**（右前大腿） | `can0` | `#2` | `+1` | **`-1.1618 rad`** | $-66.6^\circ$ |
+| **FR_knee_joint**（右前小腿） | `can0` | `#3` | `+1` | **`-0.0539 rad`** | $-3.1^\circ$ |
 
 ---
 
@@ -194,10 +194,10 @@ $$\theta_{\text{joint}} = (\theta_{\text{raw}} \times \text{MOTOR\_DIR}) + \text
 #### Python 端：`scripts/parameters.py`
 ```python
 MOTOR_OFFSET_ANGLE = [
-     0.3599, -1.2489, -0.0002,  # BL (can1: Collar, Hip, Knee)
-    -0.3553, -1.2251,  0.0002,  # BR (can0: Collar, Hip, Knee)
-     0.3741, -1.2638, -0.0002,  # FL (can1: Collar, Hip, Knee)
-    -0.3361, -1.2377, -0.0708,  # FR (can0: Collar, Hip, Knee)
+     0.3845, -1.2983, -0.0788,  # BL (can1: Collar, Hip, Knee)
+    -0.4017, -1.2976, -0.0339,  # BR (can0: Collar, Hip, Knee)
+     0.3526, -1.2427,  0.0033,  # FL (can1: Collar, Hip, Knee)
+    -0.3181, -1.2067, -0.0627,  # FR (can0: Collar, Hip, Knee)
 ]
 ```
 
@@ -205,24 +205,24 @@ MOTOR_OFFSET_ANGLE = [
 *(注意：C++ 節點底層計算為 `pos = raw - cfg.angle_offset`，因此數值為負號相反數)*
 ```cpp
 // BL (can1)
-joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3599, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  1.2489, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.0002, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3845, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  1.2983, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.0788, -0.10,  2.80, 20.0, 17.0, {}};
 
 // BR (can0)
-joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.3553, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2251, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, -0.0002, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.4017, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2976, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1,  0.0339, -0.10,  2.80, 20.0, 17.0, {}};
 
 // FL (can1)
-joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3741, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1,  1.2638, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1,  0.0002, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1,  1.2427, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1, -0.0033, -0.10,  2.80, 20.0, 17.0, {}};
 
 // FR (can0)
-joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1,  0.3361, -0.40,  0.40, 20.0, 17.0, {}};
-joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1,  1.2377, -3.14,  3.14, 20.0, 17.0, {}};
-joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1,  0.0708, -0.10,  2.80, 20.0, 17.0, {}};
+joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1,  0.3181, -0.40,  0.40, 20.0, 17.0, {}};
+joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1,  1.2067, -3.14,  3.14, 20.0, 17.0, {}};
+joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1,  0.0627, -0.10,  2.80, 20.0, 17.0, {}};
 ```
 
 ---

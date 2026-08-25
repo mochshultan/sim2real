@@ -254,6 +254,38 @@ class SitStandController:
             with self.lock:
                 self.kp = max(5.0, self.kp - 2.0)
                 self.status_msg = f"Gain Kp diubah menjadi: {self.kp:.1f}"
+        elif c == 'E':
+            with self.lock:
+                STAND_POSE[7] = min(-0.8, STAND_POSE[7] + 0.03)   # FL Hip
+                STAND_POSE[10] = min(-0.8, STAND_POSE[10] + 0.03) # FR Hip
+                if self.state == "STAND":
+                    self.target_pos[7] = STAND_POSE[7]
+                    self.target_pos[10] = STAND_POSE[10]
+                self.status_msg = f"Hip Depan lebih TEGAK: {STAND_POSE[7]:.2f} rad (FL/FR)"
+        elif c == 'R':
+            with self.lock:
+                STAND_POSE[7] = max(-2.0, STAND_POSE[7] - 0.03)   # FL Hip
+                STAND_POSE[10] = max(-2.0, STAND_POSE[10] - 0.03) # FR Hip
+                if self.state == "STAND":
+                    self.target_pos[7] = STAND_POSE[7]
+                    self.target_pos[10] = STAND_POSE[10]
+                self.status_msg = f"Hip Depan lebih CONDONG: {STAND_POSE[7]:.2f} rad (FL/FR)"
+        elif c == 'T':
+            with self.lock:
+                STAND_POSE[8] = min(2.0, STAND_POSE[8] + 0.03)    # FL Knee
+                STAND_POSE[11] = min(2.0, STAND_POSE[11] + 0.03)  # FR Knee
+                if self.state == "STAND":
+                    self.target_pos[8] = STAND_POSE[8]
+                    self.target_pos[11] = STAND_POSE[11]
+                self.status_msg = f"Knee Depan dinaikkan: +{STAND_POSE[8]:.2f} rad (FL/FR)"
+        elif c == 'Y':
+            with self.lock:
+                STAND_POSE[8] = max(1.0, STAND_POSE[8] - 0.03)    # FL Knee
+                STAND_POSE[11] = max(1.0, STAND_POSE[11] - 0.03)  # FR Knee
+                if self.state == "STAND":
+                    self.target_pos[8] = STAND_POSE[8]
+                    self.target_pos[11] = STAND_POSE[11]
+                self.status_msg = f"Knee Depan diturunkan: +{STAND_POSE[8]:.2f} rad (FL/FR)"
         elif c == 'U':
             with self.lock:
                 STAND_POSE[2] = min(2.0, STAND_POSE[2] + 0.03)  # BL Knee
@@ -261,7 +293,7 @@ class SitStandController:
                 if self.state == "STAND":
                     self.target_pos[2] = STAND_POSE[2]
                     self.target_pos[5] = STAND_POSE[5]
-                self.status_msg = f"Knee Belakang dinaikkan: +{STAND_POSE[2]:.2f} rad (Lebih tinggi menopang)"
+                self.status_msg = f"Knee Belakang dinaikkan: +{STAND_POSE[2]:.2f} rad (BL/BR)"
         elif c == 'I':
             with self.lock:
                 STAND_POSE[2] = max(1.0, STAND_POSE[2] - 0.03)  # BL Knee
@@ -269,23 +301,23 @@ class SitStandController:
                 if self.state == "STAND":
                     self.target_pos[2] = STAND_POSE[2]
                     self.target_pos[5] = STAND_POSE[5]
-                self.status_msg = f"Knee Belakang diturunkan: +{STAND_POSE[2]:.2f} rad"
+                self.status_msg = f"Knee Belakang diturunkan: +{STAND_POSE[2]:.2f} rad (BL/BR)"
         elif c == 'O':
             with self.lock:
-                STAND_POSE[1] = min(-0.8, STAND_POSE[1] + 0.03)  # BL Hip (lebih tegak / dekat ke 0)
+                STAND_POSE[1] = min(-0.8, STAND_POSE[1] + 0.03)  # BL Hip
                 STAND_POSE[4] = min(-0.8, STAND_POSE[4] + 0.03)  # BR Hip
                 if self.state == "STAND":
                     self.target_pos[1] = STAND_POSE[1]
                     self.target_pos[4] = STAND_POSE[4]
-                self.status_msg = f"Hip Belakang lebih TEGAK: {STAND_POSE[1]:.2f} rad"
+                self.status_msg = f"Hip Belakang lebih TEGAK: {STAND_POSE[1]:.2f} rad (BL/BR)"
         elif c == 'P':
             with self.lock:
-                STAND_POSE[1] = max(-2.0, STAND_POSE[1] - 0.03)  # BL Hip (lebih condong ke belakang)
+                STAND_POSE[1] = max(-2.0, STAND_POSE[1] - 0.03)  # BL Hip
                 STAND_POSE[4] = max(-2.0, STAND_POSE[4] - 0.03)  # BR Hip
                 if self.state == "STAND":
                     self.target_pos[1] = STAND_POSE[1]
                     self.target_pos[4] = STAND_POSE[4]
-                self.status_msg = f"Hip Belakang lebih CONDONG: {STAND_POSE[1]:.2f} rad"
+                self.status_msg = f"Hip Belakang lebih CONDONG: {STAND_POSE[1]:.2f} rad (BL/BR)"
         elif c == 'Q':
             self.running = False
 
@@ -457,14 +489,18 @@ class SitStandController:
                     print(f" #{cid:<3} {dev:<6} {jname:<18} {curr:+8.4f} rad   {tgt_str:<14} {diff_str:<12} {tem:4.1f}°C")
 
                 print("=" * 92)
-                print(" 🎮 KONTROL TERMINAL (Ketik tombol tanpa Enter):")
+                print(" 🎮 KONTROL TERMINAL (Ketik tombol langsung tanpa Enter):")
                 print("   [1] 🧎 DUDUK (Standby)        : Transisi halus ke posisi 0.0 rad")
-                print("   [2] 🧍 STANDUP (Berdiri)      : Transisi halus ke posisi berdiri (Belakang lebih tegak)")
+                print("   [2] 🧍 STANDUP (Berdiri)      : Transisi halus ke posisi berdiri")
                 print("   [3] ❌ WALK (RL Policy)       : [DINONAKTIFKAN] Safety lock aktif")
                 print("   [+] / [-] : Ubah Durasi Transisi (Lebih Pelan / Lebih Cepat)")
                 print("   [K] / [J] : Ubah Kekakuan Kp (+ / -)")
-                print("   [U] / [I] : 🦵 Knee Belakang (+ / -) -> Atur tinggi/lurus lutut belakang")
-                print("   [O] / [P] : 🦵 Hip Belakang (+ / -)  -> Atur ketegakan paha belakang")
+                print("   -- TUNING KAKI DEPAN --")
+                print(f"   [E] / [R] : 🦵 Hip Depan (+ / -)    -> Atur ketegakan paha depan (Saat ini: {STAND_POSE[7]:.2f} rad)")
+                print(f"   [T] / [Y] : 🦵 Knee Depan (+ / -)   -> Atur tinggi lutut depan  (Saat ini: +{STAND_POSE[8]:.2f} rad)")
+                print("   -- TUNING KAKI BELAKANG --")
+                print(f"   [O] / [P] : 🦵 Hip Belakang (+ / -) -> Atur ketegakan paha belakang (Saat ini: {STAND_POSE[1]:.2f} rad)")
+                print(f"   [U] / [I] : 🦵 Knee Belakang (+ / -)-> Atur tinggi lutut belakang  (Saat ini: +{STAND_POSE[2]:.2f} rad)")
                 print("   [Space]   : STOP DARURAT / Mode Pasif Bebas Torsi")
                 print("   [Q]       : Keluar dan Matikan Motor")
                 print("=" * 92)

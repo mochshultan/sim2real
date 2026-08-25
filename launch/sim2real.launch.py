@@ -1,7 +1,7 @@
 import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 
@@ -22,8 +22,8 @@ def generate_launch_description():
     )
     with_joy_arg = DeclareLaunchArgument(
         "with_joy",
-        default_value="true",
-        description="Launch joy_node",
+        default_value="false",
+        description="Launch joy_node (set to true if using physical gamepad /dev/input/js0)",
     )
     with_hardware_arg = DeclareLaunchArgument(
         "with_hardware",
@@ -83,7 +83,9 @@ def generate_launch_description():
             "default_kd": 1.5,
             "rt_priority": 80,
         }],
-        condition=IfCondition(use_cpp_hardware) and IfCondition(with_hardware),
+        condition=IfCondition(
+            PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' == 'true'"])
+        ),
     )
 
     # 3B. RobStride Python CAN Hardware Driver Node (Fallback)
@@ -92,7 +94,9 @@ def generate_launch_description():
         executable="can_hardware_node.py",
         name="jaguar_can_hardware",
         output="screen",
-        condition=UnlessCondition(use_cpp_hardware) and IfCondition(with_hardware),
+        condition=IfCondition(
+            PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' != 'true'"])
+        ),
     )
 
     # 4. NXP Jaguar Sim-to-Real RL Controller Node

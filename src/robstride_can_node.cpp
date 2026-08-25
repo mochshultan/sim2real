@@ -143,6 +143,7 @@ private:
 
   void onJointCommand(const sensor_msgs::msg::JointState::SharedPtr msg)
   {
+    bool has_custom_gains = (msg->effort.size() >= 24);
     if (msg->name.size() > 0) {
       for (size_t i = 0; i < msg->name.size(); ++i) {
         auto it = name_to_index_.find(msg->name[i]);
@@ -151,9 +152,15 @@ private:
           JointCommand cmd;
           cmd.position = (msg->position.size() > i) ? msg->position[i] : 0.0;
           cmd.velocity = (msg->velocity.size() > i) ? msg->velocity[i] : 0.0;
-          cmd.effort   = (msg->effort.size() > i)   ? msg->effort[i]   : 0.0;
-          cmd.kp = default_kp_;
-          cmd.kd = default_kd_;
+          if (has_custom_gains) {
+            cmd.kp = msg->effort[i];
+            cmd.kd = msg->effort[12 + i];
+            cmd.effort = (msg->effort.size() >= 36) ? msg->effort[24 + i] : 0.0;
+          } else {
+            cmd.effort = (msg->effort.size() > i) ? msg->effort[i] : 0.0;
+            cmd.kp = default_kp_;
+            cmd.kd = default_kd_;
+          }
           hw_manager_.setJointCommand(idx, cmd);
         }
       }
@@ -162,9 +169,15 @@ private:
         JointCommand cmd;
         cmd.position = msg->position[i];
         cmd.velocity = (msg->velocity.size() == N_JOINTS) ? msg->velocity[i] : 0.0;
-        cmd.effort   = (msg->effort.size() == N_JOINTS)   ? msg->effort[i]   : 0.0;
-        cmd.kp = default_kp_;
-        cmd.kd = default_kd_;
+        if (has_custom_gains) {
+          cmd.kp = msg->effort[i];
+          cmd.kd = msg->effort[12 + i];
+          cmd.effort = (msg->effort.size() >= 36) ? msg->effort[24 + i] : 0.0;
+        } else {
+          cmd.effort = (msg->effort.size() == N_JOINTS) ? msg->effort[i] : 0.0;
+          cmd.kp = default_kp_;
+          cmd.kd = default_kd_;
+        }
         hw_manager_.setJointCommand(i, cmd);
       }
     }
@@ -172,8 +185,19 @@ private:
 
   void onMitCommand(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
-    // Format: 36 elements -> [12 pos, 12 vel, 12 effort]
-    if (msg->data.size() == 36) {
+    // Format: 60 elements -> [12 pos, 12 vel, 12 kp, 12 kd, 12 effort]
+    // Or 36 elements -> [12 pos, 12 vel, 12 effort] with default Kp/Kd
+    if (msg->data.size() == 60) {
+      for (size_t i = 0; i < N_JOINTS; ++i) {
+        JointCommand cmd;
+        cmd.position = msg->data[i];
+        cmd.velocity = msg->data[12 + i];
+        cmd.kp       = msg->data[24 + i];
+        cmd.kd       = msg->data[36 + i];
+        cmd.effort   = msg->data[48 + i];
+        hw_manager_.setJointCommand(i, cmd);
+      }
+    } else if (msg->data.size() == 36) {
       for (size_t i = 0; i < N_JOINTS; ++i) {
         JointCommand cmd;
         cmd.position = msg->data[i];

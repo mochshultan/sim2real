@@ -55,6 +55,13 @@ DEFAULT_JOINT_POS = np.array([
 ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
+# Gain Scheduling Constants (Separating RL impedance from smooth sit/stand transitions)
+RL_KP = 25.0             # High stiffness used ONLY for active RL policy tracking
+RL_KD = 1.5              # Damping used ONLY for active RL policy tracking
+TRANSITION_KP = 8.0      # Soft compliant stiffness for smooth sit/stand trajectory
+TRANSITION_KD = 0.5      # Damping for smooth sit/stand trajectory
+MAX_HOMING_VEL = 0.35    # rad/s (ultra-smooth continuous rate limit for startup homing)
+
 # ==============================================================================
 # 2. 48-DIMENSIONAL OBSERVATION VECTOR BUILDER
 # ==============================================================================
@@ -122,9 +129,17 @@ class NXPJaguarControllerNode(Node):
 
         # Declare parameters
         self.declare_parameter("policy_path", "")
+        self.declare_parameter("torque_limit", 14.0)
+        self.declare_parameter("shutdown_duration", 2.0)
+        self.declare_parameter("shutdown_settle_delay", 0.2)
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
         if not policy_param:
             policy_param = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models/policy.pt"))
+
+        self.torque_limit = float(self.get_parameter("torque_limit").value)
+        self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
+        self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
+        self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
 
         self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
         self.policy = torch.jit.load(policy_param, map_location="cpu")
@@ -136,19 +151,22 @@ class NXPJaguarControllerNode(Node):
         # State Variables
         self.joint_pos = SIT_JOINT_POS.copy()
         self.joint_vel = np.zeros(12, dtype=np.float32)
+        self.joint_tau = np.zeros(12, dtype=np.float32)
         self.body_quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
         self.body_ang_vel = np.zeros(3, dtype=np.float32)
         self.body_lin_vel = np.zeros(3, dtype=np.float32)
         self.cmd_vel = np.zeros(3, dtype=np.float32)
 
-        self.state = "STANDBY"   # States: STANDBY (Sit) -> STANDUP -> WALK -> SITDOWN
+        self.state = "STANDBY"   # States: STANDBY (Passive Zero Torque) -> STANDUP -> WALK -> SITDOWN -> SAFE_SHUTDOWN -> DISABLED
         self.imu_received = False
         self.joints_received = False
+        self.overtorque_counter = 0
 
         # Transition interpolation variables
         self.transition_start_pos = SIT_JOINT_POS.copy()
+        self.transition_target_pos = SIT_JOINT_POS.copy()
         self.transition_start_time = 0.0
-        self.transition_duration = 2.0  # seconds
+        self.transition_duration = 3.0   # seconds for stand/sit transitions
 
         # QoS Profiles
         sensor_qos = QoSProfile(
@@ -163,10 +181,12 @@ class NXPJaguarControllerNode(Node):
         self.create_subscription(JointState, "/joint_states", self._joint_state_cb, 10)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 10)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
+        self.create_subscription(Bool, "/jaguar/safe_stop", self._safe_stop_cb, 10)
         self.create_subscription(Bool, "/jaguar/emergency_stop", self._estop_cb, 10)
 
         # Publishers
         self.joint_cmd_pub = self.create_publisher(JointState, "/joint_commands", 10)
+        self.estop_pub = self.create_publisher(Bool, "/jaguar/emergency_stop", 10)
         self.debug_pub = self.create_publisher(Float32MultiArray, "/jaguar/state_debug", 10)
         self.status_pub = self.create_publisher(String, "/jaguar/status", 10)
 
@@ -180,19 +200,35 @@ class NXPJaguarControllerNode(Node):
 
         # 50 Hz Control Timer Loop (20 ms dt)
         self.timer = self.create_timer(CONTROL_DT, self._control_loop)
-        self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY")
+        self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY (Motors Passive, Zero Torque)")
+
+    def _trigger_safe_shutdown(self, now: float, reason: str):
+        if self.state in ["SAFE_SHUTDOWN", "DISABLED"]:
+            return
+        self.get_logger().warn(
+            f"[FAILSAFE] {reason}. Returning to zero in {self.shutdown_duration:.1f}s, then holding for {self.shutdown_settle_delay:.1f}s before motor cutoff."
+        )
+        self.state = "SAFE_SHUTDOWN"
+        self.transition_start_time = now
+        with self.state_lock:
+            self.transition_start_pos = self.joint_pos.copy()
+            diff = (SIT_JOINT_POS - self.transition_start_pos + np.pi) % (2 * np.pi) - np.pi
+            self.transition_target_pos = self.transition_start_pos + diff
+            self.cmd_vel[:] = 0.0
+
+    def _safe_stop_cb(self, msg: Bool):
+        if msg.data:
+            now = self.get_clock().now().nanoseconds / 1e9
+            self._trigger_safe_shutdown(now, "Safe stop requested via topic")
 
     def _estop_cb(self, msg: Bool):
-        if msg.data:
-            with self.state_lock:
-                self.state = "STANDBY"
-                self.cmd_vel[:] = 0.0
-            self.get_logger().warn("🚨 EMERGENCY STOP RECEIVED via topic! Resetting state to STANDBY (DUDUK).")
+        if msg.data and self.state not in ["SAFE_SHUTDOWN", "DISABLED", "STANDBY"]:
+            now = self.get_clock().now().nanoseconds / 1e9
+            self._trigger_safe_shutdown(now, "Emergency stop signal received")
 
     def _imu_cb(self, msg: Imu):
         with self.state_lock:
-            # Raw IMU is mounted upside down on chassis (Rotated 180 deg around X-axis: rpy="pi 0 0")
-            # Transformation: q_body = q_raw * q_mount_inv where q_mount is roll(pi)
+            # Reorient IMU frame if mounted upside-down (Roll 180 deg)
             qx = msg.orientation.x
             qy = msg.orientation.y
             qz = msg.orientation.z
@@ -203,12 +239,15 @@ class NXPJaguarControllerNode(Node):
             body_qz = -qy
             body_qw = -qx
 
-            self.body_quat = np.array([body_qx, body_qy, body_qz, body_qw], dtype=np.float32)
-            self.body_ang_vel = np.array([
-                msg.angular_velocity.x,
-                -msg.angular_velocity.y,
-                -msg.angular_velocity.z,
-            ], dtype=np.float32)
+            self.body_quat[0] = body_qx
+            self.body_quat[1] = body_qy
+            self.body_quat[2] = body_qz
+            self.body_quat[3] = body_qw
+
+            self.body_ang_vel[0] = msg.angular_velocity.x
+            self.body_ang_vel[1] = -msg.angular_velocity.y
+            self.body_ang_vel[2] = -msg.angular_velocity.z
+
             self.imu_received = True
 
     def _cmd_vel_cb(self, msg: Twist):
@@ -229,6 +268,8 @@ class NXPJaguarControllerNode(Node):
                             self.joint_pos[isaac_idx] = msg.position[idx]
                         if len(msg.velocity) > idx:
                             self.joint_vel[isaac_idx] = msg.velocity[idx]
+                        if len(msg.effort) > idx:
+                            self.joint_tau[isaac_idx] = msg.effort[idx]
                         matched = True
             if not matched and len(msg.position) == 12:
                 # If unnamed array in ROS order (BL, BR, FL, FR), remap to Isaac order
@@ -237,37 +278,38 @@ class NXPJaguarControllerNode(Node):
                     self.joint_pos[i] = msg.position[ros_idx]
                     if len(msg.velocity) > ros_idx:
                         self.joint_vel[i] = msg.velocity[ros_idx]
+                    if len(msg.effort) > ros_idx:
+                        self.joint_tau[i] = msg.effort[ros_idx]
             self.joints_received = True
 
     def _joy_cb(self, msg: Joy):
         now = self.get_clock().now().nanoseconds / 1e9
         if len(msg.buttons) > 1:
             # Button 0 (X / Cross / Key '2'): Stand Up (Berdiri)
-            if msg.buttons[0] == 1 and self.state in ["STANDBY", "SITDOWN"]:
+            if msg.buttons[0] == 1 and self.state in ["STARTUP_SIT", "STANDBY", "SITDOWN", "SIT_HOLD", "DISABLED"]:
                 self.state = "STANDUP"
                 self.transition_start_time = now
                 with self.state_lock:
                     self.transition_start_pos = self.joint_pos.copy()
+                    diff = (DEFAULT_JOINT_POS - self.transition_start_pos + np.pi) % (2 * np.pi) - np.pi
+                    self.transition_target_pos = self.transition_start_pos + diff
                     self.cmd_vel[:] = 0.0
-                self.get_logger().info("State Transition -> STANDUP (Berdiri perlahan)")
+                self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
             # Button 1 (Circle / B / Key '3'): Start RL Walking (Jalan RL)
-            elif msg.buttons[1] == 1 and self.state in ["STANDUP", "STANDBY", "SITDOWN"]:
+            elif msg.buttons[1] == 1 and self.state in ["STARTUP_SIT", "STANDUP", "STAND_HOLD", "STANDBY", "SITDOWN", "SIT_HOLD"]:
                 self.state = "WALK"
-                self.get_logger().info("State Transition -> WALK (RL Policy Active)")
+                self.get_logger().info("[CONTROLLER] State transition -> WALK (RL Gains Active: Kp=25.0, Kd=1.5)")
             # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
-                if self.state in ["STANDUP", "WALK"]:
+                if self.state != "SIT_HOLD":
                     self.state = "SITDOWN"
                     self.transition_start_time = now
                     with self.state_lock:
                         self.transition_start_pos = self.joint_pos.copy()
+                        diff = (SIT_JOINT_POS - self.transition_start_pos + np.pi) % (2 * np.pi) - np.pi
+                        self.transition_target_pos = self.transition_start_pos + diff
                         self.cmd_vel[:] = 0.0
-                    self.get_logger().info("State Transition -> SITDOWN (Duduk perlahan)")
-                else:
-                    self.state = "STANDBY"
-                    with self.state_lock:
-                        self.cmd_vel[:] = 0.0
-                    self.get_logger().info("State -> STANDBY (Duduk / Folded)")
+                    self.get_logger().info(f"[CONTROLLER] State transition -> SITDOWN ({self.transition_duration:.1f}s smooth S-curve)")
 
         # Joystick axes mapped to command velocities
         if len(msg.axes) >= 2:
@@ -292,44 +334,109 @@ class NXPJaguarControllerNode(Node):
                 self.dt_history.pop(0)
             self.actual_freq = 1.0 / (sum(self.dt_history) / len(self.dt_history))
 
-        if not self.imu_received:
+        if not self.imu_received or not self.joints_received:
             return
 
         with self.state_lock:
             pos = self.joint_pos.copy()
             vel = self.joint_vel.copy()
+            tau = self.joint_tau.copy()
             quat = self.body_quat.copy()
             ang_v = self.body_ang_vel.copy()
             lin_v = self.body_lin_vel.copy()
             cmd = self.cmd_vel.copy()
 
-        # Tilt Safety Protection: Emergency Cutoff if robot tilts > 60 degrees (gz > -0.5 when upright is -1.0)
-        gz_body = -(1.0 - 2.0 * (quat[0]**2 + quat[1]**2))
-        if gz_body > -0.5:
-            self.get_logger().error(f"EMERGENCY TILT DETECTED (gz={gz_body:.2f} > -0.5, tilt > 60 deg)! Resetting to STANDBY.")
-            self.state = "STANDBY"
-
         now = self.get_clock().now().nanoseconds / 1e9
 
+        # Failsafe 1: Over-Torque Protection (Continuous overload > threshold for >100ms in active states)
+        max_tau = float(np.max(np.abs(tau)))
+        if max_tau > self.torque_limit and self.state in ["STANDUP", "WALK", "SITDOWN"]:
+            self.overtorque_counter += 1
+            if self.overtorque_counter >= self.torque_overload_cycles:
+                joint_idx = int(np.argmax(np.abs(tau)))
+                joint_name = ISAAC_JOINT_NAMES[joint_idx]
+                self._trigger_safe_shutdown(
+                    now, f"Over-torque on {joint_name} ({max_tau:.2f} Nm > {self.torque_limit:.2f} Nm)"
+                )
+        else:
+            self.overtorque_counter = max(0, self.overtorque_counter - 1)
+
+        # Failsafe 2: Tilt Safety Protection (Emergency sit if tilt > 60 deg, gz > -0.5 in active states)
+        gz_body = -(1.0 - 2.0 * (quat[0]**2 + quat[1]**2))
+        if gz_body > -0.5 and self.state in ["STANDUP", "WALK"]:
+            self._trigger_safe_shutdown(now, f"Critical tilt detected (gz={gz_body:.2f} > -0.5, tilt > 60 deg)")
+
+        target_pos = None
+        target_vel = np.zeros(12, dtype=np.float32)
+        cmd_kp = [TRANSITION_KP] * 12
+        cmd_kd = [TRANSITION_KD] * 12
+
         if self.state == "STANDBY":
-            target_pos = SIT_JOINT_POS.copy()
+            # Initial launch state: 100% passive zero-torque sensing mode (No movement, No jerk, Operator in control)
+            target_pos = None
         elif self.state == "STANDUP":
             elapsed = now - self.transition_start_time
             alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
-            # Smooth S-curve interpolation
+            # Smooth S-curve interpolation from measured starting posture
             smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            target_pos = (1.0 - smooth_alpha) * self.transition_start_pos + smooth_alpha * DEFAULT_JOINT_POS
+            diff = self.transition_target_pos - self.transition_start_pos
+            target_pos = self.transition_start_pos + smooth_alpha * diff
+            target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
+            cmd_kp = [TRANSITION_KP] * 12
+            cmd_kd = [TRANSITION_KD] * 12
             if alpha >= 1.0:
+                self.state = "STAND_HOLD"
                 target_pos = DEFAULT_JOINT_POS.copy()
+                target_vel = np.zeros(12, dtype=np.float32)
+                self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose firmly (Power ON)")
+        elif self.state == "STAND_HOLD":
+            # Actively hold standing pose with power ON
+            target_pos = DEFAULT_JOINT_POS.copy()
+            target_vel = np.zeros(12, dtype=np.float32)
+            cmd_kp = [TRANSITION_KP] * 12
+            cmd_kd = [TRANSITION_KD] * 12
         elif self.state == "SITDOWN":
             elapsed = now - self.transition_start_time
             alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
             smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            target_pos = (1.0 - smooth_alpha) * self.transition_start_pos + smooth_alpha * SIT_JOINT_POS
+            diff = self.transition_target_pos - self.transition_start_pos
+            target_pos = self.transition_start_pos + smooth_alpha * diff
+            target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
+            cmd_kp = [TRANSITION_KP] * 12
+            cmd_kd = [TRANSITION_KD] * 12
             if alpha >= 1.0:
-                self.state = "STANDBY"
+                self.state = "SIT_HOLD"
                 target_pos = SIT_JOINT_POS.copy()
-                self.get_logger().info("SITDOWN Complete -> State: STANDBY")
+                target_vel = np.zeros(12, dtype=np.float32)
+                self.get_logger().info("[CONTROLLER] SITDOWN complete -> Holding sit pose firmly (Power ON)")
+        elif self.state == "SIT_HOLD":
+            # Actively hold sitting pose firmly at 0.0 rad with power ON
+            target_pos = SIT_JOINT_POS.copy()
+            target_vel = np.zeros(12, dtype=np.float32)
+            cmd_kp = [TRANSITION_KP] * 12
+            cmd_kd = [TRANSITION_KD] * 12
+        elif self.state == "SAFE_SHUTDOWN":
+            elapsed = now - self.transition_start_time
+            alpha = float(np.clip(elapsed / self.shutdown_duration, 0.0, 1.0))
+            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
+            diff = self.transition_target_pos - self.transition_start_pos
+            target_pos = self.transition_start_pos + smooth_alpha * diff
+            target_vel = (math.pi / (2.0 * self.shutdown_duration)) * math.sin(math.pi * alpha) * diff
+            cmd_kp = [TRANSITION_KP] * 12
+            cmd_kd = [TRANSITION_KD] * 12
+            if alpha >= 1.0:
+                target_pos = SIT_JOINT_POS.copy()
+                target_vel = np.zeros(12, dtype=np.float32)
+                # Settle delay: actively hold 0.0 rad for 0.2s before cutting motor torque
+                if elapsed >= (self.shutdown_duration + self.shutdown_settle_delay):
+                    self.state = "DISABLED"
+                    target_pos = None
+                    estop_msg = Bool()
+                    estop_msg.data = True
+                    self.estop_pub.publish(estop_msg)
+                    self.get_logger().info("[FAILSAFE] Zero position settled (0.2s elapsed). Motor torque safely disabled.")
+        elif self.state == "DISABLED":
+            target_pos = None
         elif self.state == "WALK":
             # 1. Build 48-Dimensional Observation Vector
             obs = self.obs_builder.build_observation(lin_v, ang_v, quat, cmd, pos, vel)
@@ -341,20 +448,26 @@ class NXPJaguarControllerNode(Node):
 
             raw_action = actions.squeeze(0).numpy()
             target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * raw_action
+            target_vel = np.zeros(12, dtype=np.float32)
+
+            # High impedance tracking gains specifically for RL
+            cmd_kp = [RL_KP] * 12
+            cmd_kd = [RL_KD] * 12
 
             # 3. Publish Debug 48D State Vector
             debug_msg = Float32MultiArray()
             debug_msg.data = obs.squeeze(0).numpy().tolist()
             self.debug_pub.publish(debug_msg)
 
-        # Publish Joint Commands to CAN Motor Node
-        cmd_msg = JointState()
-        cmd_msg.header.stamp = self.get_clock().now().to_msg()
-        cmd_msg.name = ISAAC_JOINT_NAMES
-        cmd_msg.position = target_pos.tolist()
-        cmd_msg.velocity = [0.0] * 12
-        cmd_msg.effort = [0.0] * 12
-        self.joint_cmd_pub.publish(cmd_msg)
+        # Publish Joint Commands to CAN Motor Node only during active states
+        if target_pos is not None:
+            cmd_msg = JointState()
+            cmd_msg.header.stamp = self.get_clock().now().to_msg()
+            cmd_msg.name = ISAAC_JOINT_NAMES
+            cmd_msg.position = target_pos.tolist()
+            cmd_msg.velocity = target_vel.tolist()
+            cmd_msg.effort = (cmd_kp + cmd_kd)
+            self.joint_cmd_pub.publish(cmd_msg)
 
         t_end = time.perf_counter()
         self.compute_latency_ms = (t_end - t_start) * 1000.0
@@ -365,9 +478,8 @@ class NXPJaguarControllerNode(Node):
             self.lag_counter += 1
             if now_sec - self.last_warn_time > 1.0:
                 self.get_logger().warn(
-                    f"⚠️ [TIMING WARNING] Controller Compute Lag! "
-                    f"Latency: {self.compute_latency_ms:.2f} ms (Budget: 20.0 ms) | "
-                    f"Actual Freq: {self.actual_freq:.1f} Hz (Target: 50.0 Hz)"
+                    f"[TIMING] Compute lag: {self.compute_latency_ms:.2f} ms | "
+                    f"Frequency: {self.actual_freq:.1f} Hz (Target: 50.0 Hz)"
                 )
                 self.last_warn_time = now_sec
 
@@ -375,21 +487,17 @@ class NXPJaguarControllerNode(Node):
             if self.state == "WALK" and (self.compute_latency_ms > 45.0 or self.actual_freq < 25.0):
                 if self.lag_counter >= 5:
                     self.get_logger().error(
-                        f"🚨 [CRITICAL WATCHDOG] Persistent compute lag ({self.compute_latency_ms:.1f} ms, {self.actual_freq:.1f} Hz)! "
-                        f"Safety fallback triggered -> Resetting to STANDUP."
+                        f"[WATCHDOG] Persistent compute lag ({self.compute_latency_ms:.1f} ms, {self.actual_freq:.1f} Hz). "
+                        f"Triggering safe shutdown."
                     )
-                    self.state = "STANDUP"
-                    self.transition_start_time = now_sec
-                    with self.state_lock:
-                        self.transition_start_pos = self.joint_pos.copy()
-                        self.cmd_vel[:] = 0.0
+                    self._trigger_safe_shutdown(now_sec, "Persistent compute lag")
                     self.lag_counter = 0
         else:
             self.lag_counter = max(0, self.lag_counter - 1)
 
         # Publish Status String
         status_msg = String()
-        status_msg.data = f"State: {self.state} | Cmd: [{cmd[0]:.2f}, {cmd[1]:.2f}, {cmd[2]:.2f}] | Freq: {self.actual_freq:.1f} Hz | Latency: {self.compute_latency_ms:.1f} ms"
+        status_msg.data = f"State: {self.state} | Cmd: [{cmd[0]:.2f}, {cmd[1]:.2f}, {cmd[2]:.2f}] | Freq: {self.actual_freq:.1f} Hz | MaxTau: {max_tau:.1f} Nm"
         self.status_pub.publish(status_msg)
 
 

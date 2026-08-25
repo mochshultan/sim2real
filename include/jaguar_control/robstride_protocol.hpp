@@ -222,6 +222,13 @@ inline MotorFeedback parseFeedbackFrame(const struct can_frame & frame, const Mo
   }
 
   uint32_t raw_id = frame.can_id & CAN_EFF_MASK;
+  uint8_t comm_mode = static_cast<uint8_t>((raw_id >> 24) & 0x1F);
+
+  // Only parse feedback frames (Command mode 1: Motor Control, 2: Motor Feedback)
+  if (comm_mode != CMD_MOTOR_CONTROL && comm_mode != CMD_MOTOR_FEEDBACK) {
+    return fb;
+  }
+
   fb.motor_id = static_cast<uint8_t>((raw_id >> 8) & 0xFF);
 
   if (frame.can_dlc < 8) {

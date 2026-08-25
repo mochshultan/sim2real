@@ -145,12 +145,8 @@ class CanHardwareDriverNode(Node):
         for i in indices:
             motor = self.motors[i]
             offset = 0.0
-            with self.state.lock:
-                pos_orig = self.state.pos[i] * P.MOTOR_DIR[i]
-            if P.MOTOR_OFFSET_THRE[i] and pos_orig > P.MOTOR_OFFSET_THRE[i]:
-                offset = -2 * np.pi * P.MOTOR_DIR[i]
             if P.MOTOR_OFFSET_ANGLE[i]:
-                offset += P.MOTOR_OFFSET_ANGLE[i]
+                offset = P.MOTOR_OFFSET_ANGLE[i]
             motor.set_angle_offset(offset)
 
         # 4. Safe Passive Standby (Kp=0, Kd=0 - Zero Torque Sensing Mode)

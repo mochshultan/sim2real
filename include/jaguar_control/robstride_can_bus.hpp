@@ -55,11 +55,11 @@ public:
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
 
-    // Set receive timeout (1 ms non-blocking / low latency)
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 1000;  // 1ms
-    setsockopt(socket_fd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    // Enable non-blocking I/O for deterministic 200 Hz real-time operation
+    int flags = fcntl(socket_fd_, F_GETFL, 0);
+    if (flags >= 0) {
+      fcntl(socket_fd_, F_SETFL, flags | O_NONBLOCK);
+    }
 
     // Disable loopback
     int loopback = 0;
@@ -102,6 +102,9 @@ public:
     }
 
     ssize_t bytes_read = read(socket_fd_, &frame, sizeof(struct can_frame));
+    if (bytes_read <= 0) {
+      return false;
+    }
     return (bytes_read == static_cast<ssize_t>(sizeof(struct can_frame)));
   }
 
