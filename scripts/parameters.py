@@ -39,13 +39,13 @@ MOTOR_DIR = [
 
 # Zero-calibration angular offsets
 # Offsets calibrated from actual manual sit pose so that sitting position = 0.0 rad:
-# BL: collar=+0.3845, hip=-1.2983, knee=-0.0788
-# BR: collar=-0.4017, hip=-1.2976, knee=-0.0339
+# BL: collar=+0.3845, hip=-1.2983, knee=-0.1788 (+0.1 rad offset tuned)
+# BR: collar=-0.4017, hip=-1.2976, knee=-0.1339 (+0.1 rad offset tuned)
 # FL: collar=+0.3526, hip=-1.2427, knee=+0.0033
 # FR: collar=-0.3181, hip=-1.2067, knee=-0.0627
 MOTOR_OFFSET_ANGLE = [
-     0.3845, -1.2983, -0.0788,  # BL (can1)
-    -0.4017, -1.2976, -0.0339,  # BR (can0)
+     0.3845, -1.2983, -0.1788,  # BL (can1, knee zero shifted +0.10 rad)
+    -0.4017, -1.2976, -0.1339,  # BR (can0, knee zero shifted +0.10 rad)
      0.3526, -1.2427,  0.0033,  # FL (can1)
     -0.3181, -1.2067, -0.0627,  # FR (can0)
 ]
@@ -68,18 +68,29 @@ STANDBY_ANGLE = [
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0:
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.40, Knee: +1.36 (Tuned)
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.50, Knee: +1.40
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.40, Knee: +1.36 (Tuned via Zero Offset)
+#   FL & FR (Front Legs): Roll: 0.0 / -0.10, Hip: -1.65, Knee: +1.40
 DEFAULT_ANGLE = [
      0.0, -1.40,  1.36,  # BL
      0.0, -1.40,  1.36,  # BR
-     0.0, -1.50,  1.40,  # FL
-     0.0, -1.50,  1.40,  # FR
+     0.0, -1.65,  1.40,  # FL
+    -0.10, -1.65,  1.40,  # FR (collar: -0.10 rad)
 ]
 
-# PD Control Gains for RS00 Motors
-KP_GAIN = [25.0] * 12
-KD_GAIN = [1.5] * 12
+# PD Control Gains for RS00 Motors (ROS Order: BL, BR, FL, FR)
+# Coxa/Collar: Kp=18.0, Kd=2.0 | Hip & Knee: Kp=25.0, Kd=1.5
+KP_GAIN = [
+    18.0, 25.0, 25.0,  # BL: collar, hip, knee
+    18.0, 25.0, 25.0,  # BR: collar, hip, knee
+    18.0, 25.0, 25.0,  # FL: collar, hip, knee
+    18.0, 25.0, 25.0,  # FR: collar, hip, knee
+]
+KD_GAIN = [
+    2.0, 1.5, 1.5,     # BL: collar, hip, knee
+    2.0, 1.5, 1.5,     # BR: collar, hip, knee
+    2.0, 1.5, 1.5,     # FL: collar, hip, knee
+    2.0, 1.5, 1.5,     # FR: collar, hip, knee
+]
 
 # Isaac Lab RL Policy Control Parameters
 ACTION_SCALE = 0.25

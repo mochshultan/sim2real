@@ -36,8 +36,8 @@ ROS_NAME_TO_ISAAC_IDX = {
 }
 
 DEFAULT_JOINT_POS = np.array([
-    0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.50, -1.50, -1.40, -1.40,   # Hip Pitches (Fr, Fl, Br, Bl)
+   -0.10,  0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
+   -1.65, -1.65, -1.40, -1.40,   # Hip Pitches (Fr, Fl, Br, Bl)
     1.40,  1.40,  1.36,  1.36,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
@@ -94,12 +94,12 @@ class StateCheckerNode(Node):
 
     def _joy_cb(self, msg: Joy):
         if len(msg.axes) >= 2:
-            self.cmd_vel[0] = msg.axes[1] * 1.0
+            self.cmd_vel[0] = msg.axes[1] * 0.8
             self.cmd_vel[1] = msg.axes[0] * 0.5
             if len(msg.axes) > 3:
-                self.cmd_vel[2] = msg.axes[3] * 1.2
+                self.cmd_vel[2] = msg.axes[3] * 0.8
             elif len(msg.axes) >= 3:
-                self.cmd_vel[2] = msg.axes[2] * 1.2
+                self.cmd_vel[2] = msg.axes[2] * 0.8
             self.cmd_count += 1
 
     def _joint_cb(self, msg: JointState):

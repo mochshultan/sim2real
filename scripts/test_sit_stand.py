@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
 🐾 NXP Jaguar: Standalone Sit & Stand Transition Tester (CAN Direct)
-Interactive Terminal Control interface (similar to Sim2Sim) for testing smooth,
-non-aggressive Sit (0.0 rad) and Stand (Hip -1.4, Knee +1.4 rad) transitions.
+Interactive Terminal Control & Bluetooth/USB Xbox Gamepad interface for testing smooth,
+non-aggressive Sit (0.0 rad) and Stand (Front Hip -1.5, Front Knee +1.4, Rear Hip -1.4, Rear Knee +1.36) transitions.
 
-Walk mode [3] is disabled for safety until the robot is suspended.
+Supports:
+- Direct Linux Bluetooth & USB Xbox Gamepad (/dev/input/js*)
+- Non-blocking SSH Terminal keyboard control
+- ROS 2 Bridge (/joint_states @ 50 Hz, /Imu_data, /joy)
+- Smooth S-curve (cosine) trajectory generator with zero start/end jerk
 """
 
 import sys
@@ -17,12 +21,14 @@ import tty
 import atexit
 import threading
 import numpy as np
+from typing import Optional, List, Dict, Any
 
 # Add scripts directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import parameters as P
 from robstride_motor_lib import RobStrideMotorController
+from gamepad_reader import LinuxGamepadReader, XboxState
 
 # ==============================================================================
 # TARGET POSES (In ROS Joint Order: BL, BR, FL, FR)
@@ -35,12 +41,12 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose (Kaki belakang: Hip -1.40 rad, Knee +1.36 rad; Kaki depan: Hip -1.50 rad, Knee +1.40 rad)
+# Standing pose (Kaki belakang: Hip -1.40 rad, Knee +1.36 rad; Kaki depan: Hip -1.65 rad, Knee +1.40 rad)
 STAND_POSE = np.array([
-    0.0, -1.40,  1.36,  # BL: collar, hip, knee (belakang optimal menopang)
-    0.0, -1.40,  1.36,  # BR: collar, hip, knee (belakang optimal menopang)
-    0.0, -1.50,  1.40,  # FL: collar, hip, knee (depan standar)
-    0.0, -1.50,  1.40,  # FR: collar, hip, knee (depan standar)
+    0.0, -1.40,  1.36,  # BL: collar, hip, knee
+    0.0, -1.40,  1.36,  # BR: collar, hip, knee
+    0.0, -1.65,  1.40,  # FL: collar, hip, knee
+   -0.10, -1.65,  1.40,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 
@@ -88,7 +94,7 @@ class TerminalInputHandler:
 # ==============================================================================
 class SitStandController:
     def __init__(self):
-        self.motors = [None] * P.N_JOINTS
+        self.motors: List[Optional[RobStrideMotorController]] = [None] * P.N_JOINTS
         self.joint_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.joint_vel = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.joint_tau = np.zeros(P.N_JOINTS, dtype=np.float64)
@@ -111,10 +117,14 @@ class SitStandController:
         self.is_passive = True
         self.transition_start_time = 0.0
         self.transition_progress = 0.0
+        self.transition_finish_time = 0.0
 
         self.running = True
         self.status_msg = "Sistem siap. Motor dalam mode PASIF (Zero Torque)."
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+
+        # Direct Bluetooth/USB Gamepad Reader
+        self.gamepad_reader = LinuxGamepadReader(callback=self._on_gamepad_edge)
 
         # ROS 2 Bridge Initialization
         self.has_ros = False
@@ -134,16 +144,17 @@ class SitStandController:
     def _init_ros(self):
         try:
             import rclpy
-            from sensor_msgs.msg import JointState, Imu
+            from sensor_msgs.msg import JointState, Imu, Joy
             if not rclpy.ok():
                 rclpy.init()
             self.ros_node = rclpy.create_node("sit_stand_tester")
             self.joint_pub = self.ros_node.create_publisher(JointState, "/joint_states", 10)
             self.imu_sub = self.ros_node.create_subscription(Imu, "/Imu_data", self._imu_cb, 10)
+            self.joy_sub = self.ros_node.create_subscription(Joy, "/joy", self._ros_joy_cb, 10)
+            self.joy_remote_sub = self.ros_node.create_subscription(Joy, "/joy_remote", self._ros_joy_cb, 10)
             self.has_ros = True
             self.ros_thread = threading.Thread(target=self._ros_spin, daemon=True)
             self.ros_thread.start()
-            print("✅ ROS 2 Bridge Aktif: Publishing /joint_states & Subscribing /Imu_data.")
         except Exception as e:
             print(f"[WARN] ROS 2 tidak aktif / tidak tersedia: {e}")
 
@@ -154,6 +165,67 @@ class SitStandController:
                 rclpy.spin_once(self.ros_node, timeout_sec=0.02)
             except Exception:
                 break
+
+    def _ros_joy_cb(self, msg):
+        """Fallback callback for ROS 2 Joy topic if active."""
+        if len(msg.buttons) > 0 and msg.buttons[0] == 1:
+            self.start_transition("STAND", STAND_POSE)
+            self.status_msg = "🎮 [ROS Joy 0] Memulai transisi BERDIRI (STANDUP)..."
+        elif len(msg.buttons) > 1 and msg.buttons[1] == 1:
+            # Button 1 / B
+            pass
+        elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
+            self.start_transition("SIT", SIT_POSE)
+            self.status_msg = "🎮 [ROS Joy 2] Memulai transisi DUDUK (SIT 0.0 rad)..."
+
+    def _on_gamepad_edge(self, state: XboxState, edges: Dict[str, Any]):
+        """Triggered immediately upon button press (rising edge 0 -> 1) from Gamepad."""
+        with self.lock:
+            # Button A: STANDUP
+            if "btn_a" in edges:
+                self.start_transition("STAND", STAND_POSE)
+                self.status_msg = "🎮 [Xbox A] Memulai transisi BERDIRI (STANDUP)..."
+
+            # Button X: SIT DOWN
+            if "btn_x" in edges:
+                self.start_transition("SIT", SIT_POSE)
+                self.status_msg = "🎮 [Xbox X] Memulai transisi DUDUK (SIT 0.0 rad)..."
+
+            # Button LB or Back / View: STOP / PASSIVE ZERO-TORQUE
+            if "btn_lb" in edges or "btn_back" in edges:
+                self.is_passive = True
+                self.state = "PASSIVE"
+                self.status_msg = "🛑 [Xbox LB/Back] STOP PASIF: Torsi motor dinonaktifkan."
+
+            # Button RB: Increase Duration (+0.5s)
+            if "btn_rb" in edges:
+                self.duration = min(10.0, self.duration + 0.5)
+                self.status_msg = f"🎮 [Xbox RB] Durasi transisi diperpanjang (+0.5s): {self.duration:.1f} s"
+
+            # Button Y: Decrease Duration (-0.5s)
+            if "btn_y" in edges:
+                self.duration = max(2.0, self.duration - 0.5)
+                self.status_msg = f"🎮 [Xbox Y] Durasi transisi dipercepat (-0.5s): {self.duration:.1f} s"
+
+            # D-Pad Up: Increase Kp (+0.5)
+            if "dpad_up" in edges:
+                self.kp = round(min(50.0, self.kp + 0.5), 1)
+                self.status_msg = f"🎮 [Xbox D-Pad Up] Gain Kp dinaikkan (+0.5): {self.kp:.1f}"
+
+            # D-Pad Down: Decrease Kp (-0.5)
+            if "dpad_down" in edges:
+                self.kp = round(max(0.0, self.kp - 0.5), 1)
+                self.status_msg = f"🎮 [Xbox D-Pad Down] Gain Kp diturunkan (-0.5): {self.kp:.1f}"
+
+            # D-Pad Right: Increase Kd (+0.1)
+            if "dpad_right" in edges:
+                self.kd = round(min(10.0, self.kd + 0.1), 2)
+                self.status_msg = f"🎮 [Xbox D-Pad Right] Gain Kd dinaikkan (+0.1): {self.kd:.2f}"
+
+            # D-Pad Left: Decrease Kd (-0.1)
+            if "dpad_left" in edges:
+                self.kd = round(max(0.0, self.kd - 0.1), 2)
+                self.status_msg = f"🎮 [Xbox D-Pad Left] Gain Kd diturunkan (-0.1): {self.kd:.2f}"
 
     def _imu_cb(self, msg):
         qx = msg.orientation.x
@@ -231,7 +303,7 @@ class SitStandController:
         elif char == '3':
             # [3] WALK (DISABLED)
             with self.lock:
-                self.status_msg = "⚠️ Mode [3] WALK DINONAKTIFKAN! Robot belum digantung di udara."
+                self.status_msg = "⚠️ Mode [3] WALK DINONAKTIFKAN! Gunakan scripts/keyboard_teleop.py saat robot digantung."
         elif char == ' ':
             # [Space] Safe Passive Mode
             with self.lock:
@@ -248,12 +320,20 @@ class SitStandController:
                 self.status_msg = f"Durasi transisi diubah menjadi: {self.duration:.1f} detik."
         elif c == 'K':
             with self.lock:
-                self.kp = min(40.0, self.kp + 2.0)
-                self.status_msg = f"Gain Kp diubah menjadi: {self.kp:.1f}"
+                self.kp = round(min(50.0, self.kp + 0.5), 1)
+                self.status_msg = f"Gain Kp dinaikkan (+0.5): {self.kp:.1f}"
         elif c == 'J':
             with self.lock:
-                self.kp = max(5.0, self.kp - 2.0)
-                self.status_msg = f"Gain Kp diubah menjadi: {self.kp:.1f}"
+                self.kp = round(max(0.0, self.kp - 0.5), 1)
+                self.status_msg = f"Gain Kp diturunkan (-0.5): {self.kp:.1f}"
+        elif c == 'L':
+            with self.lock:
+                self.kd = round(min(10.0, self.kd + 0.1), 2)
+                self.status_msg = f"Gain Kd dinaikkan (+0.1): {self.kd:.2f}"
+        elif c == 'H':
+            with self.lock:
+                self.kd = round(max(0.0, self.kd - 0.1), 2)
+                self.status_msg = f"Gain Kd diturunkan (-0.1): {self.kd:.2f}"
         elif c == 'E':
             with self.lock:
                 STAND_POSE[7] = min(-0.8, STAND_POSE[7] + 0.03)   # FL Hip
@@ -369,7 +449,15 @@ class SitStandController:
                     if progress >= 1.0:
                         with self.lock:
                             self.state = target_state
+                            self.transition_finish_time = time.time()
                             self.status_msg = f"✅ Transisi ke {target_state} selesai secara mulus."
+                elif current_state == "SIT":
+                    # After 0.5s settle delay at sitting position, relax to passive zero-torque mode
+                    if hasattr(self, 'transition_finish_time') and (time.time() - self.transition_finish_time >= 0.5):
+                        with self.lock:
+                            self.is_passive = True
+                            self.state = "SIT (PASIF)"
+                            self.status_msg = "✅ Posisi duduk stabil (0.5s). Motor otomatis dilemaskan (Mode PASIF)."
                 else:
                     # Maintain target position
                     with self.lock:
@@ -428,6 +516,8 @@ class SitStandController:
 
         try:
             while self.running:
+                gp_state = self.gamepad_reader.get_state()
+
                 sys.stdout.write("\033[2J\033[H")  # Clear screen and move cursor to top
 
                 with self.lock:
@@ -456,7 +546,7 @@ class SitStandController:
                     state_badge = f"\033[1;36m[ 🔄 TRANSISI: [{bar}] {prog*100:5.1f}% ({prog*dur:.1f}s / {dur:.1f}s) ]\033[0m"
                 elif st == "STAND":
                     state_badge = "\033[1;32m[ 🧍 POSISI STANDUP (BERDIRI) ]\033[0m"
-                elif st == "SIT":
+                elif "SIT" in st:
                     state_badge = "\033[1;34m[ 🧎 POSISI DUDUK (STANDBY 0.0 RAD) ]\033[0m"
                 else:
                     state_badge = f"[ {st} ]"
@@ -464,15 +554,24 @@ class SitStandController:
                 imu_status_str = f"[{imu_g[0]:+5.2f}, {imu_g[1]:+5.2f}, {imu_g[2]:+5.2f}] ({imu_n} msg)" if imu_n > 0 else "Menunggu /Imu_data"
                 ros_status_str = "ROS 2 (/joint_states @ 50 Hz)" if has_r else "Direct CAN"
 
-                print("=" * 92)
-                print(f" 🐾 NXP JAGUAR: SIT & STAND TESTER + ROS 2 BRIDGE           {state_badge}")
-                print("=" * 92)
-                print(f" Status  : {status}")
-                print(f" Setting : Durasi = {dur:.1f} s | Kp = {kp_v:.1f} | Kd = {kd_v:.1f} | Mode: {ros_status_str}")
-                print(f" Sensor  : IMU Proj Gravity = {imu_status_str}")
-                print("-" * 92)
+                # Gamepad connection string
+                if gp_state.connected:
+                    active_btns = gp_state.get_active_buttons_str()
+                    btn_suffix = f" | Tombol: [{active_btns}]" if active_btns != "None" else ""
+                    gp_status_str = f"\033[1;32m🟢 TERHUBUNG: {gp_state.name} ({gp_state.mapping_type}){btn_suffix}\033[0m"
+                else:
+                    gp_status_str = "\033[1;33m⚪ BELUM TERHUBUNG (Hubungkan Xbox via Bluetooth/USB)\033[0m"
+
+                print("=" * 96)
+                print(f" 🐾 NXP JAGUAR: SIT & STAND TESTER (SSH + XBOX BLUETOOTH)   {state_badge}")
+                print("=" * 96)
+                print(f" Status   : {status}")
+                print(f" Gamepad  : {gp_status_str}")
+                print(f" Setting  : Durasi = {dur:.1f} s | Kp = {kp_v:.1f} | Kd = {kd_v:.1f} | Mode: {ros_status_str}")
+                print(f" Sensor   : IMU Proj Gravity = {imu_status_str}")
+                print("-" * 96)
                 print(f" {'ID':<4} {'Bus':<6} {'Joint Name':<18} {'Actual (rad)':<14} {'Target (rad)':<14} {'Diff (rad)':<12} {'Temp'}")
-                print("-" * 92)
+                print("-" * 96)
 
                 for i in range(P.N_JOINTS):
                     cid = P.CAN_ID[i]
@@ -488,22 +587,22 @@ class SitStandController:
                     tgt_str = f"{tgt:+6.3f} rad" if not is_pass else "  --    "
                     print(f" #{cid:<3} {dev:<6} {jname:<18} {curr:+8.4f} rad   {tgt_str:<14} {diff_str:<12} {tem:4.1f}°C")
 
-                print("=" * 92)
-                print(" 🎮 KONTROL TERMINAL (Ketik tombol langsung tanpa Enter):")
-                print("   [1] 🧎 DUDUK (Standby)        : Transisi halus ke posisi 0.0 rad")
+                print("=" * 96)
+                print(" 🎮 KONTROL STIK XBOX BLUETOOTH / USB:")
+                print("   [A] 🧍 Stand Up (Berdiri)     | [X] 🧎 Sit Down (Duduk ke 0 rad -> Lemas)")
+                print("   [LB]/[Back] 🛑 Stop Pasif     | [RB] ⏱️ Durasi (+0.5s)  |  [Y] ⏱️ Durasi (-0.5s)")
+                print("   [D-Pad Up/Down] ⚡ Tune Kp (+0.5 / -0.5)  |  [D-Pad Right/Left] 🛡️ Tune Kd (+0.1 / -0.1)")
+                print("-" * 96)
+                print(" ⌨️  KONTROL TERMINAL SSH (Ketik tombol langsung tanpa Enter):")
+                print("   [1] 🧎 DUDUK (Standby)        : Transisi halus ke posisi 0.0 rad lalu lemas")
                 print("   [2] 🧍 STANDUP (Berdiri)      : Transisi halus ke posisi berdiri")
-                print("   [3] ❌ WALK (RL Policy)       : [DINONAKTIFKAN] Safety lock aktif")
-                print("   [+] / [-] : Ubah Durasi Transisi (Lebih Pelan / Lebih Cepat)")
-                print("   [K] / [J] : Ubah Kekakuan Kp (+ / -)")
-                print("   -- TUNING KAKI DEPAN --")
-                print(f"   [E] / [R] : 🦵 Hip Depan (+ / -)    -> Atur ketegakan paha depan (Saat ini: {STAND_POSE[7]:.2f} rad)")
-                print(f"   [T] / [Y] : 🦵 Knee Depan (+ / -)   -> Atur tinggi lutut depan  (Saat ini: +{STAND_POSE[8]:.2f} rad)")
-                print("   -- TUNING KAKI BELAKANG --")
-                print(f"   [O] / [P] : 🦵 Hip Belakang (+ / -) -> Atur ketegakan paha belakang (Saat ini: {STAND_POSE[1]:.2f} rad)")
-                print(f"   [U] / [I] : 🦵 Knee Belakang (+ / -)-> Atur tinggi lutut belakang  (Saat ini: +{STAND_POSE[2]:.2f} rad)")
+                print("   [+] / [-] : Ubah Durasi Transisi  |  [K] / [J] : Ubah Kp (±0.5)  |  [L] / [H] : Ubah Kd (±0.1)")
+                print("   -- TUNING SENDI CEPAT --")
+                print(f"   [E]/[R]: Hip Depan ({STAND_POSE[7]:.2f})  |  [T]/[Y]: Knee Depan (+{STAND_POSE[8]:.2f})")
+                print(f"   [O]/[P]: Hip Blkg ({STAND_POSE[1]:.2f})   |  [U]/[I]: Knee Blkg (+{STAND_POSE[2]:.2f})")
                 print("   [Space]   : STOP DARURAT / Mode Pasif Bebas Torsi")
                 print("   [Q]       : Keluar dan Matikan Motor")
-                print("=" * 92)
+                print("=" * 96)
 
                 time.sleep(0.1)  # 10 Hz UI refresh
 
@@ -511,6 +610,7 @@ class SitStandController:
             pass
         finally:
             input_handler.stop()
+            self.gamepad_reader.stop()
             self.shutdown()
 
     def shutdown(self):

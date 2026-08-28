@@ -47,7 +47,9 @@ else
 fi
 
 # 3. Source Workspace Overlay with serial_imu package
-if [ -f "/home/erc/nxp_jaguar_2/nxp_jaguar/install/setup.bash" ]; then
+if [ -f "/home/erc/sim2real/install/setup.bash" ]; then
+    source /home/erc/sim2real/install/setup.bash
+elif [ -f "/home/erc/nxp_jaguar_2/nxp_jaguar/install/setup.bash" ]; then
     source /home/erc/nxp_jaguar_2/nxp_jaguar/install/setup.bash
 elif [ -f "/home/erc/nxp_jaguar/install/setup.bash" ]; then
     source /home/erc/nxp_jaguar/install/setup.bash

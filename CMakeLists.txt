@@ -63,6 +63,8 @@ install(PROGRAMS
   scripts/jaguar_main.py
   scripts/jaguar_utils.py
   scripts/parameters.py
+  scripts/remote_xbox_forwarder.py
+  scripts/gamepad_reader.py
   scripts/scan_robostride_ids.py
   scripts/set_robostride_zero.py
   DESTINATION lib/${PROJECT_NAME}

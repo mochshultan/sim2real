@@ -76,12 +76,12 @@ public:
     // BL (can1)
     joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3845, -0.40,  0.40, 20.0, 17.0, {}};
     joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1,  1.2983, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.0788, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1,  0.1788, -0.10,  2.80, 20.0, 17.0, {}};
 
     // BR (can0)
     joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1,  0.4017, -0.40,  0.40, 20.0, 17.0, {}};
     joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1,  1.2976, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1,  0.0339, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1,  0.1339, -0.10,  2.80, 20.0, 17.0, {}};
 
     // FL (can1)
     joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.40,  0.40, 20.0, 17.0, {}};
@@ -199,6 +199,18 @@ public:
 
   void disableAllMotors()
   {
+    // 1. Send passive zero-torque frame to all motors first
+    for (size_t i = 0; i < N_JOINTS; ++i) {
+      const auto & cfg = joint_configs_[i];
+      RobStrideCanBus * bus = (cfg.bus_name == "can0") ? bus_can0_.get() : bus_can1_.get();
+      if (!bus || !bus->isOpen()) continue;
+
+      struct can_frame passive_frame = buildMitControlFrame(cfg.can_id, 0.0, 0.0, 0.0, 0.0, 0.0, cfg.motor_params);
+      bus->sendFrame(passive_frame);
+    }
+    usleep(5000);  // 5ms buffer flush
+
+    // 2. Send stop frames
     for (size_t i = 0; i < N_JOINTS; ++i) {
       const auto & cfg = joint_configs_[i];
       RobStrideCanBus * bus = (cfg.bus_name == "can0") ? bus_can0_.get() : bus_can1_.get();
@@ -207,6 +219,7 @@ public:
       struct can_frame stop_frame = buildStopMotorFrame(cfg.can_id);
       bus->sendFrame(stop_frame);
     }
+    usleep(5000);
   }
 
   void stepCommunicationCycle()

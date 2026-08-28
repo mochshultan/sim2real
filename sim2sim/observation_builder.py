@@ -25,8 +25,8 @@ ISAAC_TO_MUJOCO = [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
 
 # Nominal Standing Angles (q0) in Isaac Lab Joint Order (FR, FL, BR, BL)
 DEFAULT_JOINT_POS_ISAAC = np.array([
-    0.0,   0.0,   0.0,   0.0,    # Rolls (FR, FL, BR, BL)
-   -1.50, -1.50, -1.40, -1.40,   # Hips (FR, FL, BR, BL)
+   -0.10,  0.0,   0.0,   0.0,    # Rolls (FR, FL, BR, BL)
+   -1.65, -1.65, -1.40, -1.40,   # Hips (FR, FL, BR, BL)
     1.40,  1.40,  1.36,  1.36,   # Knees (FR, FL, BR, BL)
 ], dtype=np.float32)
 

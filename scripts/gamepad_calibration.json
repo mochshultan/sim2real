@@ -1,0 +1,39 @@
+{
+    "device_name": "Xbox Wireless Controller",
+    "connection_type": "Bluetooth",
+    "timestamp": "2026-08-27 15:14:24",
+    "axes": {
+        "lx": {
+            "center_offset": 0.0,
+            "noise_std": 0.0,
+            "peak_noise": 0.0,
+            "deadzone": 0.1,
+            "min_val": -1.0,
+            "max_val": 1.0
+        },
+        "ly": {
+            "center_offset": 0.0,
+            "noise_std": 0.0,
+            "peak_noise": 0.0,
+            "deadzone": 0.1,
+            "min_val": -1.0,
+            "max_val": 1.0
+        },
+        "rx": {
+            "center_offset": 0.0,
+            "noise_std": 0.0,
+            "peak_noise": 0.0,
+            "deadzone": 0.1,
+            "min_val": -1.0,
+            "max_val": 1.0
+        },
+        "ry": {
+            "center_offset": 0.0,
+            "noise_std": 0.0,
+            "peak_noise": 0.0,
+            "deadzone": 0.1,
+            "min_val": -1.0,
+            "max_val": 1.0
+        }
+    }
+}

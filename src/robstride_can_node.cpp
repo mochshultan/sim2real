@@ -322,26 +322,12 @@ private:
 
 }  // namespace robstride
 
-static std::shared_ptr<robstride::RobStrideCanNode> g_node = nullptr;
-
-void sigint_handler(int sig)
-{
-  (void)sig;
-  if (g_node) {
-    g_node->stop();
-  }
-  rclcpp::shutdown();
-}
-
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  signal(SIGINT, sigint_handler);
-  signal(SIGTERM, sigint_handler);
-
-  g_node = std::make_shared<robstride::RobStrideCanNode>();
-  rclcpp::spin(g_node);
-  g_node->stop();
+  auto node = std::make_shared<robstride::RobStrideCanNode>();
+  rclcpp::spin(node);
+  node->stop();
   rclcpp::shutdown();
   return 0;
 }

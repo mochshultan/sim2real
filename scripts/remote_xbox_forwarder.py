@@ -30,7 +30,7 @@ C_WHITE   = "\033[1;37m"
 C_CLEAR   = "\033[2J\033[H"
 
 DEFAULT_PORT = 9876
-DEADZONE = 0.08
+DEADZONE = 0.15
 
 
 def main():
@@ -104,10 +104,10 @@ def main():
             if abs(ax_ly) < DEADZONE: ax_ly = 0.0
             if abs(ax_rx) < DEADZONE: ax_rx = 0.0
 
-            # Scale to velocity limits
-            vx = float(ax_ly * 1.2)
+            # Scale to velocity limits (Max 0.8 m/s, 0.5 m/s, 0.8 rad/s)
+            vx = float(ax_ly * 0.8)
             vy = float(ax_lx * 0.5)
-            wz = float(ax_rx * 1.2)
+            wz = float(ax_rx * 0.8)
 
             payload = {
                 "type": "XBOX_GAMEPAD",

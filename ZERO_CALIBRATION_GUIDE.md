@@ -48,18 +48,18 @@ These values are calibrated for all 12 RoboStride RS00 motors:
 
 | Joint Name | CAN Bus | CAN ID | Direction (`dir`) | Joint Offset (`rad`) | Angle (`deg`) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **BL_collar_joint** | `can1` | `#4` | `+1` | **`+0.3676 rad`** | $+21.1^\circ$ |
-| **BL_hip_joint** | `can1` | `#5` | `-1` | **`-1.2600 rad`** | $-72.2^\circ$ |
-| **BL_knee_joint** | `can1` | `#6` | `-1` | **`+0.1237 rad`** | $+7.1^\circ$ |
-| **BR_collar_joint** | `can0` | `#4` | `+1` | **`-0.3638 rad`** | $-20.8^\circ$ |
-| **BR_hip_joint** | `can0` | `#5` | `+1` | **`-1.2773 rad`** | $-73.2^\circ$ |
-| **BR_knee_joint** | `can0` | `#6` | `+1` | **`-0.0247 rad`** | $-1.4^\circ$ |
-| **FL_collar_joint** | `can1` | `#1` | `-1` | **`+0.3557 rad`** | $+20.4^\circ$ |
-| **FL_hip_joint** | `can1` | `#2` | `-1` | **`-1.2592 rad`** | $-72.1^\circ$ |
-| **FL_knee_joint** | `can1` | `#3` | `-1` | **`+0.0090 rad`** | $+0.5^\circ$ |
-| **FR_collar_joint** | `can0` | `#1` | `-1` | **`-0.2932 rad`** | $-16.8^\circ$ |
-| **FR_hip_joint** | `can0` | `#2` | `+1` | **`-1.1618 rad`** | $-66.6^\circ$ |
-| **FR_knee_joint** | `can0` | `#3` | `+1` | **`-0.0539 rad`** | $-3.1^\circ$ |
+| **BL_collar_joint** | `can1` | `#4` | `+1` | **`+0.3845 rad`** | $+22.0^\circ$ |
+| **BL_hip_joint** | `can1` | `#5` | `-1` | **`-1.2983 rad`** | $-74.4^\circ$ |
+| **BL_knee_joint** | `can1` | `#6` | `-1` | **`-0.0788 rad`** | $-4.5^\circ$ |
+| **BR_collar_joint** | `can0` | `#4` | `+1` | **`-0.4017 rad`** | $-23.0^\circ$ |
+| **BR_hip_joint** | `can0` | `#5` | `+1` | **`-1.2976 rad`** | $-74.3^\circ$ |
+| **BR_knee_joint** | `can0` | `#6` | `+1` | **`-0.0339 rad`** | $-1.9^\circ$ |
+| **FL_collar_joint** | `can1` | `#1` | `-1` | **`+0.3526 rad`** | $+20.2^\circ$ |
+| **FL_hip_joint** | `can1` | `#2` | `-1` | **`-1.2427 rad`** | $-71.2^\circ$ |
+| **FL_knee_joint** | `can1` | `#3` | `-1` | **`+0.0033 rad`** | $+0.2^\circ$ |
+| **FR_collar_joint** | `can0` | `#1` | `-1` | **`-0.3181 rad`** | $-18.2^\circ$ |
+| **FR_hip_joint** | `can0` | `#2` | `+1` | **`-1.2067 rad`** | $-69.1^\circ$ |
+| **FR_knee_joint** | `can0` | `#3` | `+1` | **`-0.0627 rad`** | $-3.6^\circ$ |
 
 ---
 
@@ -174,18 +174,18 @@ $$\theta_{\text{joint}} = (\theta_{\text{raw}} \times \text{MOTOR\_DIR}) + \text
 
 | 關節名稱 (Joint Name) | CAN 總線 | 電機 ID | 旋轉方向 (`dir`) | **關節偏移量 (`rad`)** | 角度值 (`deg`) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **BL_collar_joint**（左後側展） | `can1` | `#4` | `+1` | **`+0.3676 rad`** | $+21.1^\circ$ |
-| **BL_hip_joint**（左後大腿） | `can1` | `#5` | `-1` | **`-1.2600 rad`** | $-72.2^\circ$ |
-| **BL_knee_joint**（左後小腿） | `can1` | `#6` | `-1` | **`+0.1237 rad`** | $+7.1^\circ$ |
-| **BR_collar_joint**（右後側展） | `can0` | `#4` | `+1` | **`-0.3638 rad`** | $-20.8^\circ$ |
-| **BR_hip_joint**（右後大腿） | `can0` | `#5` | `+1` | **`-1.2773 rad`** | $-73.2^\circ$ |
-| **BR_knee_joint**（右後小腿） | `can0` | `#6` | `+1` | **`-0.0247 rad`** | $-1.4^\circ$ |
-| **FL_collar_joint**（左前側展） | `can1` | `#1` | `-1` | **`+0.3557 rad`** | $+20.4^\circ$ |
-| **FL_hip_joint**（左前大腿） | `can1` | `#2` | `-1` | **`-1.2592 rad`** | $-72.1^\circ$ |
-| **FL_knee_joint**（左前小腿） | `can1` | `#3` | `-1` | **`+0.0090 rad`** | $+0.5^\circ$ |
-| **FR_collar_joint**（右前側展） | `can0` | `#1` | `-1` | **`-0.2932 rad`** | $-16.8^\circ$ |
-| **FR_hip_joint**（右前大腿） | `can0` | `#2` | `+1` | **`-1.1618 rad`** | $-66.6^\circ$ |
-| **FR_knee_joint**（右前小腿） | `can0` | `#3` | `+1` | **`-0.0539 rad`** | $-3.1^\circ$ |
+| **BL_collar_joint**（左後側展） | `can1` | `#4` | `+1` | **`+0.3845 rad`** | $+22.0^\circ$ |
+| **BL_hip_joint**（左後大腿） | `can1` | `#5` | `-1` | **`-1.2983 rad`** | $-74.4^\circ$ |
+| **BL_knee_joint**（左後小腿） | `can1` | `#6` | `-1` | **`-0.0788 rad`** | $-4.5^\circ$ |
+| **BR_collar_joint**（右後側展） | `can0` | `#4` | `+1` | **`-0.4017 rad`** | $-23.0^\circ$ |
+| **BR_hip_joint**（右後大腿） | `can0` | `#5` | `+1` | **`-1.2976 rad`** | $-74.3^\circ$ |
+| **BR_knee_joint**（右後小腿） | `can0` | `#6` | `+1` | **`-0.0339 rad`** | $-1.9^\circ$ |
+| **FL_collar_joint**（左前側展） | `can1` | `#1` | `-1` | **`+0.3526 rad`** | $+20.2^\circ$ |
+| **FL_hip_joint**（左前大腿） | `can1` | `#2` | `-1` | **`-1.2427 rad`** | $-71.2^\circ$ |
+| **FL_knee_joint**（左前小腿） | `can1` | `#3` | `-1` | **`+0.0033 rad`** | $+0.2^\circ$ |
+| **FR_collar_joint**（右前側展） | `can0` | `#1` | `-1` | **`-0.3181 rad`** | $-18.2^\circ$ |
+| **FR_hip_joint**（右前大腿） | `can0` | `#2` | `+1` | **`-1.2067 rad`** | $-69.1^\circ$ |
+| **FR_knee_joint**（右前小腿） | `can0` | `#3` | `+1` | **`-0.0627 rad`** | $-3.6^\circ$ |
 
 ---
 

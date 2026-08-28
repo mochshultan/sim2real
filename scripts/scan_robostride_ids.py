@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+RobStride Motor CAN ID Scanner Utility.
+Scans can0 and can1 interfaces to discover connected RobStride RS00 motor node IDs.
+"""
 
 import time
 import can
@@ -6,24 +10,19 @@ import can
 
 HOST_ID = 0xFE
 BITRATE = 1_000_000
-
 CHANNELS = ["can0", "can1"]
-
-# RoboStride private protocol normally uses motor IDs 0~127 or 1~127.
 SCAN_IDS = range(1, 128)
 
 
 def make_get_device_id_frame(motor_id: int, host_id: int = HOST_ID) -> can.Message:
     """
-    RoboStride private protocol:
-    Communication type 0 = Get device ID
+    RobStride private protocol frame:
+    Communication mode 0 = Get device ID.
 
     Extended CAN ID:
-      bit 28~24 = communication type = 0x00
-      bit 15~8  = host CAN ID
-      bit 7~0   = target motor CAN ID
-
-    Data field is all zero.
+      bit 28..24 = communication type = 0x00
+      bit 15..8  = host CAN ID (0xFE)
+      bit 7..0   = target motor CAN ID
     """
     comm_type = 0x00
     arbitration_id = (comm_type << 24) | (host_id << 8) | motor_id
@@ -36,10 +35,6 @@ def make_get_device_id_frame(motor_id: int, host_id: int = HOST_ID) -> can.Messa
 
 
 def parse_robostride_id(arbitration_id: int):
-    """
-    Return:
-      comm_type, upper_16, low_8
-    """
     comm_type = (arbitration_id >> 24) & 0x1F
     upper_16 = (arbitration_id >> 8) & 0xFFFF
     low_8 = arbitration_id & 0xFF
@@ -48,16 +43,14 @@ def parse_robostride_id(arbitration_id: int):
 
 def scan_channel(channel: str):
     found = {}
-
-    print(f"\nScanning {channel}...")
+    print(f"\nScanning interface {channel}...")
 
     with can.interface.Bus(
         channel=channel,
         interface="socketcan",
         bitrate=BITRATE,
     ) as bus:
-
-        # 清掉舊 buffer，避免把之前的 feedback 當成 scan result
+        # Flush existing RX queue buffer
         start = time.time()
         while time.time() - start < 0.1:
             bus.recv(timeout=0.001)
@@ -74,20 +67,11 @@ def scan_channel(channel: str):
 
             while time.time() < deadline:
                 rx = bus.recv(timeout=0.005)
-                if rx is None:
-                    continue
-
-                if not rx.is_extended_id:
+                if rx is None or not rx.is_extended_id:
                     continue
 
                 comm_type, upper_16, low_8 = parse_robostride_id(rx.arbitration_id)
 
-                # Type 0 response:
-                #   bit28~24 = 0x0
-                #   bit23~8  = target motor CAN_ID
-                #   bit7~0   = 0xFE
-                #
-                # For response, upper_16 usually contains the responding motor ID.
                 if comm_type == 0x00 and low_8 == HOST_ID:
                     responding_motor_id = upper_16 & 0xFF
                     unique_id = int.from_bytes(rx.data, byteorder="big", signed=False)
@@ -114,21 +98,21 @@ def main():
             print(f"[ERROR] Cannot open {channel}: {e}")
             all_found[channel] = {}
 
-    print("\n===== Scan result =====")
+    print("\n===== Scan Results =====")
 
     for channel, motors in all_found.items():
         if not motors:
-            print(f"{channel}: no motors found")
+            print(f"{channel}: No motors detected.")
             continue
 
-        print(f"{channel}: found {len(motors)} motor(s)")
+        print(f"{channel}: Found {len(motors)} motor(s):")
         for motor_id in sorted(motors.keys()):
             info = motors[motor_id]
             print(
-                f"  motor_id={motor_id:3d}  "
-                f"unique_id=0x{info['unique_id']:016X}  "
-                f"reply_can_id=0x{info['raw_can_id']:08X}  "
-                f"data={info['data'].hex(' ').upper()}"
+                f"  Motor ID={motor_id:3d} | "
+                f"Unique ID=0x{info['unique_id']:016X} | "
+                f"Reply CAN ID=0x{info['raw_can_id']:08X} | "
+                f"Data={info['data'].hex(' ').upper()}"
             )
 
 

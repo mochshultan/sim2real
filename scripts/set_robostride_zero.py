@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+RobStride Motor Mechanical Zero Calibration Utility.
+Sends Type 6 mechanical zero write commands to RobStride RS00 motors across can0 and can1.
+"""
 
 import time
 import can
@@ -15,18 +19,11 @@ MOTORS_BY_CHANNEL = {
 
 def make_zero_msg(motor_id: int) -> can.Message:
     """
-    RoboStride private protocol:
-    Communication type 6 = Set motor mechanical zero
+    RobStride private protocol:
+    Communication type 6 = Set motor mechanical zero.
 
     Request CAN ID:
       0x06 00 FE <motor_id>
-
-    Example:
-      motor_id = 1
-      arbitration_id = 0x0600FE01
-
-    Data:
-      01 00 00 00 00 00 00 00
     """
     comm_type = 0x06
     arbitration_id = (comm_type << 24) | (HOST_ID << 8) | motor_id
@@ -46,28 +43,21 @@ def parse_reply(arbitration_id: int):
 
 
 def wait_for_reply(bus: can.BusABC, motor_id: int, timeout_s: float = 0.2) -> bool:
-    """
-    Zero command should produce feedback/reply from target motor.
-    Accept replies where low byte == HOST_ID and motor id appears in mid_field.
-    """
+    """Waits for zero acknowledgement reply from target motor."""
     deadline = time.time() + timeout_s
 
     while time.time() < deadline:
         rx = bus.recv(timeout=0.01)
-        if rx is None:
-            continue
-
-        if not rx.is_extended_id:
+        if rx is None or not rx.is_extended_id:
             continue
 
         comm_type, mid_field, low_byte = parse_reply(rx.arbitration_id)
-
         reply_motor_id = mid_field & 0xFF
 
         if low_byte == HOST_ID and reply_motor_id == motor_id:
             print(
-                f"    reply: id=0x{rx.arbitration_id:08X} "
-                f"data={bytes(rx.data).hex(' ').upper()}"
+                f"    Reply: ID=0x{rx.arbitration_id:08X} "
+                f"Data={bytes(rx.data).hex(' ').upper()}"
             )
             return True
 
@@ -94,44 +84,43 @@ def zero_channel(channel: str, motor_ids: list[int]) -> None:
             msg = make_zero_msg(motor_id)
 
             print(
-                f"[SEND] {channel} motor {motor_id}: "
-                f"id=0x{msg.arbitration_id:08X} "
-                f"data={bytes(msg.data).hex(' ').upper()}"
+                f"[SEND] {channel} Motor #{motor_id}: "
+                f"ID=0x{msg.arbitration_id:08X} "
+                f"Data={bytes(msg.data).hex(' ').upper()}"
             )
 
             try:
                 bus.send(msg, timeout=0.1)
             except can.CanError as e:
-                print(f"[ERROR] {channel} motor {motor_id}: send failed: {e}")
+                print(f"[ERROR] {channel} Motor #{motor_id}: Send failed: {e}")
                 continue
 
             got_reply = wait_for_reply(bus, motor_id)
-
             if got_reply:
-                print(f"[OK] {channel} motor {motor_id}: zero command acknowledged")
+                print(f"[OK] {channel} Motor #{motor_id}: Zero command acknowledged.")
             else:
-                print(f"[WARN] {channel} motor {motor_id}: no reply detected")
+                print(f"[WARN] {channel} Motor #{motor_id}: No reply detected.")
 
             time.sleep(0.05)
 
 
 def main() -> None:
-    print("RoboStride set mechanical zero")
-    print()
-    print("This will set the CURRENT mechanical position as zero.")
-    print("It will NOT move the motors to zero.")
-    print()
+    print("==================================================")
+    print(" 🐾 RobStride RS00 Mechanical Zero Calibration")
+    print("==================================================")
+    print("This will set the CURRENT physical position as zero in flash memory.")
+    print("Ensure the robot is placed in the calibrated reference pose.\n")
     print("Target motors:")
     for channel, ids in MOTORS_BY_CHANNEL.items():
-        print(f"  {channel}: {ids}")
+        print(f"  {channel}: IDs {ids}")
 
     print()
-    input("Place robot in zero pose, disable torque if needed, then press ENTER...")
+    input("Place robot in Relax/Zero pose, then press ENTER to proceed...")
 
     for channel, motor_ids in MOTORS_BY_CHANNEL.items():
         zero_channel(channel, motor_ids)
 
-    print("\nDone.")
+    print("\n✅ Zero calibration completed.")
 
 
 if __name__ == "__main__":
