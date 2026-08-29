@@ -22,7 +22,7 @@ def generate_launch_description():
     )
     with_joy_arg = DeclareLaunchArgument(
         "with_joy",
-        default_value="false",
+        default_value="true",
         description="Launch joy_node (set to true if using physical gamepad /dev/input/js0)",
     )
     with_hardware_arg = DeclareLaunchArgument(

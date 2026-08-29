@@ -41,12 +41,12 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose (Kaki belakang: Hip -1.40 rad, Knee +1.36 rad; Kaki depan: Hip -1.65 rad, Knee +1.40 rad)
+# Standing pose (Kaki belakang: Hip -1.50 rad, Knee +1.40 rad; Kaki depan: Hip -1.60 rad, Knee +1.70 rad)
 STAND_POSE = np.array([
-    0.0, -1.40,  1.36,  # BL: collar, hip, knee
-    0.0, -1.40,  1.36,  # BR: collar, hip, knee
-    0.0, -1.65,  1.40,  # FL: collar, hip, knee
-   -0.10, -1.65,  1.40,  # FR: collar, hip, knee
+    0.0, -1.50,  1.40,  # BL: collar, hip, knee
+    0.0, -1.50,  1.40,  # BR: collar, hip, knee
+    0.0, -1.60,  1.70,  # FL: collar, hip, knee
+   -0.10, -1.60,  1.70,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 
