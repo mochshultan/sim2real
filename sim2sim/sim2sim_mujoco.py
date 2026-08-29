@@ -12,6 +12,8 @@ import select
 import tty
 import termios
 import threading
+import struct
+import fcntl
 import argparse
 import numpy as np
 import torch
@@ -27,62 +29,73 @@ from observation_builder import (
 )
 
 # ==============================================================================
-# 1. AUTO-FIND / CUSTOM-FLAG JIT POLICY LOADER
+# 1. AUTO-FIND / CUSTOM-FLAG JIT POLICY LOADER (DREAMWAQ CENET)
 # ==============================================================================
+def export_checkpoint_to_jit(model_path: str, export_path: str) -> bool:
+    """Exports a raw DreamWaQ model_*.pt checkpoint to TorchScript JIT policy.pt."""
+    try:
+        from isaaclab_tasks.manager_based.locomotion.velocity.config.nxp_jaguar.dreamwaq import (
+            DreamWaQActorCritic,
+            FusedDreamWaQPolicy,
+        )
+        ac = DreamWaQActorCritic(
+            history_len=5,
+            obs_dim=45,
+            critic_dim=48,
+            action_dim=12,
+            latent_dim=16,
+            vel_dim=3,
+        ).to("cpu")
+        ckpt = torch.load(model_path, map_location="cpu")
+        ac.load_state_dict(ckpt["model_state_dict"])
+        ac.eval()
+
+        fused = FusedDreamWaQPolicy(ac.cenet_encoder, ac.actor, history_len=5, obs_dim=45).to("cpu")
+        dummy_in = torch.zeros(1, 5, 45, device="cpu")
+        traced = torch.jit.trace(fused, dummy_in)
+        os.makedirs(os.path.dirname(os.path.abspath(export_path)), exist_ok=True)
+        traced.save(export_path)
+        print(f"[INFO] Auto-exported DreamWaQ checkpoint {os.path.basename(model_path)} -> {export_path}")
+        return True
+    except Exception as e:
+        print(f"[WARNING] Could not auto-export checkpoint {model_path}: {e}")
+        return False
+
+
 def find_latest_policy(requested_path=None, load_run=None, task=None) -> str:
-    """
-    Finds the TorchScript JIT policy:
-    1. If requested_path is given:
-       - If it is a file (e.g. policy.pt), use it directly.
-       - If it is a directory (e.g. .../2026-08-14_19-14-32/exported/), auto-find policy.pt inside it.
-    2. If load_run is given (e.g. 2026-08-14_19-14-32):
-       - Search for that specific run in IsaacLab logs.
-    3. If task is given ('rough' or 'flat'):
-       - Find the latest run for that specific task.
-    4. Default:
-       - Auto-find the newest policy.pt across all runs and tasks.
-    """
+    """Finds or auto-exports the newest DreamWaQ policy JIT file."""
     if requested_path:
         req_p = os.path.expanduser(requested_path)
         if os.path.isfile(req_p):
-            print(f"\n[INFO] Loaded custom JIT policy file:\n       -> {os.path.abspath(req_p)}\n")
+            if req_p.endswith(".pt") and "model_" in os.path.basename(req_p):
+                export_p = os.path.join(os.path.dirname(req_p), "exported", "policy.pt")
+                export_checkpoint_to_jit(req_p, export_p)
+                return export_p
             return os.path.abspath(req_p)
         elif os.path.isdir(req_p):
-            candidates = [
-                os.path.join(req_p, "policy.pt"),
-                os.path.join(req_p, "exported", "policy.pt"),
-            ]
-            for c in candidates:
-                if os.path.isfile(c):
-                    print(f"\n[INFO] Loaded JIT policy from custom directory:\n       -> {os.path.abspath(c)}\n")
-                    return os.path.abspath(c)
-            # Search recursively in the directory
+            for cand in [os.path.join(req_p, "policy.pt"), os.path.join(req_p, "exported", "policy.pt")]:
+                if os.path.isfile(cand):
+                    return os.path.abspath(cand)
+            # Check if model_*.pt exists in folder and auto-export
+            model_files = [f for f in os.listdir(req_p) if f.startswith("model_") and f.endswith(".pt")]
+            if model_files:
+                model_files.sort(key=lambda x: int(x.split("_")[1].split(".")[0]) if x.split("_")[1].split(".")[0].isdigit() else 0)
+                latest_m = os.path.join(req_p, model_files[-1])
+                export_p = os.path.join(req_p, "exported", "policy.pt")
+                export_checkpoint_to_jit(latest_m, export_p)
+                return os.path.abspath(export_p)
             recursive_pt = glob.glob(os.path.join(req_p, "**", "*.pt"), recursive=True)
             if recursive_pt:
                 recursive_pt.sort(key=os.path.getmtime, reverse=True)
-                print(f"\n[INFO] Auto-found JIT policy in directory:\n       -> {os.path.abspath(recursive_pt[0])}\n")
                 return os.path.abspath(recursive_pt[0])
             raise FileNotFoundError(f"No .pt file found in custom directory: {req_p}")
 
-    if load_run:
-        pattern = os.path.expanduser(f"~/IsaacLab/logs/rsl_rl/*/{load_run}/**/policy.pt")
-        matches = glob.glob(pattern, recursive=True)
-        if matches:
-            matches.sort(key=os.path.getmtime, reverse=True)
-            print(f"\n[INFO] Loaded JIT policy from run '{load_run}':\n       -> {os.path.abspath(matches[0])}\n")
-            return os.path.abspath(matches[0])
-        raise FileNotFoundError(f"Could not find exported policy.pt for run: {load_run}")
-
-    # Build search patterns based on task
-    if task:
-        task_folders = [f"nxp_jaguar_{task}"]
-    else:
-        task_folders = ["nxp_jaguar_rough", "nxp_jaguar_flat"]
-
-    search_patterns = []
-    for tf in task_folders:
-        search_patterns.append(os.path.expanduser(f"~/IsaacLab/logs/rsl_rl/{tf}/*/exported/policy.pt"))
-    search_patterns.append(os.path.expanduser("~/mevius2_ws_ros-o/src/mevius2-master/models/policy.pt"))
+    search_patterns = [
+        os.path.expanduser("~/IsaacLab/logs/dreamwaq/*/*/policy.pt"),
+        os.path.expanduser("~/IsaacLab/logs/dreamwaq/*/*/policy_*.pt"),
+        os.path.expanduser("~/jaguar_sim2real/models/policy.pt"),
+        os.path.expanduser("~/jaguar_sim2sim/models/policy.pt"),
+    ]
 
     all_policies = []
     for pattern in search_patterns:
@@ -90,17 +103,240 @@ def find_latest_policy(requested_path=None, load_run=None, task=None) -> str:
             all_policies.append((os.path.getmtime(m), m))
 
     if not all_policies:
-        raise FileNotFoundError("No exported policy.pt found in IsaacLab logs or models folder!")
+        raise FileNotFoundError("No exported DreamWaQ policy.pt found in IsaacLab logs or models folder!")
 
     all_policies.sort(key=lambda x: x[0], reverse=True)
     latest_policy = all_policies[0][1]
-    print(f"\n[INFO] Auto-resolved newest trained JIT policy:")
-    print(f"       -> {latest_policy}\n")
+    print(f"\n[INFO] Loaded latest DreamWaQ JIT policy:\n       -> {latest_policy}\n")
     return os.path.abspath(latest_policy)
 
 # ==============================================================================
-# 2. KEYBOARD & TERMINAL TELEOP HANDLER
+# 2. KEYBOARD & LINUX JOYSTICK (XBOX CONTROLLER) TELEOP HANDLER
 # ==============================================================================
+class LinuxJoystickHandler:
+    """
+    Reads Linux joystick events directly from /dev/input/js* via native struct unpacking.
+    Supports Microsoft Xbox 360 / One / Series S|X controllers with full axis, button,
+    trigger modifiers, deadzones, and automatic reconnection.
+    """
+    # Linux joystick event structure: time (u32), value (s16), type (u8), number (u8)
+    EVENT_FORMAT = "=IhBB"
+    EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
+    JS_EVENT_BUTTON = 0x01
+    JS_EVENT_AXIS = 0x02
+    JS_EVENT_INIT = 0x80
+
+    def __init__(self, dev_path: str = "/dev/input/js0", deadzone: float = 0.08):
+        self.dev_path = dev_path
+        self.deadzone = deadzone
+        self.axes = [0.0] * 16
+        self.buttons = [0] * 32
+        self.prev_buttons = [0] * 32
+        self.prev_dpad_x = 0
+        self.prev_dpad_y = 0
+        self.connected = False
+        self.device_name = "Not Detected"
+        self.running = False
+        self.thread = None
+        self.lock = threading.Lock()
+        self.stick_was_active = False
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=0.5)
+
+    def _get_device_name(self, fd: int) -> str:
+        try:
+            buf = bytearray(64)
+            # JSIOCGNAME(len) = 0x80006a13 + (len << 16)
+            fcntl.ioctl(fd, 0x80006a13 + (0x10000 * len(buf)), buf)
+            name = buf.split(b'\x00')[0].decode('utf-8', 'ignore').strip()
+            return name if name else "Xbox / Linux Gamepad"
+        except Exception:
+            return "Xbox / Linux Gamepad"
+
+    def _worker(self):
+        while self.running:
+            if not os.path.exists(self.dev_path):
+                with self.lock:
+                    self.connected = False
+                    self.device_name = f"Device {self.dev_path} not found"
+                time.sleep(1.0)
+                continue
+
+            try:
+                fd = os.open(self.dev_path, os.O_RDONLY | os.O_NONBLOCK)
+                dev_name = self._get_device_name(fd)
+                with self.lock:
+                    self.connected = True
+                    self.device_name = dev_name
+                print(f"\n[INFO] Gamepad connected: {dev_name} ({self.dev_path})")
+
+                while self.running:
+                    rlist, _, _ = select.select([fd], [], [], 0.05)
+                    if not self.running:
+                        break
+                    if rlist:
+                        while True:
+                            try:
+                                data = os.read(fd, self.EVENT_SIZE)
+                                if len(data) == self.EVENT_SIZE:
+                                    _, val, ev_type, num = struct.unpack(self.EVENT_FORMAT, data)
+                                    actual_type = ev_type & ~self.JS_EVENT_INIT
+                                    with self.lock:
+                                        if actual_type == self.JS_EVENT_BUTTON:
+                                            if num < len(self.buttons):
+                                                self.buttons[num] = val
+                                        elif actual_type == self.JS_EVENT_AXIS:
+                                            if num < len(self.axes):
+                                                self.axes[num] = float(val) / 32767.0
+                                else:
+                                    break
+                            except (BlockingIOError, InterruptedError):
+                                break
+                            except Exception:
+                                break
+                os.close(fd)
+            except Exception:
+                with self.lock:
+                    self.connected = False
+                time.sleep(1.0)
+
+    def _apply_deadzone(self, val: float) -> float:
+        if abs(val) < self.deadzone:
+            return 0.0
+        sign = 1.0 if val > 0.0 else -1.0
+        return sign * (abs(val) - self.deadzone) / (1.0 - self.deadzone)
+
+    def process_input(self, teleop):
+        if not self.connected:
+            return
+
+        with self.lock:
+            curr_buttons = list(self.buttons)
+            curr_axes = list(self.axes)
+
+        # ----------------------------------------------------------------------
+        # 1. Edge-Triggered Buttons (Xbox Controller on /dev/input/js*)
+        # ----------------------------------------------------------------------
+        # Button 0: A -> STANDUP (Berdiri Halus Bebas Oleng)
+        if curr_buttons[0] and not self.prev_buttons[0]:
+            teleop.set_state("STANDUP", "Xbox [A] -> STANDUP (Berdiri Tegak)")
+            teleop.last_input_source = "gamepad"
+
+        # Button 1: B -> STANDBY (Duduk di Lantai Posisi 0)
+        if curr_buttons[1] and not self.prev_buttons[1]:
+            teleop.set_state("STANDBY", "Xbox [B] -> STANDBY (Duduk di Lantai)")
+            teleop.last_input_source = "gamepad"
+
+        # Button 2: X -> WALK (RL DreamWaQ Policy Aktif)
+        if curr_buttons[2] and not self.prev_buttons[2]:
+            teleop.set_state("WALK", "Xbox [X] -> WALK (RL Policy Aktif)")
+            teleop.last_input_source = "gamepad"
+
+        # Button 3: Y -> STOP (Zero Velocity)
+        if curr_buttons[3] and not self.prev_buttons[3]:
+            teleop.stop("Xbox [Y] -> STOP (Zero Velocity)")
+            teleop.last_input_source = "gamepad"
+
+        # Button 6: Back / View -> Reset Simulation
+        if curr_buttons[6] and not self.prev_buttons[6]:
+            teleop.request_reset("Xbox [Back] -> Reset Robot Simulation")
+            teleop.last_input_source = "gamepad"
+
+        # Button 7: Start / Menu -> Cycle State
+        if curr_buttons[7] and not self.prev_buttons[7]:
+            if teleop.state == "STANDBY":
+                teleop.set_state("STANDUP", "Xbox [Start] -> STANDUP")
+            elif teleop.state == "STANDUP":
+                teleop.set_state("WALK", "Xbox [Start] -> WALK")
+            else:
+                teleop.set_state("STANDUP", "Xbox [Start] -> STANDUP")
+            teleop.last_input_source = "gamepad"
+
+        # Button 9 (L3) or 10 (R3): Stick Click Stop
+        if (curr_buttons[9] and not self.prev_buttons[9]) or (curr_buttons[10] and not self.prev_buttons[10]):
+            teleop.stop("Xbox [Stick Click] -> STOP")
+            teleop.last_input_source = "gamepad"
+
+        # ----------------------------------------------------------------------
+        # 2. D-pad (Axes 6 & 7) Edge-Triggered
+        # ----------------------------------------------------------------------
+        dpad_x = 1 if curr_axes[6] > 0.5 else (-1 if curr_axes[6] < -0.5 else 0)
+        dpad_y = 1 if curr_axes[7] > 0.5 else (-1 if curr_axes[7] < -0.5 else 0)
+
+        if dpad_y == -1 and self.prev_dpad_y != -1:  # D-pad Up
+            teleop.set_state("WALK", "Xbox [D-Pad Up] -> WALK")
+            teleop.last_input_source = "gamepad"
+        elif dpad_y == 1 and self.prev_dpad_y != 1:  # D-pad Down
+            teleop.set_state("STANDBY", "Xbox [D-Pad Down] -> STANDBY")
+            teleop.last_input_source = "gamepad"
+        elif dpad_x != 0 and self.prev_dpad_x == 0:  # D-pad Left/Right
+            teleop.set_state("STANDUP", "Xbox [D-Pad] -> STANDUP")
+            teleop.last_input_source = "gamepad"
+
+        self.prev_buttons = curr_buttons
+        self.prev_dpad_x = dpad_x
+        self.prev_dpad_y = dpad_y
+
+        # ----------------------------------------------------------------------
+        # 3. Continuous Analog Stick Movement
+        # ----------------------------------------------------------------------
+        # Axis 0: Left Stick X  -> Lateral vy (Geser Kiri/Kanan)
+        # Axis 1: Left Stick Y  -> Linear vx  (Maju/Mundur; negative=up)
+        # Axis 3: Right Stick X -> Yaw wz     (Putar Kiri/Kanan; negative=left)
+        lx = self._apply_deadzone(curr_axes[0])
+        ly = self._apply_deadzone(curr_axes[1])
+        rx = self._apply_deadzone(curr_axes[3])
+
+        # Speed Modifiers:
+        # RB (button 5) or RT (axis 5 > 0) -> Turbo Mode (1.35x)
+        # LB (button 4) or LT (axis 2 > 0) -> Precision Slow Mode (0.50x)
+        speed_mult = 1.0
+        mode_tag = ""
+        if curr_buttons[5] or (len(curr_axes) > 5 and curr_axes[5] > 0.0):
+            speed_mult = 1.35
+            mode_tag = " [TURBO]"
+        elif curr_buttons[4] or (len(curr_axes) > 2 and curr_axes[2] > 0.0):
+            speed_mult = 0.50
+            mode_tag = " [SLOW]"
+
+        is_stick_active = (abs(lx) > 1e-4 or abs(ly) > 1e-4 or abs(rx) > 1e-4)
+
+        if is_stick_active:
+            # Vx: Axis 1 (Negative is Up/Forward, Positive is Down/Backward)
+            if ly < 0.0:
+                vx = (-ly) * 1.2 * speed_mult
+            else:
+                vx = (-ly) * 0.8 * speed_mult
+
+            # Vy: Axis 0 (Negative is Left -> +Vy, Positive is Right -> -Vy)
+            vy = (-lx) * 0.6 * speed_mult
+
+            # Wz: Axis 3 (Negative is Left -> +Wz CCW, Positive is Right -> -Wz CW)
+            wz = (-rx) * 1.5 * speed_mult
+
+            teleop.cmd_vel[0] = vx
+            teleop.cmd_vel[1] = vy
+            teleop.cmd_vel[2] = wz
+            self.stick_was_active = True
+            teleop.last_input_source = "gamepad"
+            if teleop.state == "WALK":
+                teleop.last_action_msg = f"Xbox: Vx={vx:+.2f} Vy={vy:+.2f} Wz={wz:+.2f}{mode_tag}"
+        else:
+            if self.stick_was_active:
+                teleop.cmd_vel[:] = 0.0
+                self.stick_was_active = False
+                if teleop.state == "WALK":
+                    teleop.last_action_msg = "Xbox: Stick Netral (0.0 m/s)"
+
+
 class TerminalInputHandler:
     """Reads non-blocking single-character inputs directly from terminal stdin."""
     def __init__(self, teleop):
@@ -142,25 +378,38 @@ class TerminalInputHandler:
 
 
 class TeleopController:
-    def __init__(self):
+    def __init__(self, joystick_dev: str = "/dev/input/js0", enable_joystick: bool = True):
         self.cmd_vel = np.array([0.0, 0.0, 0.0], dtype=np.float32)  # [vx, vy, wz]
         self.state = "STANDBY"  # States: STANDBY -> STANDUP -> WALK
         self.state_changed = False
         self.reset_requested = False
+        self.last_action_msg = "Standby (Posisi 0 di Lantai)"
+        self.last_input_source = "keyboard"
+        self.joystick_dev = joystick_dev
+        self.enable_joystick = enable_joystick
+        self.joystick = None
 
-        # Try initialize joystick if available
-        self.has_joystick = False
-        try:
-            import pygame
-            pygame.init()
-            pygame.joystick.init()
-            if pygame.joystick.get_count() > 0:
-                self.joystick = pygame.joystick.Joystick(0)
-                self.joystick.init()
-                self.has_joystick = True
-                print(f"[INFO] Gamepad detected: {self.joystick.get_name()}")
-        except Exception:
-            pass
+        if self.enable_joystick:
+            self.joystick = LinuxJoystickHandler(dev_path=joystick_dev)
+            self.joystick.start()
+
+    def set_state(self, new_state: str, action_msg: str = ""):
+        if self.state != new_state:
+            self.state = new_state
+            self.state_changed = True
+            if new_state in ["STANDBY", "STANDUP"]:
+                self.cmd_vel[:] = 0.0
+            if action_msg:
+                self.last_action_msg = action_msg
+
+    def stop(self, action_msg: str = "Berhenti (Stop)"):
+        self.cmd_vel[:] = 0.0
+        self.last_action_msg = action_msg
+
+    def request_reset(self, action_msg: str = "Reset Robot Simulation (Posisi 0)"):
+        self.reset_requested = True
+        self.cmd_vel[:] = 0.0
+        self.last_action_msg = action_msg
 
     def handle_char(self, char: str):
         """Processes a single keystroke from terminal or GUI."""
@@ -168,53 +417,50 @@ class TeleopController:
         # W / S : Forward / Backward
         if c == 'W':
             self.cmd_vel[0] = min(1.2, self.cmd_vel[0] + 0.2)
-            self._print_status("Maju (Vx +0.2)")
+            self.last_action_msg = "KB: Maju (Vx +0.2)"
+            self.last_input_source = "keyboard"
         elif c == 'S':
             self.cmd_vel[0] = max(-0.8, self.cmd_vel[0] - 0.2)
-            self._print_status("Mundur (Vx -0.2)")
+            self.last_action_msg = "KB: Mundur (Vx -0.2)"
+            self.last_input_source = "keyboard"
         # A / D : Lateral Left / Right
         elif c == 'A':
             self.cmd_vel[1] = min(0.6, self.cmd_vel[1] + 0.15)
-            self._print_status("Geser Kiri (Vy +0.15)")
+            self.last_action_msg = "KB: Geser Kiri (Vy +0.15)"
+            self.last_input_source = "keyboard"
         elif c == 'D':
             self.cmd_vel[1] = max(-0.6, self.cmd_vel[1] - 0.15)
-            self._print_status("Geser Kanan (Vy -0.15)")
+            self.last_action_msg = "KB: Geser Kanan (Vy -0.15)"
+            self.last_input_source = "keyboard"
         # Q / E : Turn Left / Right
         elif c == 'Q':
             self.cmd_vel[2] = min(1.5, self.cmd_vel[2] + 0.3)
-            self._print_status("Putar Kiri (Wz +0.3)")
+            self.last_action_msg = "KB: Putar Kiri (Wz +0.3)"
+            self.last_input_source = "keyboard"
         elif c == 'E':
             self.cmd_vel[2] = max(-1.5, self.cmd_vel[2] - 0.3)
-            self._print_status("Putar Kanan (Wz -0.3)")
+            self.last_action_msg = "KB: Putar Kanan (Wz -0.3)"
+            self.last_input_source = "keyboard"
         # Space : Stop
         elif char == ' ':
-            self.cmd_vel[:] = 0.0
-            self._print_status("Berhenti (Stop)")
+            self.stop("KB: Berhenti (Stop)")
+            self.last_input_source = "keyboard"
         # 1 : STANDBY
         elif char == '1':
-            if self.state != "STANDBY":
-                self.state = "STANDBY"
-                self.state_changed = True
-                self.cmd_vel[:] = 0.0
-                self._print_status("Transisi -> STANDBY (Duduk ke Posisi 0)")
+            self.set_state("STANDBY", "KB: -> STANDBY (Duduk di Posisi 0)")
+            self.last_input_source = "keyboard"
         # 2 : STANDUP
         elif char == '2':
-            if self.state != "STANDUP":
-                self.state = "STANDUP"
-                self.state_changed = True
-                self.cmd_vel[:] = 0.0
-                self._print_status("Transisi -> STANDUP (Berdiri halus ke q0)")
+            self.set_state("STANDUP", "KB: -> STANDUP (Berdiri Tegak)")
+            self.last_input_source = "keyboard"
         # 3 : WALK
         elif char == '3':
-            if self.state != "WALK":
-                self.state = "WALK"
-                self.state_changed = True
-                self._print_status("State -> WALK (RL DreamWaQ Policy Active)")
+            self.set_state("WALK", "KB: -> WALK (RL Policy Aktif)")
+            self.last_input_source = "keyboard"
         # R : Reset
         elif c == 'R':
-            self.reset_requested = True
-            self.cmd_vel[:] = 0.0
-            self._print_status("Reset Robot Simulation (Posisi 0)")
+            self.request_reset("KB: Reset Simulation (Posisi 0)")
+            self.last_input_source = "keyboard"
 
     def on_key(self, keycode):
         """Callback from MuJoCo viewer window."""
@@ -223,35 +469,88 @@ class TeleopController:
         except Exception:
             pass
 
-    def _print_status(self, action_str=""):
-        vx, vy, wz = self.cmd_vel
-        sys.stdout.write(f"\r\033[K [{self.state:<7}] Cmd: [vx={vx:+5.2f} m/s, vy={vy:+5.2f} m/s, wz={wz:+5.2f} rad/s] | {action_str}\n")
-        sys.stdout.flush()
-
     def update_gamepad(self):
-        if not self.has_joystick:
-            return
-        import pygame
-        pygame.event.pump()
-        # Buttons
-        if self.joystick.get_button(0):  # X / A
-            if self.state != "STANDUP":
-                self.state = "STANDUP"
-                self.state_changed = True
-        elif self.joystick.get_button(1):  # O / B
-            if self.state != "WALK":
-                self.state = "WALK"
-                self.state_changed = True
-        elif self.joystick.get_button(2):  # Square / X
-            if self.state != "STANDBY":
-                self.state = "STANDBY"
-                self.state_changed = True
-                self.cmd_vel[:] = 0.0
+        if self.joystick is not None and self.joystick.connected:
+            self.joystick.process_input(self)
 
-        # Axes
-        self.cmd_vel[0] = -self.joystick.get_axis(1) * 1.0  # Left stick Y -> vx
-        self.cmd_vel[1] = -self.joystick.get_axis(0) * 0.5  # Left stick X -> vy
-        self.cmd_vel[2] = -self.joystick.get_axis(3) * 1.2  # Right stick X -> wz
+
+def quat_to_euler_deg(q):
+    """Converts quaternion [w, x, y, z] to Euler angles in degrees (roll, pitch, yaw)."""
+    w, x, y, z = q[0], q[1], q[2], q[3]
+    sinr_cosp = 2.0 * (w * x + y * z)
+    cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+    sinp = 2.0 * (w * y - z * x)
+    pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
+
+    siny_cosp = 2.0 * (w * z + x * y)
+    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+    return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
+
+
+def print_terminal_dashboard(teleop: TeleopController, terrain: str, mj_data, target_pos_mujoco: np.ndarray):
+    """Renders a clean, live, in-place terminal dashboard table showing robot states & joint readings."""
+    vx, vy, wz = teleop.cmd_vel
+    z_m = mj_data.qpos[2]
+    roll, pitch, yaw = quat_to_euler_deg(mj_data.qpos[3:7])
+
+    state_color = {
+        "STANDBY": "\033[1;33m",  # Yellow
+        "STANDUP": "\033[1;36m",  # Cyan
+        "WALK":    "\033[1;32m",  # Green
+    }.get(teleop.state, "\033[1;37m")
+    reset_c = "\033[0m"
+    cyan_c = "\033[1;36m"
+    bold_c = "\033[1m"
+    dim_c = "\033[2m"
+    green_c = "\033[1;32m"
+    yellow_c = "\033[1;33m"
+
+    if teleop.joystick and teleop.joystick.connected:
+        joy_tag = f"{green_c}🎮 {teleop.joystick.device_name[:26]} ({teleop.joystick.dev_path}){reset_c}"
+    else:
+        joy_tag = f"{yellow_c}❌ Disconnected ({teleop.joystick_dev}){reset_c}"
+
+    legs = [
+        ("FR (Depan Kn) ", 0, 1, 2),
+        ("FL (Depan Kr) ", 3, 4, 5),
+        ("BR (Blkg Kn)  ", 6, 7, 8),
+        ("BL (Blkg Kr)  ", 9, 10, 11),
+    ]
+
+    qpos_m = mj_data.qpos[7:19]
+    torques_m = mj_data.ctrl[:]
+
+    lines = []
+    lines.append("\033[H")  # Move cursor to top-left (no clear screen = flicker-free)
+    lines.append("┌────────────────────────────────────────────────────────────────────────────────────────┐")
+    lines.append(f"│ 🐾 {bold_c}NXP JAGUAR SIM-TO-SIM DASHBOARD{reset_c}  | State: {state_color}{teleop.state:<8}{reset_c} | Terrain: {cyan_c}{terrain.upper():<9}{reset_c}│")
+    lines.append(f"│ Cmd : Vx={vx:+5.2f} m/s | Vy={vy:+5.2f} m/s | Wz={wz:+5.2f} rad/s | Action: {teleop.last_action_msg:<26}│")
+    lines.append(f"│ IMU : Height={z_m:5.2f} m | Roll={roll:+5.1f}° | Pitch={pitch:+5.1f}° | Yaw={yaw:+5.1f}°                    │")
+    lines.append(f"│ Joy : {joy_tag:<82}│")
+    lines.append("├────────────────────────────────────────────────────────────────────────────────────────┤")
+    lines.append("│ Kaki          │ Joint     │ Measured [rad] │ Target [rad]   │ Error [rad]   │ Torque [Nm]   │")
+    lines.append("├───────────────┼───────────┼────────────────┼────────────────┼───────────────┼───────────────┤")
+
+    for leg_name, r_idx, h_idx, k_idx in legs:
+        for j_name, idx in [("Roll", r_idx), ("Hip ", h_idx), ("Knee", k_idx)]:
+            q_cur = qpos_m[idx]
+            q_tgt = target_pos_mujoco[idx]
+            q_err = q_tgt - q_cur
+            tau = torques_m[idx]
+            deg = np.rad2deg(q_cur)
+
+            leg_str = leg_name if j_name == "Roll" else "               "
+            lines.append(f"│ {leg_str} │ {j_name}      │ {q_cur:+6.3f} ({deg:+5.1f}°) │ {q_tgt:+6.3f}         │ {q_err:+6.3f}        │ {tau:+6.2f}        │")
+        lines.append("├───────────────┼───────────┼────────────────┼────────────────┼───────────────┼───────────────┤")
+
+    lines[-1] = "└───────────────┴───────────┴────────────────┴────────────────┴───────────────┴───────────────┘"
+    lines.append(f" {dim_c}[KB: W/S/A/D/Q/E/Space | Xbox: L-Stick=Maju/Geser, R-Stick=Putar, A=Stand, B=Sit, X=Walk, Y=Stop]{reset_c}\033[K")
+
+    sys.stdout.write("\n".join(lines) + "\n")
+    sys.stdout.flush()
 
 # ==============================================================================
 # 3. PROCEDURAL TERRAIN GENERATOR FOR MUJOCO
@@ -307,7 +606,7 @@ def generate_terrain(mj_model, terrain_type="flat"):
 # ==============================================================================
 # 4. MAIN SIM-TO-SIM SIMULATION LOOP
 # ==============================================================================
-def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
+def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat", joystick_dev="/dev/input/js0", enable_joystick=True):
     # Select scene XML based on terrain choice
     if terrain in ["rough", "stairs", "obstacles"]:
         model_xml = os.path.join(os.path.dirname(__file__), "models/scene_rough.xml")
@@ -328,7 +627,7 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
     policy.eval()
 
     obs_builder = ObservationBuilder()
-    teleop = TeleopController()
+    teleop = TeleopController(joystick_dev=joystick_dev, enable_joystick=enable_joystick)
 
     # Start non-blocking terminal input listener
     term_input = TerminalInputHandler(teleop)
@@ -341,9 +640,9 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
     SIM_DT = mj_model.opt.timestep  # 0.002s (500 Hz)
     DECIMATION = int(CONTROL_DT / SIM_DT)
 
-    # Joint Angle References
-    q_sit_isaac = np.zeros(12, dtype=np.float32)            # All 12 joints at 0.0 rad (Position 0)
-    q_stand_isaac = DEFAULT_JOINT_POS_ISAAC.copy()          # Nominal standing q0 = [-1.5, 1.5]
+    # Joint Angle References (Position 0 is 0.0 rad for all joints; Nominal standing q0 = [-1.70, 1.40])
+    q_sit_isaac = np.zeros(12, dtype=np.float32)            # All 12 joints at 0.0 rad (Calibrated Position 0)
+    q_stand_isaac = DEFAULT_JOINT_POS_ISAAC.copy()          # Nominal standing q0 = [-1.70, 1.40]
 
     # Smooth Minimum-Jerk Trajectory Interpolation State
     transition_start_time = time.time()
@@ -352,13 +651,13 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
     transition_goal_q = q_sit_isaac.copy()
     in_transition = False
 
-    # Initial Pose Setup (Start resting on ground at Position 0)
+    # Initial Pose Setup (Start resting on ground at Position 0: 0.0 rad)
     def reset_robot():
         nonlocal in_transition, transition_start_time, transition_start_q, transition_goal_q
         mujoco.mj_resetData(mj_model, mj_data)
         mj_data.qpos[0:3] = [0.0, 0.0, 0.12]  # resting on ground
         mj_data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]  # quat [w, x, y, z]
-        mj_data.qpos[7:19] = 0.0  # all joints at 0.0 (Position 0)
+        mj_data.qpos[7:19] = 0.0  # all joints at 0.0 (Calibrated Position 0)
         mj_data.qvel[:] = 0.0
         mujoco.mj_forward(mj_model, mj_data)
         teleop.reset_requested = False
@@ -386,9 +685,25 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
     print("    [Q / E]     : Putar Kiri / Kanan   (Angular Velocity Yaw)")
     print("    [Space]     : Berhenti             (Zero Velocity)")
     print("    [R]         : Reset Robot ke Posisi 0")
+    print(" 🎮 XBOX CONTROLLER CONTROLS (/dev/input/js0):")
+    print("    [Left Stick]       : Maju/Mundur (Vx) & Geser Kiri/Kanan (Vy)")
+    print("    [Right Stick]      : Putar Kiri/Kanan (Yaw Rate Wz)")
+    print("    [Button A]         : STANDUP (Berdiri Halus Bebas Oleng)")
+    print("    [Button B]         : STANDBY (Duduk di Posisi 0)")
+    print("    [Button X]         : WALK    (Aktifkan RL DreamWaQ Policy)")
+    print("    [Button Y]         : Stop    (Zero Velocity)")
+    print("    [Button Back/View] : Reset Robot Simulation ke Posisi 0")
+    print("    [Button Start/Menu]: Cycle State (STANDBY -> STANDUP -> WALK)")
+    print("    [Button RB / RT]   : Turbo Speed Boost (1.35x)")
+    print("    [Button LB / LT]   : Precision Slow Mode (0.50x)")
+    print("    [D-Pad Up/Down]    : Mode WALK / Mode STANDBY")
     print("=" * 75)
     print(" [INFO] Robot mulai di POSISI 0 (Joint = 0.0 rad di lantai).")
-    print(" [TIPS] Tekan [2] untuk Berdiri Halus (Standup), lalu [3] untuk Jalan!\n")
+    print(" [TIPS] Tekan [2] / Xbox [A] untuk Berdiri, lalu [3] / Xbox [X] untuk Jalan!\n")
+
+    # Clear terminal screen for clean live dashboard display
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
 
     step_counter = 0
 
@@ -438,6 +753,14 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
                             transition_goal_q = q_sit_isaac.copy()
                         elif teleop.state == "WALK":
                             in_transition = False
+                            init_obs = obs_builder.build_step_observation(
+                                base_ang_vel,
+                                base_quat,
+                                teleop.cmd_vel,
+                                curr_joint_pos_isaac,
+                                curr_joint_vel_isaac,
+                            )
+                            obs_builder.reset_history(init_obs)
 
                     # 2. State Machine Trajectory Generation (Minimum Jerk)
                     if in_transition:
@@ -453,28 +776,23 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
                     elif teleop.state == "STANDUP":
                         target_pos_isaac = q_stand_isaac.copy()
                     elif teleop.state == "WALK":
-                        # Build 48-D Observation Tensor
-                        obs = obs_builder.build_observation(
-                            base_lin_vel,
+                        # Build 45-D Step Observation & Update 5-Step History Buffer (1, 5, 45)
+                        obs_45d = obs_builder.build_step_observation(
                             base_ang_vel,
                             base_quat,
                             teleop.cmd_vel,
                             curr_joint_pos_isaac,
                             curr_joint_vel_isaac,
                         )
+                        history_tensor = obs_builder.update_and_get_history(obs_45d)
 
-                        # RL Model Forward Pass (TorchScript JIT)
+                        # RL Model Forward Pass (TorchScript JIT - FusedDreamWaQPolicy)
                         with torch.no_grad():
-                            actions = policy(obs)
-                            obs_builder.update_last_action(actions)
+                            actions = policy(history_tensor)
 
-                        raw_action = actions.squeeze(0).numpy()
-                        is_zero_cmd = np.linalg.norm(teleop.cmd_vel) < 1e-3
-                        if is_zero_cmd:
-                            # Settle smoothly and cleanly to nominal standing pose q0
-                            target_pos_isaac = q_stand_isaac + (ACTION_SCALE * raw_action) * 0.15
-                        else:
-                            target_pos_isaac = q_stand_isaac + ACTION_SCALE * raw_action
+                        raw_action = actions.squeeze(0).cpu().numpy()
+                        obs_builder.update_last_action(raw_action)
+                        target_pos_isaac = q_stand_isaac + ACTION_SCALE * raw_action
 
                     # Convert target positions back to MuJoCo order
                     target_pos_mujoco = target_pos_isaac[ISAAC_TO_MUJOCO]
@@ -486,11 +804,11 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
                     if is_zero_cmd:
                         kp_now, kd_now = 32.0, 1.8
                     else:
-                        kp_now, kd_now = 25.0, 1.5
+                        kp_now, kd_now = 25.0, 1.0
                 elif in_transition or teleop.state == "STANDUP":
                     kp_now, kd_now = 35.0, 2.0
                 else:
-                    kp_now, kd_now = 15.0, 1.5
+                    kp_now, kd_now = 15.0, 1.0
 
                 curr_pos_m = mj_data.qpos[7:19]
                 curr_vel_m = mj_data.qvel[6:18]
@@ -502,7 +820,11 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
                 mujoco.mj_step(mj_model, mj_data)
                 step_counter += 1
 
-                # Sync Viewer & Smooth Camera Auto Follow (at ~60 Hz)
+                # 4. Render Live In-Place Terminal Dashboard Table (10 Hz)
+                if step_counter % (DECIMATION * 5) == 0:
+                    print_terminal_dashboard(teleop, terrain, mj_data, target_pos_mujoco)
+
+                # 5. Sync Viewer & Smooth Camera Auto Follow (at ~60 Hz)
                 if step_counter % (DECIMATION * 2) == 0:
                     # Camera smoothly tracks robot root position
                     cam_alpha = 0.15
@@ -517,6 +839,9 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat"):
                     time.sleep(SIM_DT - elapsed)
     finally:
         term_input.stop()
+        if teleop.joystick is not None:
+            teleop.joystick.stop()
+        print("\n[INFO] Sim-to-sim simulation ended.")
 
 
 if __name__ == "__main__":
@@ -537,8 +862,8 @@ if __name__ == "__main__":
         "--task",
         type=str,
         default=None,
-        choices=["rough", "flat"],
-        help="Task environment to prioritize when auto-resolving latest checkpoint ('rough' or 'flat')"
+        choices=["rough", "rough_trot", "flat"],
+        help="Task environment to prioritize when auto-resolving latest checkpoint ('rough', 'rough_trot', or 'flat')"
     )
     parser.add_argument(
         "--terrain",
@@ -547,6 +872,24 @@ if __name__ == "__main__":
         choices=["flat", "rough", "stairs", "obstacles"],
         help="Terrain type in MuJoCo: 'flat', 'rough' (rolling hills), 'stairs' (stepped pyramid), or 'obstacles' (stepping stones)"
     )
+    parser.add_argument(
+        "--joystick",
+        type=str,
+        default="/dev/input/js0",
+        help="Linux joystick device path for Xbox controller (default: /dev/input/js0)"
+    )
+    parser.add_argument(
+        "--no_joystick",
+        action="store_true",
+        help="Disable joystick / gamepad teleoperation"
+    )
     args = parser.parse_args()
 
-    run_sim2sim(policy_path=args.policy, load_run=args.load_run, task=args.task, terrain=args.terrain)
+    run_sim2sim(
+        policy_path=args.policy,
+        load_run=args.load_run,
+        task=args.task,
+        terrain=args.terrain,
+        joystick_dev=args.joystick,
+        enable_joystick=not args.no_joystick,
+    )

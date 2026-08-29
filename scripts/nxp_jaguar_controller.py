@@ -45,19 +45,19 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 # Standby Joint Angles (Folded/Sitting position = 0.0 rad)
 SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 
-# Default Standing Pose (Fr Roll -0.10, Front Hips -1.60, Back Hips -1.50, Front Knees 1.70, Back Knees 1.40)
+# Default Standing Pose synchronized with Isaac Lab NXP Jaguar (23 cm Stance)
 DEFAULT_JOINT_POS = np.array([
-   -0.10,  0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
+    0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
    -1.60, -1.60, -1.50, -1.50,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.70,  1.70,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
+    1.50,  1.50,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
 # Gain Scheduling Constants (Coxa/Roll vs Hip/Knee)
-# Coxa/Roll (4 joints): Lower stiffness (18.0) for compliant lateral motion, higher damping (2.0) for anti-wobble
-# Hip & Knee (8 joints): High stiffness (25.0) to support gravity and payload, nominal damping (1.5)
+# Coxa/Roll (4 joints): Stiffness 18.0, Damping 2.0
+# Hip & Knee (8 joints): Stiffness 25.0, Damping 1.5
 RL_KP_ROLL = 18.0
 RL_KD_ROLL = 2.0
 RL_KP_PITCH = 25.0
@@ -78,7 +78,7 @@ DEFAULT_RL_KD = [RL_KD_ROLL] * 4 + [RL_KD_PITCH] * 8
 MAX_HOMING_VEL = 0.35    # rad/s (ultra-smooth continuous rate limit for startup homing)
 
 # ==============================================================================
-# 2. 48-DIMENSIONAL OBSERVATION VECTOR BUILDER
+# 2. 45-DIMENSIONAL TEMPORAL OBSERVATION BUILDER (DREAMWAQ CENET)
 # ==============================================================================
 ROS_NAME_TO_ISAAC_IDX = {
     'FR_collar_joint': 0, 'Fr_roll_joint': 0,
@@ -96,42 +96,55 @@ ROS_NAME_TO_ISAAC_IDX = {
 }
 
 class JaguarObservationBuilder:
-    def __init__(self):
-        self.last_action = torch.zeros((1, 12), dtype=torch.float32)
+    def __init__(self, history_len: int = 5):
+        self.history_len = history_len
+        self.obs_dim = 45
+        self.last_action = np.zeros(12, dtype=np.float32)
+        # Temporal history ring buffer: shape (1, 5, 45)
+        self.history_buf = np.zeros((1, history_len, self.obs_dim), dtype=np.float32)
 
-    def build_observation(self, lin_vel, ang_vel, quat, cmd, joint_pos, joint_vel):
+    def reset_history(self, initial_obs_45d: np.ndarray):
+        for i in range(self.history_len):
+            self.history_buf[0, i, :] = initial_obs_45d
+        self.last_action[:] = 0.0
+
+    def build_step_observation(self, ang_vel, quat, cmd, joint_pos, joint_vel) -> np.ndarray:
         """
-        Builds exact 48D Observation Vector for DreamWaQ Actor:
-        [0:3]   Linear Velocity (base frame)
-        [3:6]   Angular Velocity (base frame)
-        [6:9]   Projected Gravity Vector (R^T * [0, 0, -1] -> [0, 0, -1] when upright)
-        [9:12]  Velocity Commands [vx, vy, wz]
-        [12:24] Relative Joint Positions (joint_pos - default_pos)
-        [24:36] Joint Velocities
-        [36:48] Last Action
+        Builds 45D proprioceptive observation vector:
+        [0:3]   Angular Velocity (base frame gyro)
+        [3:6]   Projected Gravity Vector
+        [6:9]   Velocity Commands [vx, vy, wz]
+        [9:21]  Relative Joint Positions (joint_pos - default_pos)
+        [21:33] Joint Velocities
+        [33:45] Last Action
         """
         qx, qy, qz, qw = quat
-        # Gravity projection in body frame (Isaac Lab / Isaac Gym standard: R^T * [0, 0, -1])
+        # Gravity projection in body frame (R^T * [0, 0, -1])
         gx = -2.0 * (qx * qz - qw * qy)
         gy = -2.0 * (qy * qz + qw * qx)
         gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
 
         rel_joint_pos = joint_pos - DEFAULT_JOINT_POS
 
-        obs_vec = np.concatenate([
-            lin_vel,                     # 3D: vx, vy, vz
+        obs_45d = np.concatenate([
             ang_vel,                     # 3D: wx, wy, wz
-            [gx, gy, gz],                # 3D: projected gravity (nominal [0, 0, -1])
+            [gx, gy, gz],                # 3D: projected gravity
             cmd,                         # 3D: vx_cmd, vy_cmd, wz_cmd
             rel_joint_pos,               # 12D: q - q0
             joint_vel,                   # 12D: q_dot
-            self.last_action[0].numpy(), # 12D: a_{t-1}
+            self.last_action,            # 12D: a_{t-1}
         ], axis=0).astype(np.float32)
 
-        return torch.from_numpy(obs_vec).unsqueeze(0)
+        return obs_45d
 
-    def update_last_action(self, action_tensor):
-        self.last_action = action_tensor.clone()
+    def update_and_get_history(self, obs_45d: np.ndarray) -> torch.Tensor:
+        # Shift history left and insert newest observation at the end
+        self.history_buf = np.roll(self.history_buf, shift=-1, axis=1)
+        self.history_buf[0, -1, :] = obs_45d
+        return torch.from_numpy(self.history_buf).float()
+
+    def update_last_action(self, action_np: np.ndarray):
+        self.last_action = action_np.copy()
 
 # ==============================================================================
 # 3. ROS 2 CONTROLLER NODE
@@ -326,8 +339,10 @@ class NXPJaguarControllerNode(Node):
                 self.state = "WALK"
                 with self.state_lock:
                     self.filtered_action[:] = 0.0
+                    init_obs = self.obs_builder.build_step_observation(self.body_ang_vel, self.body_quat, self.cmd_vel, self.joint_pos, self.joint_vel)
+                    self.obs_builder.reset_history(init_obs)
                 self.get_logger().info(
-                    f"[CONTROLLER] State transition -> WALK (Gains: Coxa[Kp={RL_KP_ROLL}, Kd={RL_KD_ROLL}], Leg[Kp={RL_KP_PITCH}, Kd={RL_KD_PITCH}] | Action EMA alpha={self.action_ema_alpha})"
+                    f"[CONTROLLER] State transition -> WALK (DreamWaQ CENet | Gains: Coxa[Kp={RL_KP_ROLL}, Kd={RL_KD_ROLL}], Leg[Kp={RL_KP_PITCH}, Kd={RL_KD_PITCH}] | Action EMA alpha={self.action_ema_alpha})"
                 )
             # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
@@ -469,15 +484,16 @@ class NXPJaguarControllerNode(Node):
                     self.estop_pub.publish(estop_msg)
                     self.get_logger().info("[FAILSAFE] Robot in sit pose. Motors relaxed to Passive Zero-Torque.")
         elif self.state == "WALK":
-            # 1. Build 48-Dimensional Observation Vector
-            obs = self.obs_builder.build_observation(lin_v, ang_v, quat, cmd, pos, vel)
+            # 1. Build 45-Dimensional Step Observation & Update 5-Step History Buffer (1, 5, 45)
+            obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
+            history_tensor = self.obs_builder.update_and_get_history(obs_45d)
 
-            # 2. Neural Network Forward Inference (JIT Model)
+            # 2. Neural Network Forward Inference (Fused CENet + Actor JIT Model)
             with torch.no_grad():
-                actions = self.policy(obs)
-                self.obs_builder.update_last_action(actions)
+                actions = self.policy(history_tensor)
 
-            raw_action = actions.squeeze(0).numpy()
+            raw_action = actions.squeeze(0).cpu().numpy()
+            self.obs_builder.update_last_action(raw_action)
 
             # Apply Single Action EMA Low-Pass Filter on Policy Actions (alpha=0.6~0.7)
             self.filtered_action = (
@@ -491,9 +507,9 @@ class NXPJaguarControllerNode(Node):
             cmd_kp = DEFAULT_RL_KP[:]
             cmd_kd = DEFAULT_RL_KD[:]
 
-            # 3. Publish Debug 48D State Vector
+            # 3. Publish Debug State Vector
             debug_msg = Float32MultiArray()
-            debug_msg.data = obs.squeeze(0).numpy().tolist()
+            debug_msg.data = obs_45d.tolist()
             self.debug_pub.publish(debug_msg)
 
         # Publish Joint Commands to CAN Motor Node only during active states
