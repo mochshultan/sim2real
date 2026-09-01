@@ -45,28 +45,28 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 # Standby Joint Angles (Folded/Sitting position = 0.0 rad)
 SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 
-# Default Standing Pose synchronized with Isaac Lab NXP Jaguar (25 cm Stance)
+# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.55, -1.55, -1.45, -1.45,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.42,  1.42,  1.35,  1.35,   # Knees (Fr, Fl, Br, Bl)
+   -1.55, -1.55, -1.55, -1.55,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.35,  1.35,  1.35,  1.35,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
 # Gain Scheduling Constants (Coxa/Roll vs Hip/Knee)
-# Coxa/Roll (4 joints): Stiffness 18.0, Damping 2.0
-# Hip & Knee (8 joints): Stiffness 25.0, Damping 1.5
-RL_KP_ROLL = 18.0
-RL_KD_ROLL = 2.0
-RL_KP_PITCH = 25.0
-RL_KD_PITCH = 1.5
+# Coxa/Roll (4 joints): Stiffness 10.0, Damping 1.0
+# Hip & Knee (8 joints): Stiffness 18.0, Damping 1.4
+RL_KP_ROLL = 10.0
+RL_KD_ROLL = 1.0
+RL_KP_PITCH = 18.0
+RL_KD_PITCH = 1.4
 
-TRANSITION_KP_ROLL = 18.0
-TRANSITION_KD_ROLL = 2.0
-TRANSITION_KP_PITCH = 25.0
-TRANSITION_KD_PITCH = 1.5
+TRANSITION_KP_ROLL = 10.0
+TRANSITION_KD_ROLL = 1.0
+TRANSITION_KP_PITCH = 18.0
+TRANSITION_KD_PITCH = 1.4
 
 # Isaac order: [0..3 Rolls, 4..7 Hips, 8..11 Knees]
 DEFAULT_TRANSITION_KP = [TRANSITION_KP_ROLL] * 4 + [TRANSITION_KP_PITCH] * 8
@@ -94,6 +94,14 @@ ROS_NAME_TO_ISAAC_IDX = {
     'BR_knee_joint': 10,  'Br_knee_joint': 10,
     'BL_knee_joint': 11,  'Bl_knee_joint': 11,
 }
+
+def apply_deadzone_linear(val: float, dz: float) -> float:
+    """Linearly rescales axis value outside deadzone so response is continuous and zero-centered."""
+    if abs(val) <= dz:
+        return 0.0
+    sign = 1.0 if val > 0 else -1.0
+    return sign * (abs(val) - dz) / max(1e-4, 1.0 - dz)
+
 
 class JaguarObservationBuilder:
     def __init__(self, history_len: int = 5):
@@ -160,6 +168,20 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("torque_limit", 14.0)
         self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
+        self.declare_parameter("cmd_timeout", 0.25)       # Seconds of no input before zeroing cmd_vel (Watchdog)
+        self.declare_parameter("joy_deadzone", 0.20)      # 20% deadzone to prevent analog stick drift
+        self.declare_parameter("action_ema_alpha", 0.55)  # Action EMA filter (0.55 for fast stopping response)
+
+        # Gain Parameters (Stiffness & Damping)
+        self.declare_parameter("rl_kp_pitch", RL_KP_PITCH)
+        self.declare_parameter("rl_kd_pitch", RL_KD_PITCH)
+        self.declare_parameter("rl_kp_roll", RL_KP_ROLL)
+        self.declare_parameter("rl_kd_roll", RL_KD_ROLL)
+        self.declare_parameter("transition_kp_pitch", TRANSITION_KP_PITCH)
+        self.declare_parameter("transition_kd_pitch", TRANSITION_KD_PITCH)
+        self.declare_parameter("transition_kp_roll", TRANSITION_KP_ROLL)
+        self.declare_parameter("transition_kd_roll", TRANSITION_KD_ROLL)
+
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
         if not policy_param:
             policy_param = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models/policy.pt"))
@@ -167,12 +189,28 @@ class NXPJaguarControllerNode(Node):
         self.torque_limit = float(self.get_parameter("torque_limit").value)
         self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
         self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
+        self.cmd_timeout = float(self.get_parameter("cmd_timeout").value)
+        self.joy_deadzone = float(self.get_parameter("joy_deadzone").value)
+        self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
         self.sitdown_settle_delay = 0.5
         self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
+        self.last_cmd_time = 0.0
 
-        # Action EMA Low-Pass Filter (removes high-frequency jitter/chatter)
-        self.declare_parameter("action_ema_alpha", 0.7)
-        self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
+        # Load Gains
+        self.rl_kp_pitch = float(self.get_parameter("rl_kp_pitch").value)
+        self.rl_kd_pitch = float(self.get_parameter("rl_kd_pitch").value)
+        self.rl_kp_roll = float(self.get_parameter("rl_kp_roll").value)
+        self.rl_kd_roll = float(self.get_parameter("rl_kd_roll").value)
+        self.transition_kp_pitch = float(self.get_parameter("transition_kp_pitch").value)
+        self.transition_kd_pitch = float(self.get_parameter("transition_kd_pitch").value)
+        self.transition_kp_roll = float(self.get_parameter("transition_kp_roll").value)
+        self.transition_kd_roll = float(self.get_parameter("transition_kd_roll").value)
+
+        self.rl_kp = [self.rl_kp_roll] * 4 + [self.rl_kp_pitch] * 8
+        self.rl_kd = [self.rl_kd_roll] * 4 + [self.rl_kd_pitch] * 8
+        self.transition_kp = [self.transition_kp_roll] * 4 + [self.transition_kp_pitch] * 8
+        self.transition_kd = [self.transition_kd_roll] * 4 + [self.transition_kd_pitch] * 8
+
         self.filtered_action = np.zeros(12, dtype=np.float32)
 
         self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
@@ -285,14 +323,16 @@ class NXPJaguarControllerNode(Node):
             self.imu_received = True
 
     def _cmd_vel_cb(self, msg: Twist):
+        now = self.get_clock().now().nanoseconds / 1e9
         with self.state_lock:
-            cmd_deadzone = 0.04
+            cmd_deadzone = 0.05
             vx = float(np.clip(msg.linear.x, -0.8, 0.8))
             vy = float(np.clip(msg.linear.y, -0.5, 0.5))
             wz = float(np.clip(msg.angular.z, -0.8, 0.8))
             self.cmd_vel[0] = vx if abs(vx) > cmd_deadzone else 0.0
             self.cmd_vel[1] = vy if abs(vy) > cmd_deadzone else 0.0
             self.cmd_vel[2] = wz if abs(wz) > cmd_deadzone else 0.0
+            self.last_cmd_time = now
 
     def _joint_state_cb(self, msg: JointState):
         with self.state_lock:
@@ -342,7 +382,7 @@ class NXPJaguarControllerNode(Node):
                     init_obs = self.obs_builder.build_step_observation(self.body_ang_vel, self.body_quat, self.cmd_vel, self.joint_pos, self.joint_vel)
                     self.obs_builder.reset_history(init_obs)
                 self.get_logger().info(
-                    f"[CONTROLLER] State transition -> WALK (DreamWaQ CENet | Gains: Coxa[Kp={RL_KP_ROLL}, Kd={RL_KD_ROLL}], Leg[Kp={RL_KP_PITCH}, Kd={RL_KD_PITCH}] | Action EMA alpha={self.action_ema_alpha})"
+                    f"[CONTROLLER] State transition -> WALK (DreamWaQ CENet | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Leg[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}] | Action EMA alpha={self.action_ema_alpha})"
                 )
             # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
@@ -357,17 +397,21 @@ class NXPJaguarControllerNode(Node):
                         self.filtered_action[:] = 0.0
                     self.get_logger().info(f"[CONTROLLER] State transition -> SITDOWN ({self.transition_duration:.1f}s smooth S-curve)")
 
-        # Joystick axes with 15% Deadzone (Eliminates stick drift when released, max 0.8 m/s, 0.5 m/s, 0.8 rad/s)
-        joy_deadzone = 0.15
+        # Joystick axes with 20% Deadzone & Linear Rescaling (Max: 0.8 m/s, 0.5 m/s, 0.8 rad/s)
         if len(msg.axes) >= 2:
             with self.state_lock:
                 raw_vx = msg.axes[1]
                 raw_vy = msg.axes[0]
                 raw_wz = msg.axes[3] if len(msg.axes) > 3 else (msg.axes[2] if len(msg.axes) >= 3 else 0.0)
 
-                self.cmd_vel[0] = (raw_vx * 0.8) if abs(raw_vx) > joy_deadzone else 0.0
-                self.cmd_vel[1] = (raw_vy * 0.5) if abs(raw_vy) > joy_deadzone else 0.0
-                self.cmd_vel[2] = (raw_wz * 0.8) if abs(raw_wz) > joy_deadzone else 0.0
+                scaled_vx = apply_deadzone_linear(raw_vx, self.joy_deadzone)
+                scaled_vy = apply_deadzone_linear(raw_vy, self.joy_deadzone)
+                scaled_wz = apply_deadzone_linear(raw_wz, self.joy_deadzone)
+
+                self.cmd_vel[0] = float(np.clip(scaled_vx * 0.8, -0.8, 0.8))
+                self.cmd_vel[1] = float(np.clip(scaled_vy * 0.5, -0.5, 0.5))
+                self.cmd_vel[2] = float(np.clip(scaled_wz * 0.8, -0.8, 0.8))
+                self.last_cmd_time = now
 
     def _control_loop(self):
         t_start = time.perf_counter()
@@ -384,6 +428,13 @@ class NXPJaguarControllerNode(Node):
         if not self.imu_received or not self.joints_received:
             return
 
+        now = self.get_clock().now().nanoseconds / 1e9
+
+        # Command Watchdog: If no /joy or /cmd_vel received within cmd_timeout (0.25s), auto-zero cmd_vel
+        if self.last_cmd_time > 0.0 and (now - self.last_cmd_time) > self.cmd_timeout:
+            with self.state_lock:
+                self.cmd_vel[:] = 0.0
+
         with self.state_lock:
             pos = self.joint_pos.copy()
             vel = self.joint_vel.copy()
@@ -392,8 +443,6 @@ class NXPJaguarControllerNode(Node):
             ang_v = self.body_ang_vel.copy()
             lin_v = self.body_lin_vel.copy()
             cmd = self.cmd_vel.copy()
-
-        now = self.get_clock().now().nanoseconds / 1e9
 
         # Failsafe 1: Over-Torque Protection (Continuous overload > threshold for >100ms in active states)
         max_tau = float(np.max(np.abs(tau)))
@@ -415,8 +464,8 @@ class NXPJaguarControllerNode(Node):
 
         target_pos = None
         target_vel = np.zeros(12, dtype=np.float32)
-        cmd_kp = DEFAULT_TRANSITION_KP[:]
-        cmd_kd = DEFAULT_TRANSITION_KD[:]
+        cmd_kp = self.transition_kp[:]
+        cmd_kd = self.transition_kd[:]
 
         if self.state in ["STANDBY", "DISABLED"]:
             # 100% passive zero-torque sensing mode (No stiffness, Motors limp, Zero Torque)
@@ -432,8 +481,8 @@ class NXPJaguarControllerNode(Node):
             diff = self.transition_target_pos - self.transition_start_pos
             target_pos = self.transition_start_pos + smooth_alpha * diff
             target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
-            cmd_kp = DEFAULT_TRANSITION_KP[:]
-            cmd_kd = DEFAULT_TRANSITION_KD[:]
+            cmd_kp = self.transition_kp[:]
+            cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 self.state = "STAND_HOLD"
                 target_pos = DEFAULT_JOINT_POS.copy()
@@ -443,8 +492,8 @@ class NXPJaguarControllerNode(Node):
             # Actively hold standing pose with power ON
             target_pos = DEFAULT_JOINT_POS.copy()
             target_vel = np.zeros(12, dtype=np.float32)
-            cmd_kp = DEFAULT_TRANSITION_KP[:]
-            cmd_kd = DEFAULT_TRANSITION_KD[:]
+            cmd_kp = self.transition_kp[:]
+            cmd_kd = self.transition_kd[:]
         elif self.state == "SITDOWN":
             elapsed = now - self.transition_start_time
             alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
@@ -452,8 +501,8 @@ class NXPJaguarControllerNode(Node):
             diff = self.transition_target_pos - self.transition_start_pos
             target_pos = self.transition_start_pos + smooth_alpha * diff
             target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
-            cmd_kp = DEFAULT_TRANSITION_KP[:]
-            cmd_kd = DEFAULT_TRANSITION_KD[:]
+            cmd_kp = self.transition_kp[:]
+            cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 target_pos = SIT_JOINT_POS.copy()
                 target_vel = np.zeros(12, dtype=np.float32)
@@ -469,8 +518,8 @@ class NXPJaguarControllerNode(Node):
             diff = self.transition_target_pos - self.transition_start_pos
             target_pos = self.transition_start_pos + smooth_alpha * diff
             target_vel = (math.pi / (2.0 * self.shutdown_duration)) * math.sin(math.pi * alpha) * diff
-            cmd_kp = DEFAULT_TRANSITION_KP[:]
-            cmd_kd = DEFAULT_TRANSITION_KD[:]
+            cmd_kp = self.transition_kp[:]
+            cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 target_pos = SIT_JOINT_POS.copy()
                 target_vel = np.zeros(12, dtype=np.float32)
@@ -503,9 +552,9 @@ class NXPJaguarControllerNode(Node):
             target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * self.filtered_action
             target_vel = np.zeros(12, dtype=np.float32)
 
-            # High impedance tracking gains specifically for RL (Coxa: Kp=18, Kd=2.0 | Leg: Kp=25, Kd=1.5)
-            cmd_kp = DEFAULT_RL_KP[:]
-            cmd_kd = DEFAULT_RL_KD[:]
+            # Impedance tracking gains for RL (Coxa: Kp=10, Kd=1.0 | Leg: Kp=18, Kd=1.4)
+            cmd_kp = self.rl_kp[:]
+            cmd_kd = self.rl_kd[:]
 
             # 3. Publish Debug State Vector
             debug_msg = Float32MultiArray()

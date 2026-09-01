@@ -79,8 +79,8 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             "rate_hz": 200,
-            "default_kp": 25.0,
-            "default_kd": 1.5,
+            "default_kp": 18.0,
+            "default_kd": 1.4,
             "rt_priority": 80,
         }],
         condition=IfCondition(

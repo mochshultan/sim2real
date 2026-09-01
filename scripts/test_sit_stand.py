@@ -2,7 +2,7 @@
 """
 🐾 NXP Jaguar: Standalone Sit & Stand Transition Tester (CAN Direct)
 Interactive Terminal Control & Bluetooth/USB Xbox Gamepad interface for testing smooth,
-non-aggressive Sit (0.0 rad) and Stand (Front Hip -1.5, Front Knee +1.4, Rear Hip -1.4, Rear Knee +1.36) transitions.
+non-aggressive Sit (0.0 rad) and Stand (Front Hip -1.55, Front Knee +1.35, Rear Hip -1.55, Rear Knee +1.35) transitions.
 
 Supports:
 - Direct Linux Bluetooth & USB Xbox Gamepad (/dev/input/js*)
@@ -41,12 +41,12 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose (Kaki belakang: Hip -1.50 rad, Knee +1.40 rad; Kaki depan: Hip -1.60 rad, Knee +1.70 rad)
+# Standing pose (Kaki belakang: Hip -1.55 rad, Knee +1.35 rad; Kaki depan: Hip -1.55 rad, Knee +1.35 rad)
 STAND_POSE = np.array([
-    0.0, -1.50,  1.40,  # BL: collar, hip, knee
-    0.0, -1.50,  1.40,  # BR: collar, hip, knee
-    0.0, -1.60,  1.70,  # FL: collar, hip, knee
-   -0.10, -1.60,  1.70,  # FR: collar, hip, knee
+    0.0, -1.55,  1.35,  # BL: collar, hip, knee
+    0.0, -1.55,  1.35,  # BR: collar, hip, knee
+    0.0, -1.55,  1.35,  # FL: collar, hip, knee
+    0.0, -1.55,  1.35,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 
@@ -106,8 +106,8 @@ class SitStandController:
         self.start_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
 
         # Control parameters
-        self.kp = 25.0          # Nominal stiffness matching parameters.py (25.0)
-        self.kd = 1.5           # Damping
+        self.kp = 20.0          # Nominal stiffness matching parameters.py (20.0)
+        self.kd = 1.4           # Damping
         self.duration = 4.0     # Smooth 4-second transition duration
         self.control_dt = 0.02  # 50 Hz control loop (20 ms)
 

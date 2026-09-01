@@ -30,7 +30,7 @@ C_WHITE   = "\033[1;37m"
 C_CLEAR   = "\033[2J\033[H"
 
 DEFAULT_PORT = 9876
-DEADZONE = 0.15
+DEADZONE = 0.20
 
 
 def main():
@@ -99,15 +99,21 @@ def main():
             ax_ly = -raw_axes[1] if num_axes > 1 else 0.0  # Up is +Vx, Down is -Vx
             ax_rx = -raw_axes[3] if num_axes > 3 else (-raw_axes[2] if num_axes > 2 else 0.0) # Left is +Wz
 
-            # Apply deadzone
-            if abs(ax_lx) < DEADZONE: ax_lx = 0.0
-            if abs(ax_ly) < DEADZONE: ax_ly = 0.0
-            if abs(ax_rx) < DEADZONE: ax_rx = 0.0
+            def apply_dz(val, dz):
+                if abs(val) <= dz:
+                    return 0.0
+                sign = 1.0 if val > 0 else -1.0
+                return sign * (abs(val) - dz) / max(1e-4, 1.0 - dz)
+
+            # Apply continuous deadzone (0.20)
+            ax_lx_dz = apply_dz(ax_lx, DEADZONE)
+            ax_ly_dz = apply_dz(ax_ly, DEADZONE)
+            ax_rx_dz = apply_dz(ax_rx, DEADZONE)
 
             # Scale to velocity limits (Max 0.8 m/s, 0.5 m/s, 0.8 rad/s)
-            vx = float(ax_ly * 0.8)
-            vy = float(ax_lx * 0.5)
-            wz = float(ax_rx * 0.8)
+            vx = float(ax_ly_dz * 0.8)
+            vy = float(ax_lx_dz * 0.5)
+            wz = float(ax_rx_dz * 0.8)
 
             payload = {
                 "type": "XBOX_GAMEPAD",

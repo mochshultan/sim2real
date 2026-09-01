@@ -38,16 +38,12 @@ MOTOR_DIR = [
 ]
 
 # Zero-calibration angular offsets
-# Offsets calibrated from actual manual sit pose so that sitting position = 0.0 rad:
-# BL: collar=+0.3845, hip=-1.0983 (+0.2 rad offset tuned), knee=-0.3288 (-0.15 rad offset tuned)
-# BR: collar=-0.4017, hip=-1.0976 (+0.2 rad offset tuned), knee=-0.2839 (-0.15 rad offset tuned)
-# FL: collar=+0.3526, hip=-1.2427, knee=+0.0033
-# FR: collar=-0.3181, hip=-1.2067, knee=-0.0627
+# Calibrated True Sitting Zero offsets (so that sitting position = 0.0 rad):
 MOTOR_OFFSET_ANGLE = [
-     0.3845, -1.0983, -0.3288,  # BL (can1, hip shifted +0.20 rad, knee shifted -0.15 rad)
-    -0.4017, -1.0976, -0.2839,  # BR (can0, hip shifted +0.20 rad, knee shifted -0.15 rad)
-     0.3526, -1.2427,  0.0033,  # FL (can1)
-    -0.3181, -1.2067, -0.0627,  # FR (can0)
+    +0.3245, -1.3983, -0.1488,  # BL (can1: Collar, Hip, Knee)
+    -0.3517, -1.3976, -0.1039,  # BR (can0: Collar, Hip, Knee)
+    +0.3526, -1.2627, -0.0967,  # FL (can1: Collar, Hip, Knee)
+    -0.1881, -1.2267, -0.2427,  # FR (can0: Collar, Hip, Knee)
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
@@ -68,28 +64,28 @@ STANDBY_ANGLE = [
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0:
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.50, Knee: +1.40 (adjusted for -0.15 low-level offset)
-#   FL & FR (Front Legs): Roll: 0.0 / -0.10, Hip: -1.60, Knee: +1.70
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.55, Knee: +1.35
+#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.55, Knee: +1.35
 DEFAULT_ANGLE = [
-     0.0, -1.50,  1.40,  # BL
-     0.0, -1.50,  1.40,  # BR
-     0.0, -1.60,  1.70,  # FL
-    -0.10, -1.60,  1.70,  # FR (collar: -0.10 rad)
+     0.0, -1.55,  1.35,  # BL
+     0.0, -1.55,  1.35,  # BR
+     0.0, -1.55,  1.35,  # FL
+     0.0, -1.55,  1.35,  # FR
 ]
 
 # PD Control Gains for RS00 Motors (ROS Order: BL, BR, FL, FR)
-# Coxa/Collar: Kp=18.0, Kd=2.0 | Hip & Knee: Kp=25.0, Kd=1.5
+# Coxa/Collar: Kp=10.0, Kd=1.0 | Hip & Knee: Kp=18.0, Kd=1.4
 KP_GAIN = [
-    18.0, 25.0, 25.0,  # BL: collar, hip, knee
-    18.0, 25.0, 25.0,  # BR: collar, hip, knee
-    18.0, 25.0, 25.0,  # FL: collar, hip, knee
-    18.0, 25.0, 25.0,  # FR: collar, hip, knee
+    10.0, 18.0, 18.0,  # BL: collar, hip, knee
+    10.0, 18.0, 18.0,  # BR: collar, hip, knee
+    10.0, 18.0, 18.0,  # FL: collar, hip, knee
+    10.0, 18.0, 18.0,  # FR: collar, hip, knee
 ]
 KD_GAIN = [
-    2.0, 1.5, 1.5,     # BL: collar, hip, knee
-    2.0, 1.5, 1.5,     # BR: collar, hip, knee
-    2.0, 1.5, 1.5,     # FL: collar, hip, knee
-    2.0, 1.5, 1.5,     # FR: collar, hip, knee
+    1.0, 1.4, 1.4,     # BL: collar, hip, knee
+    1.0, 1.4, 1.4,     # BR: collar, hip, knee
+    1.0, 1.4, 1.4,     # FL: collar, hip, knee
+    1.0, 1.4, 1.4,     # FR: collar, hip, knee
 ]
 
 # Isaac Lab RL Policy Control Parameters

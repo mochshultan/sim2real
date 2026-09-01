@@ -24,8 +24,8 @@ ISAAC_TO_MUJOCO = [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
 
 DEFAULT_JOINT_POS_ISAAC = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (FR, FL, BR, BL)
-   -1.55, -1.55, -1.45, -1.45,   # Hips  (FR, FL, BR, BL)
-    1.42,  1.42,  1.35,  1.35,   # Knees (FR, FL, BR, BL)
+   -1.55, -1.55, -1.55, -1.55,   # Hips  (FR, FL, BR, BL)
+    1.35,  1.35,  1.35,  1.35,   # Knees (FR, FL, BR, BL)
 ], dtype=np.float32)
 
 

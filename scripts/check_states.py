@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NXP Jaguar State & Joint Verification Diagnostic Tool for ROS 2.
-Verifies all 48-D Observation dimensions and joint ordering against Isaac Lab policy expectations.
+Verifies 45-D Observation dimensions and joint ordering against Isaac Lab policy expectations.
 """
 
 import sys
@@ -35,10 +35,13 @@ ROS_NAME_TO_ISAAC_IDX = {
     'BL_knee_joint': 11,  'Bl_knee_joint': 11,
 }
 
+ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
+
+# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
 DEFAULT_JOINT_POS = np.array([
-   -0.10,  0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.60, -1.60, -1.50, -1.50,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.70,  1.70,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
+    0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
+   -1.55, -1.55, -1.55, -1.55,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.35,  1.35,  1.35,  1.35,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 class StateCheckerNode(Node):

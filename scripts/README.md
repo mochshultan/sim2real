@@ -28,6 +28,8 @@ This directory contains control nodes, teleoperation hubs, calibration tools, di
 ### 🔧 3. Hardware Calibration & Diagnostics
 | Script | Type | Description |
 | :--- | :---: | :--- |
+| [`calibrate_sit_zero.py`](./calibrate_sit_zero.py) | Interactive Tool | **True Zero & Sitting Pose Fine-Tuning Tool**. Real-time tuning of Front/Rear Hip and Knee angles in $\pm 0.05\text{ rad}$ increments to match simulation posture, outputs updated angular offsets on exit (`[S]`). |
+| [`calibrate_stand_pose.py`](./calibrate_stand_pose.py) | Interactive Tool | **Standing Pose Fine-Tuning Tool**. Stands robot up with S-curve, allows live tuning of standing angles ($\pm 0.05\text{ rad}$), and on `[S]` smoothly sits down and prints updated standing posture constants. |
 | [`test_sit_stand.py`](./test_sit_stand.py) | Interactive Tool | Standalone Sit (0.0 rad) and Standup tester using smooth S-curve cosine trajectory interpolation (zero jerk). Supports keyboard and Xbox gamepad. |
 | [`check_states.py`](./check_states.py) | ROS 2 Node | Live diagnostic dashboard verifying all 48 dimensions of the Actor observation vector, sensor rates, and joint order mappings against Isaac Lab expectations. |
 | [`check_joints.py`](./check_joints.py) | Standalone Tool | Direct CAN passive sensor checker (Kp=0, Kd=0). Reads actual motor encoder angles in real-time with zero applied motor torque. |

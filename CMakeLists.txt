@@ -67,6 +67,8 @@ install(PROGRAMS
   scripts/gamepad_reader.py
   scripts/scan_robostride_ids.py
   scripts/set_robostride_zero.py
+  scripts/calibrate_sit_zero.py
+  scripts/calibrate_stand_pose.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
