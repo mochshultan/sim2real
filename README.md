@@ -319,3 +319,29 @@ python3 sim2sim/sim2sim_mujoco.py --terrain rough
 * `2`: Stand Up (Minimum-jerk trajectory)
 * `3`: Walk (RL Policy aktif)
 * `W/S/A/D/Q/E`: Pergerakan badan robot
+
+---
+
+## 12. ⚠️ Catatan Kritis Arsitektur & Pelatihan RL (Kinematika Foot Tip & Base Height)
+
+> [!IMPORTANT]
+> **Temuan & Pembaruan Kritis pada Kinematika dan Reward (Wajib Dipertahankan):**
+
+### 1. Kinematika Titik Ujung Kaki (*True Foot Tip Clearance Kinematics*)
+* **Masalah Sebelumnya**:
+  Fungsi clearance awal menggunakan `asset.data.body_pos_w[:, tibia_ids, 2]`. Pada struktur URDF robot, titik asal (*origin frame*) dari `tibia_link` berada di **pangkal sendi lutut** ($Z \approx 0.44\text{ m}$). Mengukur ketinggian origin link ini membuat reward clearance tidak efektif mengangkat ujung kaki saat melangkah.
+* **Solusi STL-Based Kinematics**:
+  Berdasarkan analisis titik vertex terbawah pada mesh STL 3D (`Fr_tibia_pitch.STL`), titik kontak ujung telapak kaki (*foot tip*) berada pada offset:
+  $$\mathbf{p}_{\text{tip\_local}} = [+\mathbf{0.087\text{ m}}, \mathbf{0.0\text{ m}}, -\mathbf{0.1634\text{ m}}]$$
+  Fungsi `foot_clearance_dreamwaq` kini mentransformasikan posisi offset ini ke koordinat dunia (*world frame*) secara real-time via rotasi kuaternion orientasi betis $\mathbf{R}_{\text{tibia}}(q)$:
+  $$\mathbf{p}_{\text{foot\_tip, world}} = \mathbf{p}_{\text{tibia, world}} + \mathbf{R}_{\text{tibia}}(\mathbf{p}_{\text{tip\_local}})$$
+  Dengan perbaikan ini, clearance $8\text{ cm}$ benar-benar mengangkat **ujung telapak kaki** setinggi target saat fase ayunan (*swing phase*) sehingga kaki tidak menyeret di tanah.
+
+### 2. Base Height Ground Clearance & Eliminasi False Reading Stance Height
+* **Temuan False Reading Stance**:
+  Ketika robot merayap/jongkok di tanah ($\approx 10\text{ cm}$), seluruh batang betis roboh menempel di lantai. Sensor kontak mendeteksi seluruh permukaan betis bersentuhan dengan lantai, sehingga kalkulasi kinematika stance menghasilkan pembacaan semu $\approx 23\text{ cm}$. Hal ini menyebabkan reward gagal menghukum robot yang merayap (*reward exploitation*).
+* **Solusi `base_height_l2_safe` (Privileged True Ground Elevation)**:
+  Reward ketinggian bodi menggunakan `base_height_l2_safe` yang mengukur jarak vertikal bodi absolut terhadap elevasi tanah aktual di bawah robot ($Z_{\text{root}} - Z_{\text{ground}}$). Pengukuran ini 100% objektif dan kebal eksploitasi, mengunci postur berdiri kokoh pada target **`0.24 m` (24 cm)**.
+
+### 3. Stand-Still Joint Deviation Penalty
+* Saat perintah kecepatan bernilai nol / sangat rendah ($\|\mathbf{v}_{\text{cmd}}\| < 0.1\text{ m/s}$), reward `stand_still` secara tegas mempenalti deviasi sudut sendi dari postur nominal $q_0$ (`Hips = -1.55 rad`, `Knees = 1.35 rad`, `Rolls = 0.0 rad`). Hal ini memastikan robot langsung mengunci postur berdiri tegak tanpa goyang (*fidgeting*) saat berhenti.
