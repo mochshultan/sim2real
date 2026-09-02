@@ -56,17 +56,17 @@ ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
 # Gain Scheduling Constants (Coxa/Roll vs Hip/Knee)
-# Coxa/Roll (4 joints): Stiffness 10.0, Damping 1.0
-# Hip & Knee (8 joints): Stiffness 18.0, Damping 1.4
-RL_KP_ROLL = 10.0
+# Coxa/Roll (4 joints): Stiffness 18.0, Damping 1.0
+# Hip & Knee (8 joints): Stiffness 25.0, Damping 1.5
+RL_KP_ROLL = 18.0
 RL_KD_ROLL = 1.0
-RL_KP_PITCH = 18.0
-RL_KD_PITCH = 1.4
+RL_KP_PITCH = 25.0
+RL_KD_PITCH = 1.5
 
-TRANSITION_KP_ROLL = 10.0
+TRANSITION_KP_ROLL = 18.0
 TRANSITION_KD_ROLL = 1.0
-TRANSITION_KP_PITCH = 18.0
-TRANSITION_KD_PITCH = 1.4
+TRANSITION_KP_PITCH = 25.0
+TRANSITION_KD_PITCH = 1.5
 
 # Isaac order: [0..3 Rolls, 4..7 Hips, 8..11 Knees]
 DEFAULT_TRANSITION_KP = [TRANSITION_KP_ROLL] * 4 + [TRANSITION_KP_PITCH] * 8

@@ -25,6 +25,10 @@ from observation_builder import (
     MUJOCO_TO_ISAAC,
     ISAAC_TO_MUJOCO,
     DEFAULT_JOINT_POS_ISAAC,
+    DEFAULT_JOINT_POS_MUJOCO,
+    DEFAULT_JOINT_POS_DICT,
+    DEFAULT_BASE_HEIGHT,
+    ROBOT_CONFIG_PATH,
     quat_rotate_inverse,
 )
 
@@ -490,10 +494,63 @@ def quat_to_euler_deg(q):
     return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
 
 
-def print_terminal_dashboard(teleop: TeleopController, terrain: str, mj_data, target_pos_mujoco: np.ndarray):
+def get_stance_base_height(mj_model, mj_data) -> tuple[float, list[str]]:
+    """
+    Measures vertical clearance from robot base to stance feet (Stance Foot Kinematics).
+    Immune to terrain raycast drop errors on stairs, slopes, and rough terrain.
+    Returns:
+        (stance_base_height, list_of_contacting_feet)
+    """
+    foot_names = ["Fr_tibia_link", "Fl_tibia_link", "Br_tibia_link", "Bl_tibia_link"]
+    foot_labels = {"Fr_tibia_link": "FR", "Fl_tibia_link": "FL", "Br_tibia_link": "BR", "Bl_tibia_link": "BL"}
+
+    body_names = [mj_model.body(i).name for i in range(mj_model.nbody)]
+    foot_body_ids = {name: mj_model.body(name).id for name in foot_names if name in body_names}
+
+    base_z = float(mj_data.qpos[2])
+    stance_heights = []
+    stance_feet = set()
+
+    for i in range(mj_data.ncon):
+        c = mj_data.contact[i]
+        b1 = mj_model.geom_bodyid[c.geom1]
+        b2 = mj_model.geom_bodyid[c.geom2]
+        for name, b_id in foot_body_ids.items():
+            if b_id in (b1, b2):
+                h = base_z - float(c.pos[2])
+                stance_heights.append(h)
+                stance_feet.add(foot_labels[name])
+
+    if stance_heights:
+        return float(np.mean(stance_heights)), sorted(list(stance_feet))
+
+    # Fallback when all feet in air: height relative to lowest tibia frame
+    if foot_body_ids:
+        min_foot_z = min([mj_data.xpos[b_id][2] for b_id in foot_body_ids.values()])
+        return float(base_z - min_foot_z), ["AIR"]
+
+    return base_z, ["N/A"]
+
+
+def get_base_height_relative(mj_model, mj_data) -> float:
+    """Measures vertical clearance from robot base to ground using raycasting (like IsaacLab RayCaster)."""
+    pnt = mj_data.qpos[0:3].copy()
+    vec = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+    geomid = np.zeros(1, dtype=np.int32)
+    body_id = mj_model.body("base_link").id if "base_link" in [mj_model.body(i).name for i in range(mj_model.nbody)] else -1
+    dist = mujoco.mj_ray(mj_model, mj_data, pnt, vec, None, 1, body_id, geomid)
+    if dist >= 0:
+        return float(dist)
+    return float(mj_data.qpos[2])
+
+
+def print_terminal_dashboard(teleop: TeleopController, terrain: str, mj_model, mj_data, target_pos_mujoco: np.ndarray):
     """Renders a clean, live, in-place terminal dashboard table showing robot states & joint readings."""
     vx, vy, wz = teleop.cmd_vel
-    z_m = mj_data.qpos[2]
+    z_abs = mj_data.qpos[2]
+    z_stance, stance_feet = get_stance_base_height(mj_model, mj_data)
+    stance_str = ",".join(stance_feet) if stance_feet else "None"
+    z_rel = get_base_height_relative(mj_model, mj_data)
     roll, pitch, yaw = quat_to_euler_deg(mj_data.qpos[3:7])
 
     state_color = {
@@ -528,7 +585,7 @@ def print_terminal_dashboard(teleop: TeleopController, terrain: str, mj_data, ta
     lines.append("┌────────────────────────────────────────────────────────────────────────────────────────┐")
     lines.append(f"│ 🐾 {bold_c}NXP JAGUAR SIM-TO-SIM DASHBOARD{reset_c}  | State: {state_color}{teleop.state:<8}{reset_c} | Terrain: {cyan_c}{terrain.upper():<9}{reset_c}│")
     lines.append(f"│ Cmd : Vx={vx:+5.2f} m/s | Vy={vy:+5.2f} m/s | Wz={wz:+5.2f} rad/s | Action: {teleop.last_action_msg:<26}│")
-    lines.append(f"│ IMU : Height={z_m:5.2f} m | Roll={roll:+5.1f}° | Pitch={pitch:+5.1f}° | Yaw={yaw:+5.1f}°                    │")
+    lines.append(f"│ IMU : Stance-H={z_stance:5.2f}m [{stance_str:<11}] | Ray-Z={z_rel:5.2f}m | Abs-Z={z_abs:5.2f}m | R/P/Y=[{roll:+4.0f}°,{pitch:+4.0f}°,{yaw:+4.0f}°]│")
     lines.append(f"│ Joy : {joy_tag:<82}│")
     lines.append("├────────────────────────────────────────────────────────────────────────────────────────┤")
     lines.append("│ Kaki          │ Joint     │ Measured [rad] │ Target [rad]   │ Error [rad]   │ Torque [Nm]   │")
@@ -640,9 +697,9 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat", joys
     SIM_DT = mj_model.opt.timestep  # 0.002s (500 Hz)
     DECIMATION = int(CONTROL_DT / SIM_DT)
 
-    # Joint Angle References (Position 0 is 0.0 rad for all joints; Nominal standing q0 = [-1.70, 1.40])
+    # Joint Angle References (Dynamically loaded directly from nxp_jaguar.py)
     q_sit_isaac = np.zeros(12, dtype=np.float32)            # All 12 joints at 0.0 rad (Calibrated Position 0)
-    q_stand_isaac = DEFAULT_JOINT_POS_ISAAC.copy()          # Nominal standing q0 = [-1.70, 1.40]
+    q_stand_isaac = DEFAULT_JOINT_POS_ISAAC.copy()          # Nominal standing q0 from nxp_jaguar.py
 
     # Smooth Minimum-Jerk Trajectory Interpolation State
     transition_start_time = time.time()
@@ -675,6 +732,8 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat", joys
     print("=" * 75)
     print(" 🐾 NXP JAGUAR: INTERACTIVE MUJOCO SIM-TO-SIM SIMULATOR")
     print(f" 🏔️  MEDAN SIMULASI : [{terrain.upper()}]")
+    print(f" 📌 STAND POSE SRC  : [{ROBOT_CONFIG_PATH}]")
+    print(f" 📐 STAND HEIGHT    : {DEFAULT_BASE_HEIGHT:.2f} m")
     print("=" * 75)
     print(" 🕹️  KEYBOARD CONTROLS (Langsung ketik di Terminal atau Window):")
     print("    [1]         : Set State to STANDBY (Duduk di Posisi 0)")
@@ -822,7 +881,7 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat", joys
 
                 # 4. Render Live In-Place Terminal Dashboard Table (10 Hz)
                 if step_counter % (DECIMATION * 5) == 0:
-                    print_terminal_dashboard(teleop, terrain, mj_data, target_pos_mujoco)
+                    print_terminal_dashboard(teleop, terrain, mj_model, mj_data, target_pos_mujoco)
 
                 # 5. Sync Viewer & Smooth Camera Auto Follow (at ~60 Hz)
                 if step_counter % (DECIMATION * 2) == 0:

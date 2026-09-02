@@ -3,6 +3,10 @@
 import numpy as np
 import torch
 
+import ast
+import os
+import sys
+
 # Isaac Lab 3.0 Joint Order (Rolls, Hips, Knees)
 ISAAC_JOINT_NAMES = [
     "Fr_roll_joint", "Fl_roll_joint", "Br_roll_joint", "Bl_roll_joint",
@@ -22,11 +26,65 @@ MUJOCO_JOINT_NAMES = [
 MUJOCO_TO_ISAAC = [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11]
 ISAAC_TO_MUJOCO = [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
 
+ROBOT_CONFIG_PATH = "/home/shultan/IsaacLab/source/isaaclab_assets/isaaclab_assets/robots/nxp_jaguar.py"
+
+
+def load_robot_init_state(config_path: str = ROBOT_CONFIG_PATH):
+    """
+    Directly extracts initial joint positions and base pose from nxp_jaguar.py.
+    Tries Python module import first, with AST parsing fallback for environments without Isaac Lab simulator dependencies.
+    """
+    # 1. Try direct module import
+    try:
+        assets_dir = "/home/shultan/IsaacLab/source/isaaclab_assets"
+        if assets_dir not in sys.path:
+            sys.path.insert(0, assets_dir)
+        from isaaclab_assets.robots.nxp_jaguar import NXP_JAGUAR_CFG
+        if hasattr(NXP_JAGUAR_CFG, "init_state"):
+            return dict(NXP_JAGUAR_CFG.init_state.joint_pos), tuple(NXP_JAGUAR_CFG.init_state.pos)
+    except Exception:
+        pass
+
+    # 2. AST parsing fallback (always works independently)
+    joint_pos = {}
+    pos = (0.0, 0.0, 0.25)
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.keyword) and node.arg == "joint_pos" and isinstance(node.value, ast.Dict):
+                    for k, v in zip(node.value.keys, node.value.values):
+                        key = ast.literal_eval(k)
+                        val = ast.literal_eval(v)
+                        joint_pos[key] = float(val)
+                if isinstance(node, ast.keyword) and node.arg == "pos" and isinstance(node.value, ast.Tuple):
+                    pos = tuple(ast.literal_eval(elt) for elt in node.value.elts)
+        except Exception as e:
+            print(f"[WARNING] Could not parse {config_path}: {e}")
+
+    if not joint_pos:
+        joint_pos = {
+            "Fr_roll_joint": 0.0, "Fr_hip_pitch_joint": -1.55, "Fr_knee_joint": 1.4,
+            "Fl_roll_joint": 0.0, "Fl_hip_pitch_joint": -1.55, "Fl_knee_joint": 1.4,
+            "Br_roll_joint": 0.0, "Br_hip_pitch_joint": -1.45, "Br_knee_joint": 1.35,
+            "Bl_roll_joint": 0.0, "Bl_hip_pitch_joint": -1.45, "Bl_knee_joint": 1.35,
+        }
+    return joint_pos, pos
+
+
+# Dynamically loaded standing / initial poses from nxp_jaguar.py
+DEFAULT_JOINT_POS_DICT, DEFAULT_BASE_POS = load_robot_init_state(ROBOT_CONFIG_PATH)
+
 DEFAULT_JOINT_POS_ISAAC = np.array([
-    0.0,   0.0,   0.0,   0.0,    # Rolls (FR, FL, BR, BL)
-   -1.55, -1.55, -1.55, -1.55,   # Hips  (FR, FL, BR, BL)
-    1.35,  1.35,  1.35,  1.35,   # Knees (FR, FL, BR, BL)
+    DEFAULT_JOINT_POS_DICT.get(name, 0.0) for name in ISAAC_JOINT_NAMES
 ], dtype=np.float32)
+
+DEFAULT_JOINT_POS_MUJOCO = np.array([
+    DEFAULT_JOINT_POS_DICT.get(name, 0.0) for name in MUJOCO_JOINT_NAMES
+], dtype=np.float32)
+
+DEFAULT_BASE_HEIGHT = float(DEFAULT_BASE_POS[2])
 
 
 def quat_rotate_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:
