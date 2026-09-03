@@ -52,7 +52,7 @@ C++ source headers reside in [`include/jaguar_control/`](file:///home/erc/sim2re
 | :--- | :--- | :--- |
 | **`robstride_protocol.hpp`** | `RobStrideProtocol` | Encodes floating-point targets ($q, \dot{q}, K_p, K_d, \tau_{\text{ff}}$) into 16-bit packed payloads and parses 29-bit CAN arbitration responses. |
 | **`robstride_can_bus.hpp`** | `RobStrideCANBus` | Manages non-blocking POSIX SocketCAN raw sockets (`AF_CAN`, `SOCK_RAW`) with hardware frame filters. |
-| **`robstride_hardware_manager.hpp`** | `RobStrideHardwareManager` | Coordinates dual CAN channels (`can0` rear, `can1` front), generates quintic startup trajectories, interpolates setpoints, and compensates encoder zero offsets. |
+| **`robstride_hardware_manager.hpp`** | `RobStrideHardwareManager` | Coordinates dual CAN channels (`can0` right 6 motors, `can1` left 6 motors), generates quintic startup trajectories, interpolates setpoints, and compensates encoder zero offsets. |
 | **`robstride_can_node.cpp`** | `RobStrideCANNode` | ROS 2 wrapper thread running under `SCHED_FIFO` at 200 Hz, bridging ROS topics to the low-level hardware manager. |
 
 ## 3. RL Policy Observation Space (48-D)

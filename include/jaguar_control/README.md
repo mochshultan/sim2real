@@ -8,7 +8,7 @@ C++ headers for SocketCAN communication and RobStride RS00 motor control on the 
 | :--- | :--- | :--- |
 | [`robstride_protocol.hpp`](./robstride_protocol.hpp) | Bit-packing, linear scaling, 29-bit CAN arbitration ID assembly, and telemetry frame parsing. | `struct MotorParams`, `struct MotorFeedback`, `buildMitControlFrame()`, `buildEnableMotorFrame()`, `buildStopMotorFrame()`, `buildSetRunModeFrame()`, `parseFeedbackFrame()` |
 | [`robstride_can_bus.hpp`](./robstride_can_bus.hpp) | Linux SocketCAN wrapper with non-blocking I/O. | `class RobStrideCanBus` (`openBus()`, `closeBus()`, `sendFrame()`, `receiveFrame()`) |
-| [`robstride_hardware_manager.hpp`](./robstride_hardware_manager.hpp) | Dual CAN bus coordination (`can0` and `can1`), joint command dispatch, watchdog timeout monitoring, and zero-torque fallback. | `class RobStrideHardwareManager`, `struct JointConfig`, `struct JointCommand`, `struct JointStateData` |
+| [`robstride_hardware_manager.hpp`](./robstride_hardware_manager.hpp) | Dual CAN bus coordination (`can0` right 6 motors, `can1` left 6 motors), joint command dispatch, watchdog timeout monitoring, and zero-torque fallback. | `class RobStrideHardwareManager`, `struct JointConfig`, `struct JointCommand`, `struct JointStateData` |
 
 ## Design Constraints
 
