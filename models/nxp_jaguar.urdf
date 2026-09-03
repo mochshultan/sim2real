@@ -183,7 +183,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -353,7 +353,7 @@
     
   </link>
   
-  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-3.14" upper="3.14" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-3.14" upper="0.00" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
   
   <joint name="Fl_hip_pitch_joint" type="revolute">
     
@@ -365,7 +365,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -547,7 +547,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -717,7 +717,7 @@
     
   </link>
   
-  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-3.14" upper="3.14" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
+  <!-- SEBELUMNYA: axis xyz="0 -1 0" , limit lower="-3.14" upper="0.00" -> DIUBAH MIRIP A1 (titik 0 & arah gerak simetris) -->
   
   <joint name="Bl_hip_pitch_joint" type="revolute">
     
@@ -729,7 +729,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-3.14" upper="3.14" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   

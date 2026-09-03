@@ -58,12 +58,12 @@ CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 # Gain Scheduling Constants (Coxa/Roll vs Hip/Knee)
 # Coxa/Roll (4 joints): Stiffness 18.0, Damping 1.0
 # Hip & Knee (8 joints): Stiffness 25.0, Damping 1.5
-RL_KP_ROLL = 18.0
+RL_KP_ROLL = 20.0
 RL_KD_ROLL = 1.0
 RL_KP_PITCH = 25.0
 RL_KD_PITCH = 1.5
 
-TRANSITION_KP_ROLL = 18.0
+TRANSITION_KP_ROLL = 20.0
 TRANSITION_KD_ROLL = 1.0
 TRANSITION_KP_PITCH = 25.0
 TRANSITION_KD_PITCH = 1.5
@@ -75,7 +75,7 @@ DEFAULT_TRANSITION_KD = [TRANSITION_KD_ROLL] * 4 + [TRANSITION_KD_PITCH] * 8
 DEFAULT_RL_KP = [RL_KP_ROLL] * 4 + [RL_KP_PITCH] * 8
 DEFAULT_RL_KD = [RL_KD_ROLL] * 4 + [RL_KD_PITCH] * 8
 
-MAX_HOMING_VEL = 0.35    # rad/s (ultra-smooth continuous rate limit for startup homing)
+MAX_HOMING_VEL = 0.45    # rad/s (ultra-smooth continuous rate limit for startup homing)
 
 # ==============================================================================
 # 2. 45-DIMENSIONAL TEMPORAL OBSERVATION BUILDER (DREAMWAQ CENET)
@@ -532,6 +532,8 @@ class NXPJaguarControllerNode(Node):
                     estop_msg.data = True
                     self.estop_pub.publish(estop_msg)
                     self.get_logger().info("[FAILSAFE] Robot in sit pose. Motors relaxed to Passive Zero-Torque.")
+
+        # RL
         elif self.state == "WALK":
             # 1. Build 45-Dimensional Step Observation & Update 5-Step History Buffer (1, 5, 45)
             obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
