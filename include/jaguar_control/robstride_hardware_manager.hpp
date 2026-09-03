@@ -76,12 +76,12 @@ public:
     // BL (can1)
     joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3245, -0.40,  0.40, 20.0, 17.0, {}};
     joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1, +1.3483, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0988, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0488, -0.10,  2.80, 20.0, 17.0, {}};
 
     // BR (can0)
     joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1, +0.3517, -0.40,  0.40, 20.0, 17.0, {}};
     joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1, +1.3476, -3.14,  3.14, 20.0, 17.0, {}};
-    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0539, -0.10,  2.80, 20.0, 17.0, {}};
+    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0039, -0.10,  2.80, 20.0, 17.0, {}};
 
     // FL (can1)
     joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.40,  0.40, 20.0, 17.0, {}};
