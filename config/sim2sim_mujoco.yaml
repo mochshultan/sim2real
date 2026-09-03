@@ -7,8 +7,8 @@ sim2sim_mujoco:
   torque_limit: 17.0
   action_scale: 0.25
   walk_gains:
-    coxa_kp: 18.0
-    coxa_kd: 1.0
+    coxa_kp: 20.0
+    coxa_kd: 1.5
     pitch_kp: 25.0
     pitch_kd: 1.5
   standup_gains:

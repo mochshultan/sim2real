@@ -105,11 +105,11 @@ class SitStandController:
         self.cmd_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.start_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
 
-        # Control parameters: Coxa Kp=18.0, Kd=1.0 | Hip & Knee Kp=25.0, Kd=1.5
-        self.kp_coxa = 18.0
-        self.kd_coxa = 1.0
-        self.kp = 25.0          # Nominal stiffness for leg pitch (Hip/Knee)
-        self.kd = 1.5           # Nominal damping for leg pitch (Hip/Knee)
+        # Control parameters dynamically sourced from parameters.py (config/sim2real.yaml)
+        self.kp_coxa = float(P.KP_GAIN[0])
+        self.kd_coxa = float(P.KD_GAIN[0])
+        self.kp = float(P.KP_GAIN[1])          # Nominal stiffness for leg pitch (Hip/Knee)
+        self.kd = float(P.KD_GAIN[1])          # Nominal damping for leg pitch (Hip/Knee)
         self.duration = 4.0     # Smooth 4-second transition duration
         self.control_dt = 0.02  # 50 Hz control loop (20 ms)
 

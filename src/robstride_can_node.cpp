@@ -33,8 +33,8 @@ public:
     loop_hz_(200),
     default_kp_(25.0),
     default_kd_(1.5),
-    default_coxa_kp_(18.0),
-    default_coxa_kd_(1.0)
+    default_coxa_kp_(20.0),
+    default_coxa_kd_(1.5)
   {
     RCLCPP_INFO(this->get_logger(), "=================================================");
     RCLCPP_INFO(this->get_logger(), " Starting RobStride RS00 Hard Real-Time CAN Node ");
@@ -44,8 +44,8 @@ public:
     this->declare_parameter<int>("rate_hz", 200);
     this->declare_parameter<double>("default_kp", 25.0);
     this->declare_parameter<double>("default_kd", 1.5);
-    this->declare_parameter<double>("default_coxa_kp", 18.0);
-    this->declare_parameter<double>("default_coxa_kd", 1.0);
+    this->declare_parameter<double>("default_coxa_kp", 20.0);
+    this->declare_parameter<double>("default_coxa_kd", 1.5);
     this->declare_parameter<int>("rt_priority", 80);
 
     loop_hz_ = this->get_parameter("rate_hz").as_int();

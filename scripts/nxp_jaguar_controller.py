@@ -38,12 +38,18 @@ ROS_JOINT_NAMES = [
     'FR_collar_joint', 'FR_hip_joint', 'FR_knee_joint',
 ]
 
+import parameters as P
+
 # Remapping Indices: ROS CAN Order (BL, BR, FL, FR) <-> Isaac Lab Order
 ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
 ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
-# Standby Joint Angles (Folded/Sitting position = 0.0 rad)
+# Standby Sitting Joint Angles (0.0 rad)
 SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
+
+# Relax Joint Angles (Equal to calibrated motor offsets in Isaac order; raw motor at 0.0 rad)
+# Isaac order: [0..3 Rolls (FR, FL, BR, BL), 4..7 Hips (FR, FL, BR, BL), 8..11 Knees (FR, FL, BR, BL)]
+RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range(12)], dtype=np.float32)
 
 # Default Standing Pose synchronized with Isaac Lab NXP Jaguar
 DEFAULT_JOINT_POS = np.array([
@@ -55,18 +61,17 @@ DEFAULT_JOINT_POS = np.array([
 ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 
-# Gain Scheduling Constants (Coxa/Roll vs Hip/Knee)
-# Coxa/Roll (4 joints): Stiffness 18.0, Damping 1.0
-# Hip & Knee (8 joints): Stiffness 25.0, Damping 1.5
-RL_KP_ROLL = 18.0
-RL_KD_ROLL = 1.0
-RL_KP_PITCH = 25.0
-RL_KD_PITCH = 1.5
+# Gain Scheduling Constants dynamically sourced from parameters.py (config/sim2real.yaml)
 
-TRANSITION_KP_ROLL = 18.0
-TRANSITION_KD_ROLL = 1.0
-TRANSITION_KP_PITCH = 25.0
-TRANSITION_KD_PITCH = 1.5
+RL_KP_ROLL = float(P.KP_GAIN[0])
+RL_KD_ROLL = float(P.KD_GAIN[0])
+RL_KP_PITCH = float(P.KP_GAIN[1])
+RL_KD_PITCH = float(P.KD_GAIN[1])
+
+TRANSITION_KP_ROLL = float(P.KP_GAIN[0])
+TRANSITION_KD_ROLL = float(P.KD_GAIN[0])
+TRANSITION_KP_PITCH = float(P.KP_GAIN[1])
+TRANSITION_KD_PITCH = float(P.KD_GAIN[1])
 
 # Isaac order: [0..3 Rolls, 4..7 Hips, 8..11 Knees]
 DEFAULT_TRANSITION_KP = [TRANSITION_KP_ROLL] * 4 + [TRANSITION_KP_PITCH] * 8
@@ -278,13 +283,13 @@ class NXPJaguarControllerNode(Node):
         if self.state in ["SAFE_SHUTDOWN", "DISABLED"]:
             return
         self.get_logger().warn(
-            f"[FAILSAFE] {reason}. Returning to zero in {self.shutdown_duration:.1f}s, then holding for {self.shutdown_settle_delay:.1f}s before motor cutoff."
+            f"[FAILSAFE] {reason}. Returning to RELAX pose (motor offsets) in {self.shutdown_duration:.1f}s, then holding for {self.shutdown_settle_delay:.1f}s before motor cutoff."
         )
         self.state = "SAFE_SHUTDOWN"
         self.transition_start_time = now
         with self.state_lock:
             self.transition_start_pos = self.joint_pos.copy()
-            diff = (SIT_JOINT_POS - self.transition_start_pos + np.pi) % (2 * np.pi) - np.pi
+            diff = (RELAX_JOINT_POS - self.transition_start_pos + np.pi) % (2 * np.pi) - np.pi
             self.transition_target_pos = self.transition_start_pos + diff
             self.cmd_vel[:] = 0.0
 
@@ -363,8 +368,11 @@ class NXPJaguarControllerNode(Node):
     def _joy_cb(self, msg: Joy):
         now = self.get_clock().now().nanoseconds / 1e9
         if len(msg.buttons) > 1:
+            # Button 4 (LB) or Button 6 (Back / View): Safety Switch (Safe Stop to Relax Pose)
+            if (len(msg.buttons) > 4 and msg.buttons[4] == 1) or (len(msg.buttons) > 6 and msg.buttons[6] == 1):
+                self._trigger_safe_shutdown(now, "Safety switch triggered via joystick (LB/Back)")
             # Button 0 (X / Cross / Key '2'): Stand Up (Berdiri)
-            if msg.buttons[0] == 1 and self.state in ["STARTUP_SIT", "STANDBY", "SITDOWN", "SIT_HOLD", "DISABLED"]:
+            elif msg.buttons[0] == 1 and self.state in ["STARTUP_SIT", "STANDBY", "SITDOWN", "SIT_HOLD", "DISABLED"]:
                 self.state = "STANDUP"
                 self.transition_start_time = now
                 with self.state_lock:
@@ -521,9 +529,9 @@ class NXPJaguarControllerNode(Node):
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
-                target_pos = SIT_JOINT_POS.copy()
+                target_pos = RELAX_JOINT_POS.copy()
                 target_vel = np.zeros(12, dtype=np.float32)
-                # Settle delay: actively hold 0.0 rad for settle delay before cutting motor torque
+                # Settle delay: actively hold relax pose for settle delay before cutting motor torque
                 if elapsed >= (self.shutdown_duration + self.shutdown_settle_delay):
                     self.state = "STANDBY"
                     cmd_kp = [0.0] * 12
@@ -531,7 +539,7 @@ class NXPJaguarControllerNode(Node):
                     estop_msg = Bool()
                     estop_msg.data = True
                     self.estop_pub.publish(estop_msg)
-                    self.get_logger().info("[FAILSAFE] Robot in sit pose. Motors relaxed to Passive Zero-Torque.")
+                    self.get_logger().info("[FAILSAFE] Robot in RELAX pose (raw motor zero). Motors relaxed to Passive Zero-Torque.")
 
         # RL
         elif self.state == "WALK":
@@ -554,7 +562,7 @@ class NXPJaguarControllerNode(Node):
             target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * self.filtered_action
             target_vel = np.zeros(12, dtype=np.float32)
 
-            # Impedance tracking gains for RL (Coxa: Kp=18, Kd=1.0 | Leg: Kp=25, Kd=1.5)
+            # Impedance tracking gains for RL (Coxa: Kp=20, Kd=1.5 | Leg: Kp=25, Kd=1.5)
             cmd_kp = self.rl_kp[:]
             cmd_kd = self.rl_kd[:]
 

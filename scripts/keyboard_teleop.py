@@ -195,7 +195,7 @@ class UnifiedTeleopNode(Node):
                 safe_msg = Bool()
                 safe_msg.data = True
                 self.safe_stop_pub.publish(safe_msg)
-                self.last_action = f"{C_RED}[Xbox LB/Back] SAFE SHUTDOWN DIPICU! Robot kembali ke 0 rad lalu mati.{C_RESET}"
+                self.last_action = f"{C_RED}[Xbox LB/Back] SAFETY SWITCH DIPICU! Robot kembali ke RELAX POSE (nilai offset motor) dalam 3.0 detik lalu mati.{C_RESET}"
 
     def _publish_loop(self):
         with self.lock:
@@ -282,7 +282,7 @@ class UnifiedTeleopNode(Node):
                 safe_msg = Bool()
                 safe_msg.data = True
                 self.safe_stop_pub.publish(safe_msg)
-                self.last_action = f"{C_RED}[Key SPACE] SAFE SHUTDOWN DIPICU! Robot kembali ke 0 rad lalu mati.{C_RESET}"
+                self.last_action = f"{C_RED}[Key SPACE] SAFETY SWITCH DIPICU! Robot kembali ke RELAX POSE (nilai offset motor) dalam 3.0 detik lalu mati.{C_RESET}"
 
     def render_ui(self):
         gp_state = self.gamepad_reader.get_state()

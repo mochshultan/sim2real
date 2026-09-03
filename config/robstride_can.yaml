@@ -3,15 +3,15 @@ robstride_can_hardware:
   ros__parameters:
     rate_hz: 200
     rt_priority: 80
-    default_coxa_kp: 18.0
-    default_coxa_kd: 1.0
+    default_coxa_kp: 20.0
+    default_coxa_kd: 1.5
     default_kp: 25.0
     default_kd: 1.5
 
 jaguar_can_hardware:
   ros__parameters:
     rate_hz: 200
-    default_coxa_kp: 18.0
-    default_coxa_kd: 1.0
+    default_coxa_kp: 20.0
+    default_coxa_kd: 1.5
     default_kp: 25.0
     default_kd: 1.5

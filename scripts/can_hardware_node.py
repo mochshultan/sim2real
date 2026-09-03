@@ -64,12 +64,12 @@ class CanHardwareDriverNode(Node):
 
         self.get_logger().info("Initializing NXP Jaguar RobStride RS00 CAN Hardware Driver...")
 
-        # Declare parameters
-        self.declare_parameter("rate_hz", 200)
-        self.declare_parameter("default_coxa_kp", 18.0)
-        self.declare_parameter("default_coxa_kd", 1.0)
-        self.declare_parameter("default_kp", 25.0)
-        self.declare_parameter("default_kd", 1.5)
+        # Declare parameters dynamically sourced from parameters.py (config/sim2real.yaml)
+        self.declare_parameter("rate_hz", P.CAN_HZ)
+        self.declare_parameter("default_coxa_kp", float(P.KP_GAIN[0]))
+        self.declare_parameter("default_coxa_kd", float(P.KD_GAIN[0]))
+        self.declare_parameter("default_kp", float(P.KP_GAIN[1]))
+        self.declare_parameter("default_kd", float(P.KD_GAIN[1]))
 
         self.rate_hz = self.get_parameter("rate_hz").as_int()
         self.default_coxa_kp = float(self.get_parameter("default_coxa_kp").value)

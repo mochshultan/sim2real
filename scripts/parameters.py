@@ -40,10 +40,10 @@ MOTOR_DIR = [
 # Zero-calibration angular offsets
 # Calibrated True Sitting Zero offsets (so that sitting position = 0.0 rad):
 MOTOR_OFFSET_ANGLE = [
-    +0.3245, -1.3983, -0.1488,  # BL (can1: Collar, Hip, Knee)
-    -0.3517, -1.3976, -0.1039,  # BR (can0: Collar, Hip, Knee)
-    +0.3526, -1.2627, -0.0967,  # FL (can1: Collar, Hip, Knee)
-    -0.1881, -1.2267, -0.2427,  # FR (can0: Collar, Hip, Knee)
+    +0.3245, -1.3483, -0.0988,  # BL (can1: Collar, Hip, Knee)
+    -0.3517, -1.3476, -0.0539,  # BR (can0: Collar, Hip, Knee)
+    +0.3526, -1.2127, -0.0967,  # FL (can1: Collar, Hip, Knee)
+    -0.1881, -1.1767, -0.2427,  # FR (can0: Collar, Hip, Knee)
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
@@ -62,6 +62,9 @@ STANDBY_ANGLE = [
      0.0,  0.0,  0.0,  # FR
 ]
 
+# Relax Pose Joint Angles (Equal to calibrated motor offsets; raw motor reading = 0.0 rad)
+RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
+
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0:
 #   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.55, Knee: +1.35
@@ -73,19 +76,44 @@ DEFAULT_ANGLE = [
      0.0, -1.55,  1.35,  # FR
 ]
 
+import os
+import yaml
+
+# Dynamic parameter loader from config/sim2real.yaml (Single Source of Truth)
+_CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "sim2real.yaml"))
+
+_coxa_kp = 20.0
+_coxa_kd = 1.5
+_pitch_kp = 25.0
+_pitch_kd = 1.5
+_can_hz = 200
+
+if os.path.isfile(_CONFIG_FILE):
+    try:
+        with open(_CONFIG_FILE, "r") as _f:
+            _cfg = yaml.safe_load(_f)
+        if _cfg and "robstride_can_hardware" in _cfg:
+            _hw = _cfg["robstride_can_hardware"].get("ros__parameters", {})
+            _coxa_kp = float(_hw.get("default_coxa_kp", _coxa_kp))
+            _coxa_kd = float(_hw.get("default_coxa_kd", _coxa_kd))
+            _pitch_kp = float(_hw.get("default_kp", _pitch_kp))
+            _pitch_kd = float(_hw.get("default_kd", _pitch_kd))
+            _can_hz = int(_hw.get("rate_hz", _can_hz))
+    except Exception:
+        pass
+
 # PD Control Gains for RS00 Motors (ROS Order: BL, BR, FL, FR)
-# Coxa/Collar: Kp=18.0, Kd=1.0 | Hip & Knee: Kp=25.0, Kd=1.5
 KP_GAIN = [
-    18.0, 25.0, 25.0,  # BL: collar, hip, knee
-    18.0, 25.0, 25.0,  # BR: collar, hip, knee
-    18.0, 25.0, 25.0,  # FL: collar, hip, knee
-    18.0, 25.0, 25.0,  # FR: collar, hip, knee
+    _coxa_kp, _pitch_kp, _pitch_kp,  # BL: collar, hip, knee
+    _coxa_kp, _pitch_kp, _pitch_kp,  # BR: collar, hip, knee
+    _coxa_kp, _pitch_kp, _pitch_kp,  # FL: collar, hip, knee
+    _coxa_kp, _pitch_kp, _pitch_kp,  # FR: collar, hip, knee
 ]
 KD_GAIN = [
-    1.0, 1.5, 1.5,     # BL: collar, hip, knee
-    1.0, 1.5, 1.5,     # BR: collar, hip, knee
-    1.0, 1.5, 1.5,     # FL: collar, hip, knee
-    1.0, 1.5, 1.5,     # FR: collar, hip, knee
+    _coxa_kd, _pitch_kd, _pitch_kd,  # BL: collar, hip, knee
+    _coxa_kd, _pitch_kd, _pitch_kd,  # BR: collar, hip, knee
+    _coxa_kd, _pitch_kd, _pitch_kd,  # FL: collar, hip, knee
+    _coxa_kd, _pitch_kd, _pitch_kd,  # FR: collar, hip, knee
 ]
 
 # Isaac Lab RL Policy Control Parameters
@@ -94,7 +122,7 @@ ACTION_CLIPPING = 10.0
 CONTROL_HZ = 50       # 50 Hz control loop (dt = 0.02s)
 CONTROL_DT = 0.02
 
-CAN_HZ = 200          # 200 Hz CAN communication rate
+CAN_HZ = _can_hz          # CAN communication rate loaded from YAML
 
 # Remapping Indices: ROS CAN Order (BL, BR, FL, FR) <-> Isaac Lab Order (Rolls, Hips, Knees)
 # Isaac Lab: [FR_r, FL_r, BR_r, BL_r, FR_h, FL_h, BR_h, BL_h, FR_k, FL_k, BR_k, BL_k]

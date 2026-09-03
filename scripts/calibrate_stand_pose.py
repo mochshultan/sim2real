@@ -202,11 +202,11 @@ class StandPoseCalibrator:
         self.start_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.cmd_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
 
-        # Control & Trajectory Parameters: Coxa Kp=18.0, Kd=1.0 | Hip & Knee Kp=25.0, Kd=1.5
-        self.kp_coxa = 18.0     # Coxa stiffness
-        self.kd_coxa = 1.0      # Coxa damping
-        self.kp = 25.0          # Stiffness for standing hold & tuning (Hip/Knee)
-        self.kd = 1.5           # Damping (Hip/Knee)
+        # Control & Trajectory Parameters dynamically sourced from parameters.py (config/sim2real.yaml)
+        self.kp_coxa = float(P.KP_GAIN[0])     # Coxa stiffness
+        self.kd_coxa = float(P.KD_GAIN[0])     # Coxa damping
+        self.kp = float(P.KP_GAIN[1])          # Stiffness for standing hold & tuning (Hip/Knee)
+        self.kd = float(P.KD_GAIN[1])          # Damping (Hip/Knee)
         self.step_size = 0.05   # Default adjustment step (±0.05 rad ≈ 2.86°)
         self.control_dt = 0.02  # 50 Hz control loop (20 ms)
         self.max_rate = 1.2     # Max rate of angle change (rad/s) during manual tuning

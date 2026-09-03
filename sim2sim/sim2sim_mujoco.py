@@ -8,6 +8,11 @@ import os
 import sys
 import glob
 import time
+
+scripts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+if scripts_dir not in sys.path:
+    sys.path.insert(0, scripts_dir)
+import parameters as P
 import select
 import tty
 import termios
@@ -863,9 +868,9 @@ def run_sim2sim(policy_path=None, load_run=None, task=None, terrain="flat", joys
                     if is_zero_cmd:
                         kp_now, kd_now = 32.0, 1.8
                     else:
-                        # Match sim2real gains: Coxa Kp=18, Kd=1.0 | Hip/Knee Kp=25, Kd=1.5
-                        kp_now = np.array([18.0, 25.0, 25.0, 18.0, 25.0, 25.0, 18.0, 25.0, 25.0, 18.0, 25.0, 25.0], dtype=np.float32)
-                        kd_now = np.array([1.0, 1.5, 1.5, 1.0, 1.5, 1.5, 1.0, 1.5, 1.5, 1.0, 1.5, 1.5], dtype=np.float32)
+                        # Dynamically sourced from parameters.py (config/sim2real.yaml)
+                        kp_now = np.array(P.KP_GAIN, dtype=np.float32)
+                        kd_now = np.array(P.KD_GAIN, dtype=np.float32)
                 elif in_transition or teleop.state == "STANDUP":
                     kp_now, kd_now = 35.0, 2.0
                 else:
