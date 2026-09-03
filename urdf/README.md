@@ -1,9 +1,7 @@
-# 🦴 Robot URDF Model (`urdf/`)
+# URDF Model (`urdf/`)
 
-Unified Robot Description Format (URDF) definition for the **NXP Jaguar Quadruped**.
+Kinematic and dynamic model for the NXP Jaguar quadruped.
 
----
+## Files
 
-## 📄 Files
-
-- **`nxp_jaguar.urdf`**: Complete kinematic tree, revolute joint limits, parent-child links, and visual/collision geometries matching the RobStride RS00 motor linkage kinematics.
+- `nxp_jaguar.urdf`: Kinematic tree, joint limits, link inertial data, and mesh references matching the RobStride RS00 leg linkages.

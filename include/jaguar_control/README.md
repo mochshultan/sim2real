@@ -1,21 +1,17 @@
-# ⚡ RobStride C++ Real-Time Driver Headers (`include/jaguar_control/`)
+# RobStride C++ Driver Headers (`include/jaguar_control/`)
 
-High-performance, hard real-time C++ header library for SocketCAN communication and motor control of **RobStride RS00** actuators on the **NXP Jaguar Quadruped**.
+C++ headers for SocketCAN communication and RobStride RS00 motor control on the NXP Jaguar quadruped.
 
----
+## Headers
 
-## 📁 Headers Overview
-
-| Header File | Primary Responsibilities | Key Classes / Functions |
+| Header File | Responsibilities | Key Symbols |
 | :--- | :--- | :--- |
-| [`robstride_protocol.hpp`](./robstride_protocol.hpp) | CAN Protocol bit-packing, linear scaling, 29-bit CAN arbitration ID assembly, and telemetry frame parsing. | `struct MotorParams`, `struct MotorFeedback`, `buildMitControlFrame()`, `buildEnableMotorFrame()`, `buildStopMotorFrame()`, `buildSetRunModeFrame()`, `parseFeedbackFrame()` |
-| [`robstride_can_bus.hpp`](./robstride_can_bus.hpp) | POSIX Linux SocketCAN RAII encapsulation with non-blocking I/O for deterministic sub-millisecond bus access. | `class RobStrideCanBus` (`openBus()`, `closeBus()`, `sendFrame()`, `receiveFrame()`) |
-| [`robstride_hardware_manager.hpp`](./robstride_hardware_manager.hpp) | Multi-bus manager coordinating dual CAN buses (`can0` & `can1`), thread-safe joint command dispatch, watchdog timeout monitoring, and zero-torque passive fallback. | `class RobStrideHardwareManager`, `struct JointConfig`, `struct JointCommand`, `struct JointStateData` |
+| [`robstride_protocol.hpp`](./robstride_protocol.hpp) | Bit-packing, linear scaling, 29-bit CAN arbitration ID assembly, and telemetry frame parsing. | `struct MotorParams`, `struct MotorFeedback`, `buildMitControlFrame()`, `buildEnableMotorFrame()`, `buildStopMotorFrame()`, `buildSetRunModeFrame()`, `parseFeedbackFrame()` |
+| [`robstride_can_bus.hpp`](./robstride_can_bus.hpp) | Linux SocketCAN wrapper with non-blocking I/O. | `class RobStrideCanBus` (`openBus()`, `closeBus()`, `sendFrame()`, `receiveFrame()`) |
+| [`robstride_hardware_manager.hpp`](./robstride_hardware_manager.hpp) | Dual CAN bus coordination (`can0` and `can1`), joint command dispatch, watchdog timeout monitoring, and zero-torque fallback. | `class RobStrideHardwareManager`, `struct JointConfig`, `struct JointCommand`, `struct JointStateData` |
 
----
+## Design Constraints
 
-## 🏎️ Performance Characteristics
-
-- **Zero-Copy Memory Layout**: Custom bit-packing into standard `struct can_frame` without heap allocations during active loop cycles.
-- **Deterministic Latency**: Pure non-blocking socket operations (`O_NONBLOCK`) allowing steady **200 Hz** CAN cycle time.
-- **Safety Defaults**: Automatic transition to passive zero-torque mode upon command timeouts (> 100 ms) or emergency stop signals.
+- **Fixed Allocation**: Packs bits into `struct can_frame` without heap allocations in the control loop.
+- **Non-Blocking I/O**: Sockets set `O_NONBLOCK` for the 200 Hz CAN cycle.
+- **Fail-Safe**: Switches to zero torque when command delay exceeds 100 ms or on emergency stop.

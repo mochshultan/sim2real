@@ -1,60 +1,53 @@
-# 🚀 Python & Shell Scripts Reference (`scripts/`)
+# Scripts (`scripts/`)
 
-This directory contains control nodes, teleoperation hubs, calibration tools, diagnostics, and bringup shell scripts for the **NXP Jaguar Quadruped**.
+Control nodes, teleoperation tools, calibration utilities, diagnostics, and bringup scripts for the NXP Jaguar quadruped.
 
----
+## 1. Control and Hardware Nodes
 
-## 📑 Scripts Directory Index
-
-### 🧠 1. Core Control & Hardware Nodes
 | Script | Type | Description |
 | :--- | :---: | :--- |
-| [`nxp_jaguar_controller.py`](./nxp_jaguar_controller.py) | ROS 2 Node | **High-Level Sim-to-Real RL Controller Node**. Ingests 48-D observation vector, runs TorchScript JIT policy inference at 50 Hz, executes state transitions (`STANDBY`, `STANDUP`, `STAND_HOLD`, `WALK`, `SITDOWN`, `SAFE_SHUTDOWN`), and enforces tilt/overtorque failsafes. |
-| [`can_hardware_node.py`](./can_hardware_node.py) | ROS 2 Node | Python-based SocketCAN hardware driver fallback (publishes `/joint_states` @ 200 Hz). |
-| [`parameters.py`](./parameters.py) | Module | Central configuration for hardware CAN IDs, motor directions, angular calibration offsets, joint naming, and nominal standing poses. |
-| [`robstride_motor_lib.py`](./robstride_motor_lib.py) | Module | Core Python SocketCAN communication library for RobStride RS-series actuators supporting MIT impedance control mode (`p_des`, `v_des`, `kp`, `kd`, `tau_ff`). |
+| [`nxp_jaguar_controller.py`](./nxp_jaguar_controller.py) | ROS 2 Node | Evaluates TorchScript policy at 50 Hz from the 48-D observation vector, handles state transitions (`STANDBY`, `STANDUP`, `STAND_HOLD`, `WALK`, `SITDOWN`, `SAFE_SHUTDOWN`), and enforces tilt and torque limits. |
+| [`can_hardware_node.py`](./can_hardware_node.py) | ROS 2 Node | Python SocketCAN driver fallback. Publishes `/joint_states` at 200 Hz. |
+| [`parameters.py`](./parameters.py) | Module | CAN IDs, motor directions, calibration offsets, joint names, and nominal standing angles. |
+| [`robstride_motor_lib.py`](./robstride_motor_lib.py) | Module | SocketCAN communication library for RobStride RS actuators with MIT impedance control (`p_des`, `v_des`, `kp`, `kd`, `tau_ff`). |
 
----
+## 2. Teleoperation
 
-### 🕹️ 2. Teleoperation & Remote Control
 | Script | Type | Description |
 | :--- | :---: | :--- |
-| [`keyboard_teleop.py`](./keyboard_teleop.py) | ROS 2 Node | Unified teleoperation hub supporting simultaneous SSH terminal keyboard control, direct Bluetooth/USB Xbox gamepad, and remote ROS 2 `/joy` topics. |
-| [`gamepad_reader.py`](./gamepad_reader.py) | Tool / Module | Universal non-blocking Linux Gamepad reader (`/dev/input/js*`). Auto-detects 15-button Bluetooth Xbox and 11-button USB xpad controller mappings. |
-| [`remote_xbox_forwarder.py`](./remote_xbox_forwarder.py) | Standalone (Remote PC) | Lightweight UDP telemetry forwarder to run on a remote PC/laptop when the Xbox controller is connected to the operator laptop rather than the robot. |
+| [`keyboard_teleop.py`](./keyboard_teleop.py) | ROS 2 Node | Teleoperation interface for keyboard input, Bluetooth or USB gamepads, and ROS 2 `/joy` topics. |
+| [`gamepad_reader.py`](./gamepad_reader.py) | Tool / Module | Non-blocking Linux gamepad reader for `/dev/input/js*`. Maps Bluetooth Xbox (15 buttons) and USB xpad (11 buttons). |
+| [`remote_xbox_forwarder.py`](./remote_xbox_forwarder.py) | Standalone | UDP forwarder for Xbox controllers connected to an operator laptop. |
 
----
+## 3. Hardware Calibration and Diagnostics
 
-### 🔧 3. Hardware Calibration & Diagnostics
 | Script | Type | Description |
 | :--- | :---: | :--- |
-| [`calibrate_sit_zero.py`](./calibrate_sit_zero.py) | Interactive Tool | **True Zero & Sitting Pose Fine-Tuning Tool**. Real-time tuning of Front/Rear Hip and Knee angles in $\pm 0.05\text{ rad}$ increments to match simulation posture, outputs updated angular offsets on exit (`[S]`). |
-| [`calibrate_stand_pose.py`](./calibrate_stand_pose.py) | Interactive Tool | **Standing Pose Fine-Tuning Tool**. Stands robot up with S-curve, allows live tuning of standing angles ($\pm 0.05\text{ rad}$), and on `[S]` smoothly sits down and prints updated standing posture constants. |
-| [`test_sit_stand.py`](./test_sit_stand.py) | Interactive Tool | Standalone Sit (0.0 rad) and Standup tester using smooth S-curve cosine trajectory interpolation (zero jerk). Supports keyboard and Xbox gamepad. |
-| [`check_states.py`](./check_states.py) | ROS 2 Node | Live diagnostic dashboard verifying all 48 dimensions of the Actor observation vector, sensor rates, and joint order mappings against Isaac Lab expectations. |
-| [`check_joints.py`](./check_joints.py) | Standalone Tool | Direct CAN passive sensor checker (Kp=0, Kd=0). Reads actual motor encoder angles in real-time with zero applied motor torque. |
-| [`set_robostride_zero.py`](./set_robostride_zero.py) | Standalone Tool | Flashes the current physical position as mechanical zero into RobStride RS00 motor EEPROM memory (Type 6 private protocol command). |
-| [`scan_robostride_ids.py`](./scan_robostride_ids.py) | Standalone Tool | Scans `can0` and `can1` buses to detect connected RobStride motor CAN node IDs and unique factory IDs. |
-| [`robstride_motor_test.py`](./robstride_motor_test.py) | Standalone Tool | Low-level diagnostic script for individual motor testing (position mode, torque mode, ID change, passive sensing). |
+| [`calibrate_sit_zero.py`](./calibrate_sit_zero.py) | Interactive Tool | Calibrates hip and knee angles in steps of 0.05 rad and saves offsets with `[S]`. |
+| [`calibrate_stand_pose.py`](./calibrate_stand_pose.py) | Interactive Tool | Tunes standing joint angles in steps of 0.05 rad and prints posture values on exit with `[S]`. |
+| [`test_sit_stand.py`](./test_sit_stand.py) | Interactive Tool | Tests sit (0 rad) and stand transitions with S-curve cosine trajectories via keyboard or gamepad. |
+| [`check_states.py`](./check_states.py) | ROS 2 Node | Terminal dashboard displaying the 48-D observation vector, sensor rates, and joint order mappings. |
+| [`check_joints.py`](./check_joints.py) | Standalone Tool | Reads motor encoder angles over CAN with zero control gains ($K_p=0, K_d=0$). |
+| [`set_robostride_zero.py`](./set_robostride_zero.py) | Standalone Tool | Writes the current position as mechanical zero into RobStride RS00 motor EEPROM. |
+| [`scan_robostride_ids.py`](./scan_robostride_ids.py) | Standalone Tool | Scans `can0` and `can1` for connected motor node IDs and factory IDs. |
+| [`robstride_motor_test.py`](./robstride_motor_test.py) | Standalone Tool | Individual motor tests for position mode, torque mode, ID assignment, and passive reading. |
 
----
+## 4. Shell Bringup and Utilities
 
-### 🔌 4. Shell Bringup, Plotting & Teardown Scripts
 | Script | Description |
 | :--- | :--- |
-| [`bringup_canbus.sh`](./bringup_canbus.sh) | Initializes `can0` and `can1` SocketCAN network interfaces at 1 Mbps bitrate (`txqueuelen 1000`). |
-| [`bringup_imu.sh`](./bringup_imu.sh) | Validates `/dev/ttyUSB0` serial port permissions and launches the `serial_imu talker` ROS 2 node. |
-| [`plot_torques.sh`](./plot_torques.sh) | **1-Click Multi-Motor Telemetry Plotter**. Automatically launches `rqt_plot` configured with all 12 RobStride RS00 motor channels (`effort`, `position`, or `velocity`). |
-| [`stop_all.sh`](./stop_all.sh) | Gracefully terminates all background robot processes, stops ROS 2 daemons, and brings down CAN network interfaces. |
+| [`bringup_canbus.sh`](./bringup_canbus.sh) | Sets up `can0` and `can1` SocketCAN interfaces at 1 Mbps with queue length 1000. |
+| [`bringup_imu.sh`](./bringup_imu.sh) | Sets `/dev/ttyUSB0` permissions and starts the `serial_imu talker` node. |
+| [`plot_torques.sh`](./plot_torques.sh) | Opens `rqt_plot` with 12 RobStride motor channels. |
+| [`stop_all.sh`](./stop_all.sh) | Stops robot processes, ROS 2 daemons, and CAN interfaces. |
 
----
+## 5. Sensor Transforms and Math
 
-### 📡 5. Sensor Transforms & Legacy Utilities
 | Script | Description |
 | :--- | :--- |
-| [`livox_cloud_transform.py`](./livox_cloud_transform.py) | Converts Livox custom PointCloud messages to standard `sensor_msgs/PointCloud2`. |
-| [`livox_imu_transform.py`](./livox_imu_transform.py) | Applies mounting pitch/roll rotation corrections to Livox LiDAR IMU data. |
-| [`livox_odom_transform.py`](./livox_odom_transform.py) | Static transform broadcaster from `/odom` to `/camera_init`. |
-| [`jaguar_utils.py`](./jaguar_utils.py) | Utility functions for URDF parsing, TorchScript policy loading, and mathematical interpolations. |
-| [`isaacgym_torch_utils.py`](./isaacgym_torch_utils.py) | Quaternion and vector transformation math functions. |
-| [`legged_gym_math.py`](./legged_gym_math.py) | Math helper routines for yaw application and angle wrapping. |
+| [`livox_cloud_transform.py`](./livox_cloud_transform.py) | Converts Livox PointCloud messages to `sensor_msgs/PointCloud2`. |
+| [`livox_imu_transform.py`](./livox_imu_transform.py) | Applies pitch and roll mounting corrections to Livox IMU data. |
+| [`livox_odom_transform.py`](./livox_odom_transform.py) | Publishes static transform from `/odom` to `/camera_init`. |
+| [`jaguar_utils.py`](./jaguar_utils.py) | Utilities for URDF parsing, TorchScript policy loading, and interpolation. |
+| [`isaacgym_torch_utils.py`](./isaacgym_torch_utils.py) | Quaternion and vector math routines. |
+| [`legged_gym_math.py`](./legged_gym_math.py) | Yaw transformations and angle wrapping routines. |

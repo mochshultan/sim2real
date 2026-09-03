@@ -1,27 +1,23 @@
-# 🛠️ C++ Driver Source Files (`src/`)
+# C++ Driver Sources (`src/`)
 
-This directory contains the ROS 2 node implementation for low-level hard real-time hardware execution.
+Hardware execution nodes for the NXP Jaguar quadruped.
 
----
+## `robstride_can_node.cpp`
 
-## 📄 Source Files
+ROS 2 driver node for RobStride RS00 motor communication over SocketCAN.
 
-### `robstride_can_node.cpp`
-The primary hard real-time ROS 2 driver node (`robstride_can_hardware`).
-
-- **Real-Time Scheduling**: Runs a dedicated POSIX thread configured with `SCHED_FIFO` (Priority 80) and `clock_nanosleep(CLOCK_MONOTONIC)` for deterministic 200 Hz execution.
+- **Scheduling**: Runs a POSIX thread with `SCHED_FIFO` priority 80 and `clock_nanosleep(CLOCK_MONOTONIC)` at 200 Hz.
 - **Published Topics**:
-  - `/joint_states` (`sensor_msgs/msg/JointState` @ 200 Hz): Actual angular positions, velocities, and torques.
-  - `/jaguar/motor_diagnostics` (`std_msgs/msg/Float32MultiArray` @ 1 Hz): Motor temperatures.
-  - `/jaguar/hardware_status` (`std_msgs/msg/String` @ 1 Hz): Operational state and watchdog overruns.
+  - `/joint_states` (`sensor_msgs/msg/JointState`, 200 Hz): Measured positions, velocities, and torques.
+  - `/jaguar/motor_diagnostics` (`std_msgs/msg/Float32MultiArray`, 1 Hz): Motor temperatures.
+  - `/jaguar/hardware_status` (`std_msgs/msg/String`, 1 Hz): Bus health and watchdog overruns.
 - **Subscribed Topics**:
-  - `/joint_commands` (`sensor_msgs/msg/JointState`): Desired target joint angles and custom PD gains.
-  - `/mit_controller/commands` (`std_msgs/msg/Float64MultiArray`): Direct MIT impedance control array.
-  - `/jaguar/emergency_stop` (`std_msgs/msg/Bool`): Hardware E-stop trigger.
+  - `/joint_commands` (`sensor_msgs/msg/JointState`): Target angles and PD gains.
+  - `/mit_controller/commands` (`std_msgs/msg/Float64MultiArray`): Direct MIT impedance values.
+  - `/jaguar/emergency_stop` (`std_msgs/msg/Bool`): Motor disable trigger.
 
----
+## Execution
 
-## 🚀 Execution
 ```bash
 ros2 run jaguar_control robstride_can_node
 ```
