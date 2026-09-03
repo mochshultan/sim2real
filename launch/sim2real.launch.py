@@ -8,8 +8,14 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     default_policy = os.path.join(pkg_dir, "models", "policy.pt")
+    default_config = os.path.join(pkg_dir, "config", "sim2real.yaml")
 
     # Launch arguments
+    config_file_arg = DeclareLaunchArgument(
+        "config_file",
+        default_value=default_config,
+        description="Path to ROS 2 parameters YAML configuration file",
+    )
     policy_path_arg = DeclareLaunchArgument(
         "policy_path",
         default_value=default_policy,
@@ -41,6 +47,7 @@ def generate_launch_description():
         description="Launch NXP Jaguar RL controller node",
     )
 
+    config_file = LaunchConfiguration("config_file")
     policy_path = LaunchConfiguration("policy_path")
     with_imu = LaunchConfiguration("with_imu")
     with_joy = LaunchConfiguration("with_joy")
@@ -63,11 +70,7 @@ def generate_launch_description():
         executable="joy_node",
         name="joy_node",
         output="screen",
-        parameters=[{
-            "dev": "/dev/input/js0",
-            "deadzone": 0.05,
-            "autorepeat_rate": 20.0,
-        }],
+        parameters=[config_file],
         condition=IfCondition(with_joy),
     )
 
@@ -77,12 +80,7 @@ def generate_launch_description():
         executable="robstride_can_node",
         name="robstride_can_hardware",
         output="screen",
-        parameters=[{
-            "rate_hz": 200,
-            "default_kp": 18.0,
-            "default_kd": 1.4,
-            "rt_priority": 80,
-        }],
+        parameters=[config_file],
         condition=IfCondition(
             PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' == 'true'"])
         ),
@@ -94,6 +92,7 @@ def generate_launch_description():
         executable="can_hardware_node.py",
         name="jaguar_can_hardware",
         output="screen",
+        parameters=[config_file],
         condition=IfCondition(
             PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' != 'true'"])
         ),
@@ -105,13 +104,15 @@ def generate_launch_description():
         executable="nxp_jaguar_controller.py",
         name="nxp_jaguar_controller",
         output="screen",
-        parameters=[{
-            "policy_path": policy_path,
-        }],
+        parameters=[
+            config_file,
+            {"policy_path": policy_path},
+        ],
         condition=IfCondition(with_controller),
     )
 
     return LaunchDescription([
+        config_file_arg,
         policy_path_arg,
         with_imu_arg,
         with_joy_arg,

@@ -1,0 +1,45 @@
+# NXP Jaguar Quadruped - sim2real Unified ROS 2 Parameters Configuration
+# Joint Order:
+#   Coxa / Collar (Roll) : FR(9), FL(6), BR(3), BL(0)
+#   Hip (Pitch)          : FR(10), FL(7), BR(4), BL(1)
+#   Knee (Pitch)         : FR(11), FL(8), BR(5), BL(2)
+
+joy_node:
+  ros__parameters:
+    dev: "/dev/input/js0"
+    deadzone: 0.05
+    autorepeat_rate: 20.0
+
+robstride_can_hardware:
+  ros__parameters:
+    rate_hz: 200
+    rt_priority: 80
+    default_coxa_kp: 18.0
+    default_coxa_kd: 1.0
+    default_kp: 25.0
+    default_kd: 1.5
+
+jaguar_can_hardware:
+  ros__parameters:
+    rate_hz: 200
+    default_coxa_kp: 18.0
+    default_coxa_kd: 1.0
+    default_kp: 25.0
+    default_kd: 1.5
+
+nxp_jaguar_controller:
+  ros__parameters:
+    torque_limit: 14.0
+    shutdown_duration: 3.0
+    shutdown_settle_delay: 0.5
+    cmd_timeout: 0.25
+    joy_deadzone: 0.20
+    action_ema_alpha: 0.55
+    rl_kp_roll: 18.0
+    rl_kd_roll: 1.0
+    rl_kp_pitch: 25.0
+    rl_kd_pitch: 1.5
+    transition_kp_roll: 18.0
+    transition_kd_roll: 1.0
+    transition_kp_pitch: 25.0
+    transition_kd_pitch: 1.5

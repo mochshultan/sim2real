@@ -202,9 +202,11 @@ class StandPoseCalibrator:
         self.start_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.cmd_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
 
-        # Control & Trajectory Parameters
-        self.kp = 20.0          # Stiffness for standing hold & tuning
-        self.kd = 1.4           # Damping
+        # Control & Trajectory Parameters: Coxa Kp=18.0, Kd=1.0 | Hip & Knee Kp=25.0, Kd=1.5
+        self.kp_coxa = 18.0     # Coxa stiffness
+        self.kd_coxa = 1.0      # Coxa damping
+        self.kp = 25.0          # Stiffness for standing hold & tuning (Hip/Knee)
+        self.kd = 1.5           # Damping (Hip/Knee)
         self.step_size = 0.05   # Default adjustment step (±0.05 rad ≈ 2.86°)
         self.control_dt = 0.02  # 50 Hz control loop (20 ms)
         self.max_rate = 1.2     # Max rate of angle change (rad/s) during manual tuning
@@ -409,8 +411,11 @@ class StandPoseCalibrator:
                                     p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
                                 )
                             else:
+                                is_coxa = (i % 3 == 0)
+                                kp_cmd = self.kp_coxa if is_coxa else kp_val
+                                kd_cmd = self.kd_coxa if is_coxa else kd_val
                                 _, pos, vel, tau, tem = motor.send_control_command(
-                                    p_ref=self.cmd_pos[i], v_ref=0.0, kp=kp_val, kd=kd_val, tau_ff=0.0
+                                    p_ref=self.cmd_pos[i], v_ref=0.0, kp=kp_cmd, kd=kd_cmd, tau_ff=0.0
                                 )
 
                             if pos is not None:

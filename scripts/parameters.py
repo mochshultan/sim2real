@@ -74,18 +74,18 @@ DEFAULT_ANGLE = [
 ]
 
 # PD Control Gains for RS00 Motors (ROS Order: BL, BR, FL, FR)
-# Coxa/Collar: Kp=10.0, Kd=1.0 | Hip & Knee: Kp=18.0, Kd=1.4
+# Coxa/Collar: Kp=18.0, Kd=1.0 | Hip & Knee: Kp=25.0, Kd=1.5
 KP_GAIN = [
-    10.0, 18.0, 18.0,  # BL: collar, hip, knee
-    10.0, 18.0, 18.0,  # BR: collar, hip, knee
-    10.0, 18.0, 18.0,  # FL: collar, hip, knee
-    10.0, 18.0, 18.0,  # FR: collar, hip, knee
+    18.0, 25.0, 25.0,  # BL: collar, hip, knee
+    18.0, 25.0, 25.0,  # BR: collar, hip, knee
+    18.0, 25.0, 25.0,  # FL: collar, hip, knee
+    18.0, 25.0, 25.0,  # FR: collar, hip, knee
 ]
 KD_GAIN = [
-    1.0, 1.4, 1.4,     # BL: collar, hip, knee
-    1.0, 1.4, 1.4,     # BR: collar, hip, knee
-    1.0, 1.4, 1.4,     # FL: collar, hip, knee
-    1.0, 1.4, 1.4,     # FR: collar, hip, knee
+    1.0, 1.5, 1.5,     # BL: collar, hip, knee
+    1.0, 1.5, 1.5,     # BR: collar, hip, knee
+    1.0, 1.5, 1.5,     # FL: collar, hip, knee
+    1.0, 1.5, 1.5,     # FR: collar, hip, knee
 ]
 
 # Isaac Lab RL Policy Control Parameters

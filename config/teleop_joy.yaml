@@ -1,0 +1,6 @@
+# Joystick Teleoperation Node Configuration
+joy_node:
+  ros__parameters:
+    dev: "/dev/input/js0"
+    deadzone: 0.05
+    autorepeat_rate: 20.0

@@ -58,12 +58,12 @@ CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
 # Gain Scheduling Constants (Coxa/Roll vs Hip/Knee)
 # Coxa/Roll (4 joints): Stiffness 18.0, Damping 1.0
 # Hip & Knee (8 joints): Stiffness 25.0, Damping 1.5
-RL_KP_ROLL = 20.0
+RL_KP_ROLL = 18.0
 RL_KD_ROLL = 1.0
 RL_KP_PITCH = 25.0
 RL_KD_PITCH = 1.5
 
-TRANSITION_KP_ROLL = 20.0
+TRANSITION_KP_ROLL = 18.0
 TRANSITION_KD_ROLL = 1.0
 TRANSITION_KP_PITCH = 25.0
 TRANSITION_KD_PITCH = 1.5
@@ -554,7 +554,7 @@ class NXPJaguarControllerNode(Node):
             target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * self.filtered_action
             target_vel = np.zeros(12, dtype=np.float32)
 
-            # Impedance tracking gains for RL (Coxa: Kp=10, Kd=1.0 | Leg: Kp=18, Kd=1.4)
+            # Impedance tracking gains for RL (Coxa: Kp=18, Kd=1.0 | Leg: Kp=25, Kd=1.5)
             cmd_kp = self.rl_kp[:]
             cmd_kd = self.rl_kd[:]
 

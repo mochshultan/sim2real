@@ -64,6 +64,19 @@ class CanHardwareDriverNode(Node):
 
         self.get_logger().info("Initializing NXP Jaguar RobStride RS00 CAN Hardware Driver...")
 
+        # Declare parameters
+        self.declare_parameter("rate_hz", 200)
+        self.declare_parameter("default_coxa_kp", 18.0)
+        self.declare_parameter("default_coxa_kd", 1.0)
+        self.declare_parameter("default_kp", 25.0)
+        self.declare_parameter("default_kd", 1.5)
+
+        self.rate_hz = self.get_parameter("rate_hz").as_int()
+        self.default_coxa_kp = float(self.get_parameter("default_coxa_kp").value)
+        self.default_coxa_kd = float(self.get_parameter("default_coxa_kd").value)
+        self.default_kp = float(self.get_parameter("default_kp").value)
+        self.default_kd = float(self.get_parameter("default_kd").value)
+
         self.state = RobotHardwareState()
         self.cmd = RobotHardwareCommand()
         self.motors = [None] * P.N_JOINTS
@@ -90,6 +103,7 @@ class CanHardwareDriverNode(Node):
 
     def _cmd_cb(self, msg: JointState):
         with self.cmd.lock:
+            has_custom_gains = (len(msg.effort) >= 24)
             if msg.name:
                 for idx, name in enumerate(msg.name):
                     if name in NAME_TO_ROS_INDEX:
@@ -98,11 +112,33 @@ class CanHardwareDriverNode(Node):
                             self.cmd.pos[ros_idx] = msg.position[idx]
                         if len(msg.velocity) > idx:
                             self.cmd.vel[ros_idx] = msg.velocity[idx]
-                        if len(msg.effort) > idx:
-                            self.cmd.tau[ros_idx] = msg.effort[idx]
+                        if has_custom_gains:
+                            self.cmd.kp[ros_idx] = msg.effort[idx]
+                            self.cmd.kd[ros_idx] = msg.effort[12 + idx]
+                            self.cmd.tau[ros_idx] = msg.effort[24 + idx] if len(msg.effort) >= 36 else 0.0
+                        else:
+                            is_coxa = (ros_idx % 3 == 0)
+                            self.cmd.kp[ros_idx] = self.default_coxa_kp if is_coxa else self.default_kp
+                            self.cmd.kd[ros_idx] = self.default_coxa_kd if is_coxa else self.default_kd
+                            if len(msg.effort) > idx:
+                                self.cmd.tau[ros_idx] = msg.effort[idx]
             elif len(msg.position) == 12:
                 # Direct ROS order
                 self.cmd.pos = list(msg.position)
+                if len(msg.velocity) == 12:
+                    self.cmd.vel = list(msg.velocity)
+                if has_custom_gains:
+                    for i in range(12):
+                        self.cmd.kp[i] = msg.effort[i]
+                        self.cmd.kd[i] = msg.effort[12 + i]
+                        self.cmd.tau[i] = msg.effort[24 + i] if len(msg.effort) >= 36 else 0.0
+                else:
+                    for i in range(12):
+                        is_coxa = (i % 3 == 0)
+                        self.cmd.kp[i] = self.default_coxa_kp if is_coxa else self.default_kp
+                        self.cmd.kd[i] = self.default_coxa_kd if is_coxa else self.default_kd
+                        if len(msg.effort) > i:
+                            self.cmd.tau[i] = msg.effort[i]
             self.cmd.enabled = True
 
     def _setup_can(self):

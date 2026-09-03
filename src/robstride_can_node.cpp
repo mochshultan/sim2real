@@ -32,7 +32,9 @@ public:
     hw_manager_(),
     loop_hz_(200),
     default_kp_(25.0),
-    default_kd_(1.5)
+    default_kd_(1.5),
+    default_coxa_kp_(18.0),
+    default_coxa_kd_(1.0)
   {
     RCLCPP_INFO(this->get_logger(), "=================================================");
     RCLCPP_INFO(this->get_logger(), " Starting RobStride RS00 Hard Real-Time CAN Node ");
@@ -42,11 +44,15 @@ public:
     this->declare_parameter<int>("rate_hz", 200);
     this->declare_parameter<double>("default_kp", 25.0);
     this->declare_parameter<double>("default_kd", 1.5);
+    this->declare_parameter<double>("default_coxa_kp", 18.0);
+    this->declare_parameter<double>("default_coxa_kd", 1.0);
     this->declare_parameter<int>("rt_priority", 80);
 
     loop_hz_ = this->get_parameter("rate_hz").as_int();
     default_kp_ = this->get_parameter("default_kp").as_double();
     default_kd_ = this->get_parameter("default_kd").as_double();
+    default_coxa_kp_ = this->get_parameter("default_coxa_kp").as_double();
+    default_coxa_kd_ = this->get_parameter("default_coxa_kd").as_double();
     rt_priority_ = this->get_parameter("rt_priority").as_int();
 
     buildNameMapping();
@@ -158,8 +164,9 @@ private:
             cmd.effort = (msg->effort.size() >= 36) ? msg->effort[24 + i] : 0.0;
           } else {
             cmd.effort = (msg->effort.size() > i) ? msg->effort[i] : 0.0;
-            cmd.kp = default_kp_;
-            cmd.kd = default_kd_;
+            bool is_coxa = (idx % 3 == 0);
+            cmd.kp = is_coxa ? default_coxa_kp_ : default_kp_;
+            cmd.kd = is_coxa ? default_coxa_kd_ : default_kd_;
           }
           hw_manager_.setJointCommand(idx, cmd);
         }
@@ -175,8 +182,9 @@ private:
           cmd.effort = (msg->effort.size() >= 36) ? msg->effort[24 + i] : 0.0;
         } else {
           cmd.effort = (msg->effort.size() == N_JOINTS) ? msg->effort[i] : 0.0;
-          cmd.kp = default_kp_;
-          cmd.kd = default_kd_;
+          bool is_coxa = (i % 3 == 0);
+          cmd.kp = is_coxa ? default_coxa_kp_ : default_kp_;
+          cmd.kd = is_coxa ? default_coxa_kd_ : default_kd_;
         }
         hw_manager_.setJointCommand(i, cmd);
       }
@@ -203,8 +211,9 @@ private:
         cmd.position = msg->data[i];
         cmd.velocity = msg->data[12 + i];
         cmd.effort   = msg->data[24 + i];
-        cmd.kp = default_kp_;
-        cmd.kd = default_kd_;
+        bool is_coxa = (i % 3 == 0);
+        cmd.kp       = is_coxa ? default_coxa_kp_ : default_kp_;
+        cmd.kd       = is_coxa ? default_coxa_kd_ : default_kd_;
         hw_manager_.setJointCommand(i, cmd);
       }
     }
@@ -304,6 +313,8 @@ private:
   int loop_hz_;
   double default_kp_;
   double default_kd_;
+  double default_coxa_kp_;
+  double default_coxa_kd_;
   int rt_priority_;
 
   std::unordered_map<std::string, size_t> name_to_index_;
