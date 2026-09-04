@@ -7,7 +7,7 @@
 joy_node:
   ros__parameters:
     dev: "/dev/input/js0"
-    deadzone: 0.05
+    deadzone: 0.10
     autorepeat_rate: 20.0
 
 robstride_can_hardware:

@@ -25,7 +25,7 @@ import numpy as np
 JSIOCGNAME = lambda length: 0x80006a13 + (length << 16)
 JSIOCGAXES = 0x80016a11
 JSIOCGBUTTONS = 0x80016a12
-DEADZONE_DEFAULT = 0.15
+DEADZONE_DEFAULT = 0.10
 
 CALIBRATION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamepad_calibration.json")
 

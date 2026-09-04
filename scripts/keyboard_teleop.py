@@ -41,7 +41,7 @@ C_CYAN    = "\033[1;36m"
 C_WHITE   = "\033[1;37m"
 C_CLEAR   = "\033[2J\033[H"
 
-DEADZONE = 0.15
+DEADZONE = 0.10
 MAX_VX = 1.0
 MIN_VX = -1.0
 MAX_VY = 1.0

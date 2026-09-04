@@ -330,13 +330,13 @@ class NXPJaguarControllerNode(Node):
     def _cmd_vel_cb(self, msg: Twist):
         now = self.get_clock().now().nanoseconds / 1e9
         with self.state_lock:
-            cmd_deadzone = 0.05
+            cmd_deadzone = 0.10
             vx = float(np.clip(msg.linear.x, -1.0, 1.0))
             vy = float(np.clip(msg.linear.y, -1.0, 1.0))
             wz = float(np.clip(msg.angular.z, -1.0, 1.0))
-            self.cmd_vel[0] = vx if abs(vx) > cmd_deadzone else 0.0
-            self.cmd_vel[1] = vy if abs(vy) > cmd_deadzone else 0.0
-            self.cmd_vel[2] = wz if abs(wz) > cmd_deadzone else 0.0
+            self.cmd_vel[0] = vx if abs(vx) >= cmd_deadzone else 0.0
+            self.cmd_vel[1] = vy if abs(vy) >= cmd_deadzone else 0.0
+            self.cmd_vel[2] = wz if abs(wz) >= cmd_deadzone else 0.0
             self.last_cmd_time = now
 
     def _joint_state_cb(self, msg: JointState):
