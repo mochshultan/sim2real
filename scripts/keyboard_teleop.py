@@ -42,10 +42,10 @@ C_WHITE   = "\033[1;37m"
 C_CLEAR   = "\033[2J\033[H"
 
 DEADZONE = 0.15
-MAX_VX = 0.8
-MIN_VX = -0.8
-MAX_VY = 0.5
-MAX_WZ = 0.8
+MAX_VX = 1.0
+MIN_VX = -1.0
+MAX_VY = 1.0
+MAX_WZ = 1.0
 
 
 class UnifiedTeleopNode(Node):

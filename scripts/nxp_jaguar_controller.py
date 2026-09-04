@@ -331,9 +331,9 @@ class NXPJaguarControllerNode(Node):
         now = self.get_clock().now().nanoseconds / 1e9
         with self.state_lock:
             cmd_deadzone = 0.05
-            vx = float(np.clip(msg.linear.x, -0.8, 0.8))
-            vy = float(np.clip(msg.linear.y, -0.5, 0.5))
-            wz = float(np.clip(msg.angular.z, -0.8, 0.8))
+            vx = float(np.clip(msg.linear.x, -1.0, 1.0))
+            vy = float(np.clip(msg.linear.y, -1.0, 1.0))
+            wz = float(np.clip(msg.angular.z, -1.0, 1.0))
             self.cmd_vel[0] = vx if abs(vx) > cmd_deadzone else 0.0
             self.cmd_vel[1] = vy if abs(vy) > cmd_deadzone else 0.0
             self.cmd_vel[2] = wz if abs(wz) > cmd_deadzone else 0.0
@@ -416,9 +416,9 @@ class NXPJaguarControllerNode(Node):
                 scaled_vy = apply_deadzone_linear(raw_vy, self.joy_deadzone)
                 scaled_wz = apply_deadzone_linear(raw_wz, self.joy_deadzone)
 
-                self.cmd_vel[0] = float(np.clip(scaled_vx * 0.8, -0.8, 0.8))
-                self.cmd_vel[1] = float(np.clip(scaled_vy * 0.5, -0.5, 0.5))
-                self.cmd_vel[2] = float(np.clip(scaled_wz * 0.8, -0.8, 0.8))
+                self.cmd_vel[0] = float(np.clip(scaled_vx * 1.0, -1.0, 1.0))
+                self.cmd_vel[1] = float(np.clip(scaled_vy * 1.0, -1.0, 1.0))
+                self.cmd_vel[2] = float(np.clip(scaled_wz * 1.0, -1.0, 1.0))
                 self.last_cmd_time = now
 
     def _control_loop(self):

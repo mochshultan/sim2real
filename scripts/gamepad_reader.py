@@ -79,7 +79,7 @@ class XboxState:
         self.vy: float = 0.0        # Lateral velocity (m/s)
         self.wz: float = 0.0        # Yaw rate (rad/s)
 
-    def compute_velocities(self, max_vx: float = 0.8, max_vy: float = 0.5, max_wz: float = 0.8, deadzone: float = DEADZONE_DEFAULT):
+    def compute_velocities(self, max_vx: float = 1.0, max_vy: float = 1.0, max_wz: float = 1.0, deadzone: float = DEADZONE_DEFAULT):
         """Computes robot command velocities with auto-calibrated zero-offset and deadzone."""
         calib = load_gamepad_calibration()
 

@@ -97,12 +97,12 @@ class StateCheckerNode(Node):
 
     def _joy_cb(self, msg: Joy):
         if len(msg.axes) >= 2:
-            self.cmd_vel[0] = msg.axes[1] * 0.8
-            self.cmd_vel[1] = msg.axes[0] * 0.5
+            self.cmd_vel[0] = msg.axes[1] * 1.0
+            self.cmd_vel[1] = msg.axes[0] * 1.0
             if len(msg.axes) > 3:
-                self.cmd_vel[2] = msg.axes[3] * 0.8
+                self.cmd_vel[2] = msg.axes[3] * 1.0
             elif len(msg.axes) >= 3:
-                self.cmd_vel[2] = msg.axes[2] * 0.8
+                self.cmd_vel[2] = msg.axes[2] * 1.0
             self.cmd_count += 1
 
     def _joint_cb(self, msg: JointState):
