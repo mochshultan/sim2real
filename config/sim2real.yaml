@@ -14,18 +14,18 @@ robstride_can_hardware:
   ros__parameters:
     rate_hz: 200
     rt_priority: 80
-    default_coxa_kp: 20.0
-    default_coxa_kd: 1.5
-    default_kp: 25.0
-    default_kd: 1.5
+    default_coxa_kp: 28.0
+    default_coxa_kd: 0.7
+    default_kp: 28.0
+    default_kd: 0.7
 
 jaguar_can_hardware:
   ros__parameters:
     rate_hz: 200
-    default_coxa_kp: 20.0
-    default_coxa_kd: 1.5
-    default_kp: 25.0
-    default_kd: 1.5
+    default_coxa_kp: 28.0
+    default_coxa_kd: 0.7
+    default_kp: 28.0
+    default_kd: 0.7
 
 nxp_jaguar_controller:
   ros__parameters:
@@ -35,11 +35,11 @@ nxp_jaguar_controller:
     cmd_timeout: 0.25
     joy_deadzone: 0.20
     action_ema_alpha: 0.55
-    rl_kp_roll: 20.0
-    rl_kd_roll: 1.5
-    rl_kp_pitch: 25.0
-    rl_kd_pitch: 1.5
-    transition_kp_roll: 20.0
-    transition_kd_roll: 1.5
-    transition_kp_pitch: 25.0
-    transition_kd_pitch: 1.5
+    rl_kp_roll: 28.0
+    rl_kd_roll: 0.7
+    rl_kp_pitch: 28.0
+    rl_kd_pitch: 0.7
+    transition_kp_roll: 28.0
+    transition_kd_roll: 1.2
+    transition_kp_pitch: 28.0
+    transition_kd_pitch: 1.2

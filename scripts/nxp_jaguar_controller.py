@@ -51,11 +51,11 @@ SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 # Isaac order: [0..3 Rolls (FR, FL, BR, BL), 4..7 Hips (FR, FL, BR, BL), 8..11 Knees (FR, FL, BR, BL)]
 RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range(12)], dtype=np.float32)
 
-# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
+# Default Standing Pose synchronized with Isaac Lab NXP Jaguar (nxp_jaguar.py)
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.55, -1.55, -1.55, -1.55,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.35,  1.35,  1.35,  1.35,   # Knees (Fr, Fl, Br, Bl)
+   -1.40, -1.40, -1.30, -1.30,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.30,  1.30,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 ACTION_SCALE = 0.25      # Policy action scaling factor
