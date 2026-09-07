@@ -142,14 +142,14 @@ inline struct can_frame buildMitControlFrame(
 /**
  * @brief Builds Motor Enable Frame
  */
-inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFD)
+inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFE)
 {
   struct can_frame frame;
   std::memset(&frame, 0, sizeof(frame));
 
   frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_ENABLE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
+                 ((static_cast<uint32_t>(motor_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(master_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
   return frame;
@@ -158,14 +158,14 @@ inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_i
 /**
  * @brief Builds Motor Stop / Disable Frame
  */
-inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFD)
+inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFE)
 {
   struct can_frame frame;
   std::memset(&frame, 0, sizeof(frame));
 
   frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_STOP) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
+                 ((static_cast<uint32_t>(motor_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(master_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
   return frame;
@@ -174,14 +174,14 @@ inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id 
 /**
  * @brief Builds Set Run Mode Frame (Sets parameter 0x7005)
  */
-inline struct can_frame buildSetRunModeFrame(uint8_t motor_id, RunMode mode, uint8_t master_id = 0xFD)
+inline struct can_frame buildSetRunModeFrame(uint8_t motor_id, RunMode mode, uint8_t master_id = 0xFE)
 {
   struct can_frame frame;
   std::memset(&frame, 0, sizeof(frame));
 
   frame.can_id = ((static_cast<uint32_t>(CMD_SINGLE_PARAM_WRITE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
+                 ((static_cast<uint32_t>(motor_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(master_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
 

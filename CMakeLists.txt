@@ -16,6 +16,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(Threads REQUIRED)
 
+include(CTest)
+
 include_directories(
   include
 )
@@ -39,6 +41,13 @@ ament_target_dependencies(robstride_can_node
   geometry_msgs
   nav_msgs
 )
+
+if(BUILD_TESTING)
+  add_executable(test_can_protocol tests/test_can_protocol.cpp)
+  target_include_directories(test_can_protocol PRIVATE include)
+  target_compile_features(test_can_protocol PRIVATE cxx_std_17)
+  add_test(NAME can_protocol COMMAND test_can_protocol)
+endif()
 
 target_link_libraries(robstride_can_node
   Threads::Threads

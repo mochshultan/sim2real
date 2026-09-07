@@ -2,7 +2,7 @@
 
 Date: 2026-09-07. Baseline: local branch `cpp`, commit `1952f8f`, including the existing uncommitted changes.
 
-This is a review, not a motor-control fix. No application source, configuration, calibration, Git remote, or hardware state was changed during this audit. Findings describe the current checkout; some regressions were introduced by the earlier assistant edits and partial rollback in this conversation.
+This began as a review of the checkout at commit `1952f8f`. A remediation pass subsequently changed application source and added offline regression tests; the original findings below describe the pre-remediation baseline unless marked as resolved. No CAN or serial hardware was opened.
 
 ## Scope and Verification
 
@@ -234,3 +234,18 @@ The earlier statement that the motor-ID bit position was the root cause was unsu
 6. Unify model metadata, joint names, calibration/config loading, and simulator observations; then reconcile documentation and remove dead code.
 
 Hardware-specific questions remain: which firmware/reference convention produces the reported ~12-rad samples, whether other CAN writers are running concurrently, and which motor-side communication watchdog is configured. None was assumed verified in this audit.
+
+## Remediation Pass
+
+The following are now covered by source changes and offline tests: strict Python/C++ feedback routing, type-2 and DLC validation, raw position preservation without modulo wrapping, bounded CAN transactions, active-control inhibition on stale/discontinuous/fault feedback, whole-robot command validation, C++ build/API repair, immediate latched stop requests, IMU frame bounds and CRC handling, joystick release/disconnect neutralization, CPU-only policy loading and contract validation, Isaac policy history shape handling, and explicit simulator checkpoint export failures.
+
+Regression commands used:
+
+```text
+python3 -m unittest discover -s tests -v
+g++ -std=c++17 -Iinclude tests/test_can_protocol.cpp
+gcc -std=c11 -Iserial_imu/src tests/test_serial_parser.c
+source /opt/ros/humble/setup.bash && colcon build --symlink-install
+```
+
+The physical encoder reference remains unresolved until a raw type-2 capture is made while the affected joint is stationary. The embedded Git credential still must be revoked by the repository owner; this workspace did not alter the remote URL.

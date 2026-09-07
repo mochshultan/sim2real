@@ -313,7 +313,7 @@ public:
   {
     uint32_t raw_id = frame.can_id & CAN_EFF_MASK;
     if (!(frame.can_id & CAN_EFF_FLAG) || (frame.can_id & (CAN_ERR_FLAG | CAN_RTR_FLAG)) ||
-        (raw_id & 0xFF) != 0xFD) return;
+        (raw_id & 0xFF) != 0xFE) return;
     uint8_t motor_id = static_cast<uint8_t>((raw_id >> 8) & 0xFF);
 
     for (size_t i = 0; i < N_JOINTS; ++i) {

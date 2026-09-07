@@ -17,10 +17,10 @@ from robstride_motor_lib import RobStrideMotorController
 class PassiveJointChecker:
     def __init__(self):
         self.motors = [None] * P.N_JOINTS
-        self.joint_pos = [0.0] * P.N_JOINTS
-        self.joint_vel = [0.0] * P.N_JOINTS
-        self.joint_tau = [0.0] * P.N_JOINTS
-        self.joint_tem = [0.0] * P.N_JOINTS
+        self.joint_pos = [float("nan")] * P.N_JOINTS
+        self.joint_vel = [float("nan")] * P.N_JOINTS
+        self.joint_tau = [float("nan")] * P.N_JOINTS
+        self.joint_tem = [float("nan")] * P.N_JOINTS
         self.running = True
         self.lock = threading.Lock()
 
@@ -88,20 +88,26 @@ class PassiveJointChecker:
                         dev = P.DEVICE[i]
                         jname = P.JOINT_NAME[i]
                         mtype = P.MOTOR_TYPE[i]
-                        curr_pos = f"{self.joint_pos[i]:+8.4f} rad"
-                        curr_vel = f"{self.joint_vel[i]:+6.2f} r/s"
-                        curr_tem = f"{self.joint_tem[i]:.1f}°C"
+                        online = self.motors[i] is not None and self.motors[i].feedback_fresh()
+                        curr_pos = f"{self.joint_pos[i]:+8.4f} rad" if online else "     --     "
+                        curr_vel = f"{self.joint_vel[i]:+6.2f} r/s" if online else "    --    "
+                        curr_tem = f"{self.joint_tem[i]:.1f}°C" if online else "OFFLINE"
                         print(f" #{cid:<3} {dev:<6} {jname:<20} {mtype:<13} {curr_pos:<15} {curr_vel:<12} {curr_tem}")
 
                 print("=" * 88)
-                print(" [SAFE SENSING MODE] Motors are completely passive (zero torque).")
+                print(" [PASSIVE SENSING] Kp=0/Kd=0 commands are used; ONLINE requires a fresh type-2 reply.")
                 print(" Move each leg manually with your hand to verify angle changes. Press Ctrl+C to exit.")
                 time.sleep(0.2)
         except KeyboardInterrupt:
             self.shutdown()
 
     def shutdown(self):
+        if getattr(self, "_shutdown_done", False):
+            return
+        self._shutdown_done = True
         self.running = False
+        if getattr(self, "poll_thread", None) is not None and self.poll_thread is not threading.current_thread():
+            self.poll_thread.join(timeout=1.0)
         print("\nDisabling all motors...")
         for motor in self.motors:
             if motor is not None:

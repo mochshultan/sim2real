@@ -26,7 +26,10 @@ MUJOCO_JOINT_NAMES = [
 MUJOCO_TO_ISAAC = [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11]
 ISAAC_TO_MUJOCO = [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
 
-ROBOT_CONFIG_PATH = "/home/shultan/IsaacLab/source/isaaclab_assets/isaaclab_assets/robots/nxp_jaguar.py"
+ROBOT_CONFIG_PATH = os.environ.get(
+    "JAGUAR_ROBOT_CONFIG",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "nxp_jaguar_init.py")),
+)
 
 
 def load_robot_init_state(config_path: str = ROBOT_CONFIG_PATH):
@@ -34,7 +37,7 @@ def load_robot_init_state(config_path: str = ROBOT_CONFIG_PATH):
     Directly extracts initial joint positions and base pose from nxp_jaguar.py.
     Tries Python module import first, with AST parsing fallback for environments without Isaac Lab simulator dependencies.
     """
-    # 1. Try direct module import
+    # 1. Try direct module import when Isaac Lab is explicitly available.
     try:
         assets_dir = "/home/shultan/IsaacLab/source/isaaclab_assets"
         if assets_dir not in sys.path:
@@ -65,10 +68,10 @@ def load_robot_init_state(config_path: str = ROBOT_CONFIG_PATH):
 
     if not joint_pos:
         joint_pos = {
-            "Fr_roll_joint": 0.0, "Fr_hip_pitch_joint": -1.55, "Fr_knee_joint": 1.4,
-            "Fl_roll_joint": 0.0, "Fl_hip_pitch_joint": -1.55, "Fl_knee_joint": 1.4,
-            "Br_roll_joint": 0.0, "Br_hip_pitch_joint": -1.45, "Br_knee_joint": 1.35,
-            "Bl_roll_joint": 0.0, "Bl_hip_pitch_joint": -1.45, "Bl_knee_joint": 1.35,
+            "Fr_roll_joint": 0.0, "Fr_hip_pitch_joint": -1.40, "Fr_knee_joint": 1.30,
+            "Fl_roll_joint": 0.0, "Fl_hip_pitch_joint": -1.40, "Fl_knee_joint": 1.30,
+            "Br_roll_joint": 0.0, "Br_hip_pitch_joint": -1.30, "Br_knee_joint": 1.40,
+            "Bl_roll_joint": 0.0, "Bl_hip_pitch_joint": -1.30, "Bl_knee_joint": 1.40,
         }
     return joint_pos, pos
 

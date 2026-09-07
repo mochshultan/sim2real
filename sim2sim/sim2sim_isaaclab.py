@@ -193,17 +193,18 @@ def main():
     }
     task_name = task_map.get(args_cli.task, "Isaac-Velocity-Rough-NXP-Jaguar-v0")
 
-    # Load JIT Policy
-    policy_path = find_latest_policy(args_cli.policy, args_cli.load_run, args_cli.task)
-    print(f"\n[INFO] Loading JIT Policy: {policy_path}\n")
-    policy = torch.jit.load(policy_path, map_location="cuda:0")
-    policy.eval()
-
     # Parse Environment Config (1 single robot env)
     env_cfg = parse_env_cfg(task_name, device="cuda:0", num_envs=args_cli.num_envs)
     env_cfg.scene.num_envs = args_cli.num_envs
     env_cfg.scene.env_spacing = 2.5
     env_cfg.observations.policy.enable_corruption = False
+
+    # Load JIT Policy. This simulator is training-side CUDA code; deployment
+    # uses scripts/nxp_jaguar_controller.py and always maps the model to CPU.
+    policy_path = find_latest_policy(args_cli.policy, args_cli.load_run, args_cli.task)
+    print(f"\n[INFO] Loading JIT Policy: {policy_path}\n")
+    policy = torch.jit.load(policy_path, map_location="cuda:0")
+    policy.eval()
 
     # Disable randomizations on reset so robot spawns cleanly in nominal standing posture
     if hasattr(env_cfg, "events"):
@@ -245,6 +246,7 @@ def main():
 
     # Reset environment
     obs, _ = env.reset()
+    history = None
 
     # Bind Teleop Commands directly to Isaac Lab Command Manager
     if hasattr(env.unwrapped, "command_manager"):
@@ -275,23 +277,36 @@ def main():
                 obs, _ = env.reset()
                 teleop.reset_requested = False
 
-            # Extract policy observations
+            # Keep the same 5x45 contract as deployment. Isaac Lab versions may
+            # expose either a flat policy observation or an already-stacked one.
             if isinstance(obs, dict):
                 policy_obs = obs["policy"]
             else:
                 policy_obs = obs
 
-            # Directly inject teleoperation command into observation tensor slice [9:12]
-            policy_obs[:, 9] = float(teleop.cmd_vel[0])
-            policy_obs[:, 10] = float(teleop.cmd_vel[1])
-            policy_obs[:, 11] = float(teleop.cmd_vel[2])
+            if policy_obs.ndim == 2 and policy_obs.shape[-1] == 45:
+                policy_obs = policy_obs.clone()
+                policy_obs[:, 6:9] = torch.tensor(teleop.cmd_vel, device=policy_obs.device)
+                if history is None or history.shape[0] != policy_obs.shape[0]:
+                    history = policy_obs.unsqueeze(1).repeat(1, 5, 1)
+                else:
+                    history = torch.cat((history[:, 1:], policy_obs.unsqueeze(1)), dim=1)
+                policy_input = history
+            elif policy_obs.ndim == 3 and tuple(policy_obs.shape[1:]) == (5, 45):
+                policy_input = policy_obs.clone()
+                policy_input[:, -1, 6:9] = torch.tensor(teleop.cmd_vel, device=policy_obs.device)
+                history = policy_input
+            else:
+                raise RuntimeError(f"Isaac policy observation must be (N,45) or (N,5,45), got {tuple(policy_obs.shape)}")
 
             # State Machine: STANDUP (Hold q0) vs WALK (DreamWaQ RL Policy)
             if teleop.state in ["STANDBY", "STANDUP"]:
-                actions = torch.zeros((args_cli.num_envs, 12), device="cuda:0", dtype=torch.float32)
+                actions = torch.zeros((policy_input.shape[0], 12), device=policy_input.device, dtype=torch.float32)
             elif teleop.state == "WALK":
                 with torch.no_grad():
-                    actions = policy(policy_obs)
+                    actions = policy(policy_input)
+            else:
+                actions = torch.zeros((policy_input.shape[0], 12), device=policy_input.device, dtype=torch.float32)
 
             # Step Environment
             obs, rewards, dones, truncated, info = env.step(actions)

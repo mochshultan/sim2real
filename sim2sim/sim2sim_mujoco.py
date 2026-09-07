@@ -78,7 +78,8 @@ def find_latest_policy(requested_path=None, load_run=None, task=None) -> str:
         if os.path.isfile(req_p):
             if req_p.endswith(".pt") and "model_" in os.path.basename(req_p):
                 export_p = os.path.join(os.path.dirname(req_p), "exported", "policy.pt")
-                export_checkpoint_to_jit(req_p, export_p)
+                if not export_checkpoint_to_jit(req_p, export_p):
+                    raise RuntimeError(f"Could not export checkpoint: {req_p}")
                 return export_p
             return os.path.abspath(req_p)
         elif os.path.isdir(req_p):
@@ -91,7 +92,8 @@ def find_latest_policy(requested_path=None, load_run=None, task=None) -> str:
                 model_files.sort(key=lambda x: int(x.split("_")[1].split(".")[0]) if x.split("_")[1].split(".")[0].isdigit() else 0)
                 latest_m = os.path.join(req_p, model_files[-1])
                 export_p = os.path.join(req_p, "exported", "policy.pt")
-                export_checkpoint_to_jit(latest_m, export_p)
+                if not export_checkpoint_to_jit(latest_m, export_p):
+                    raise RuntimeError(f"Could not export checkpoint: {latest_m}")
                 return os.path.abspath(export_p)
             recursive_pt = glob.glob(os.path.join(req_p, "**", "*.pt"), recursive=True)
             if recursive_pt:

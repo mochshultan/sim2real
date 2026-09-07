@@ -202,7 +202,22 @@ class NXPJaguarControllerNode(Node):
 
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
         if not policy_param:
-            policy_param = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models/policy.pt"))
+            candidates = [
+                os.path.abspath(os.path.join(os.path.dirname(__file__), "../models/policy.pt")),
+            ]
+            try:
+                from ament_index_python.packages import get_package_share_directory
+                candidates.append(os.path.join(
+                    get_package_share_directory("jaguar_control"), "models", "policy.pt"))
+            except Exception:
+                pass
+            policy_param = next((path for path in candidates if os.path.isfile(path)), candidates[0])
+        if not os.path.isfile(policy_param):
+            raise FileNotFoundError(f"TorchScript policy not found: {policy_param}. Set policy_path explicitly.")
+
+        # Deployment target is the robot mini PC. Keep inference CPU-only and
+        # avoid allowing Torch to consume every control-core thread.
+        torch.set_num_threads(max(1, int(os.environ.get("JAGUAR_TORCH_THREADS", "1"))))
 
         self.torque_limit = float(self.get_parameter("torque_limit").value)
         self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
@@ -234,6 +249,10 @@ class NXPJaguarControllerNode(Node):
         self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
         self.policy = torch.jit.load(policy_param, map_location="cpu")
         self.policy.eval()
+        with torch.no_grad():
+            probe = self.policy(torch.zeros((1, 5, 45), dtype=torch.float32))
+        if tuple(probe.shape) != (1, 12) or not torch.isfinite(probe).all():
+            raise RuntimeError(f"Policy contract failure: expected finite (1,12), got {tuple(probe.shape)}")
 
         self.obs_builder = JaguarObservationBuilder()
         self.state_lock = threading.Lock()

@@ -9,7 +9,7 @@ The `cpp` branch executes low-level actuator communication through a native Linu
 ## Table of Contents
 1. [System Architecture](#1-system-architecture)
 2. [C++ Driver Modules](#2-c-driver-modules)
-3. [RL Policy Observation Space (48-D)](#3-rl-policy-observation-space-48-d)
+3. [RL Policy Observation Space (45-D x 5 history)](#3-rl-policy-observation-space-45-d-x-5-history)
 4. [Joint Index Remapping (Isaac Lab vs. Hardware)](#4-joint-index-remapping-isaac-lab-vs-hardware)
 5. [Actuator CAN Bus and Node ID Mapping](#5-actuator-can-bus-and-node-id-mapping)
 6. [Actuator Parameters and PD Impedance Gains](#6-actuator-parameters-and-pd-impedance-gains)
@@ -25,7 +25,7 @@ The `cpp` branch executes low-level actuator communication through a native Linu
 ```
 [ HIGH-LEVEL: RL Policy ]
       │  Model: TorchScript JIT (`policy.pt`) trained in Isaac Lab 3.0 (DreamWaQ)
-      │  Rate: 50 Hz (dt = 0.02 s) | Input: 48-D Observation | Output: 12-D Target Δq
+      │  Rate: 50 Hz (dt = 0.02 s) | Input: 5x45 Observation History | Output: 12-D Target Δq
       ▼
 [ MID-LEVEL: ROS 2 Controller Node (`scripts/nxp_jaguar_controller.py`) ]
       │  • Subscriptions: IMU (`/Imu_data`), Joy/Teleop (`/joy`, `/cmd_vel`), Joint States (`/robot_joint_states`)
@@ -55,21 +55,20 @@ C++ source headers reside in [`include/jaguar_control/`](file:///home/erc/sim2re
 | **`robstride_hardware_manager.hpp`** | `RobStrideHardwareManager` | Coordinates dual CAN channels (`can0` right 6 motors, `can1` left 6 motors), generates quintic startup trajectories, interpolates setpoints, and compensates encoder zero offsets. |
 | **`robstride_can_node.cpp`** | `RobStrideCANNode` | ROS 2 wrapper thread running under `SCHED_FIFO` at 200 Hz, bridging ROS topics to the low-level hardware manager. |
 
-## 3. RL Policy Observation Space (48-D)
+## 3. RL Policy Observation Space (45-D x 5 history)
 
-The actor policy ingests a 48-dimensional observation vector at 50 Hz:
+The actor policy ingests a 5-step history of 45-dimensional observations at 50 Hz:
 
 | Index Range | State Variable | Dimension | Unit | Description |
 | :---: | :--- | :---: | :---: | :--- |
-| `[0 : 3]` | `base_lin_vel` | 3 | $\text{m/s}$ | Base linear velocity in body frame $[v_x, v_y, v_z]$ |
-| `[3 : 6]` | `base_ang_vel` | 3 | $\text{rad/s}$ | Base angular velocity in body frame $[\omega_x, \omega_y, \omega_z]$ |
-| `[6 : 9]` | `projected_gravity` | 3 | unit | Projected gravity vector $[g_x, g_y, g_z]$ ($[0, 0, -1]$ upright) |
-| `[9 : 12]` | `velocity_commands` | 3 | $\text{m/s, rad/s}$ | Commanded planar velocity $[v_x^{\text{cmd}}, v_y^{\text{cmd}}, \omega_z^{\text{cmd}}]$ |
-| `[12 : 24]` | `joint_pos_rel` | 12 | $\text{rad}$ | Joint position relative to nominal: $(q_i - q_{0, i})$ |
-| `[24 : 36]` | `joint_vel` | 12 | $\text{rad/s}$ | Joint angular velocity $\dot{q}_i$ |
-| `[36 : 48]` | `actions` | 12 | $\text{rad}$ | Previous policy output $a_{t-1}$ |
+| `[0 : 3]` | `base_ang_vel` | 3 | $\text{rad/s}$ | Base angular velocity in body frame $[\omega_x, \omega_y, \omega_z]$ |
+| `[3 : 6]` | `projected_gravity` | 3 | unit | Projected gravity vector $[g_x, g_y, g_z]$ ($[0, 0, -1]$ upright) |
+| `[6 : 9]` | `velocity_commands` | 3 | $\text{m/s, rad/s}$ | Commanded planar velocity $[v_x^{\text{cmd}}, v_y^{\text{cmd}}, \omega_z^{\text{cmd}}]$ |
+| `[9 : 21]` | `joint_pos_rel` | 12 | $\text{rad}$ | Joint position relative to nominal: $(q_i - q_{0, i})$ |
+| `[21 : 33]` | `joint_vel` | 12 | $\text{rad/s}$ | Joint angular velocity $\dot{q}_i$ |
+| `[33 : 45]` | `actions` | 12 | $\text{rad}$ | Previous policy output $a_{t-1}$ |
 
-$$\text{Total Observation Dimension} = 3 + 3 + 3 + 3 + 12 + 12 + 12 = 48$$
+$$\text{Total Observation Dimension} = 3 + 3 + 3 + 12 + 12 + 12 = 45$$
 
 ## 4. Joint Index Remapping (Isaac Lab vs. Hardware)
 
@@ -336,6 +335,4 @@ With $w_{\text{ang\_l2}} = -0.5$, this term penalizes:
 1. **Yaw Stall**: Resisting turning commands or failing to pivot around $Z$ when steering is requested.
 2. **Uncommanded Yaw Drift**: Spinning out, twisting, or drifting off heading when commanded to walk straight or stand still ($\omega_{\text{cmd}, z} = 0$).
 Together, these terms maintain precise heading and drive execution across challenging rough terrains and obstacles.
-
-
 

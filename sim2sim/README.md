@@ -35,20 +35,19 @@ Verification pipeline for reinforcement learning locomotion policies (DreamWaQ) 
 5. **Non-Blocking Teleoperation**:
    - Captures terminal keystrokes asynchronously without requiring Enter key confirmations.
 
-## Observation Vector Specification (48-D)
+## Observation Vector Specification (45-D x 5 history)
 
 The observation vector matches the Isaac Lab training configuration (`LocomotionVelocityRoughEnvCfg.observations.policy`):
 
 | Index | Observation Component | Dimension | Mathematical Definition | Description |
 |---|---|---|---|---|
-| 1 | `base_lin_vel` | 3D | $R^T \mathbf{v}_{\text{world}}$ | Body frame linear velocity ($v_x, v_y, v_z$) |
-| 2 | `base_ang_vel` | 3D | $\boldsymbol{\omega}_{\text{body}}$ | Body frame angular velocity ($\omega_x, \omega_y, \omega_z$) |
-| 3 | `projected_gravity` | 3D | $R^T [0, 0, -1]^T$ | Projected gravitational acceleration in body frame |
-| 4 | `velocity_commands` | 3D | $[v_x^{\text{cmd}}, v_y^{\text{cmd}}, \omega_z^{\text{cmd}}]$ | Commanded planar velocity from user |
-| 5 | `joint_pos_rel` | 12D | $q_{\text{isaac}} - q_0$ | Joint angular position relative to nominal stance $q_0$ |
-| 6 | `joint_vel_rel` | 12D | $\dot{q}_{\text{isaac}}$ | Joint angular velocity |
-| 7 | `actions` | 12D | $a_{t-1}$ | Previous policy action output |
-| **Total** | **Observation** | **48D** | float32 Tensor | Policy actor input |
+| 1 | `base_ang_vel` | 3D | $\boldsymbol{\omega}_{\text{body}}$ | Body frame angular velocity |
+| 2 | `projected_gravity` | 3D | $R^T [0, 0, -1]^T$ | Projected gravitational acceleration in body frame |
+| 3 | `velocity_commands` | 3D | $[v_x^{\text{cmd}}, v_y^{\text{cmd}}, \omega_z^{\text{cmd}}]$ | Commanded planar velocity from user |
+| 4 | `joint_pos_rel` | 12D | $q_{\text{isaac}} - q_0$ | Joint angular position relative to nominal stance $q_0$ |
+| 5 | `joint_vel` | 12D | $\dot{q}_{\text{isaac}}$ | Joint angular velocity |
+| 6 | `actions` | 12D | $a_{t-1}$ | Previous policy action output |
+| **Total** | **Observation** | **45D** | float32 Tensor | One policy timestep; five timesteps are stacked |
 
 ## Joint Order Reconciliation
 
@@ -146,7 +145,7 @@ sim2sim/
 ├── README.md                 # Technical documentation
 ├── sim2sim_mujoco.py         # MuJoCo simulation environment
 ├── sim2sim_isaaclab.py       # Isaac Lab simulation environment
-├── observation_builder.py    # 48-D observation tensor construction and kinematics
+├── observation_builder.py    # 45-D observation tensor construction and kinematics
 └── models/
     ├── scene.xml             # MuJoCo lighting, floor, and visual scene
     ├── nxp_jaguar.xml        # MJCF robot description

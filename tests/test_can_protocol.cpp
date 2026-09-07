@@ -8,13 +8,13 @@ int main()
   MotorParams params;
   auto frame = buildEnableMotorFrame(1);
   assert(frame.can_dlc == 8);
-  frame.can_id = CAN_EFF_FLAG | (2U << 24) | (4U << 8) | 0xFD;
+  frame.can_id = CAN_EFF_FLAG | (2U << 24) | (4U << 8) | 0xFE;
   frame.can_dlc = 8;
   frame.data[0] = frame.data[2] = frame.data[4] = 0x7F;
   frame.data[1] = frame.data[3] = frame.data[5] = 0xFF;
   assert(parseFeedbackFrame(frame, params).valid);
   auto bad = frame;
-  bad.can_id = CAN_EFF_FLAG | (1U << 24) | (4U << 8) | 0xFD;
+  bad.can_id = CAN_EFF_FLAG | (1U << 24) | (4U << 8) | 0xFE;
   assert(!parseFeedbackFrame(bad, params).valid);
   bad = frame;
   bad.can_id |= CAN_RTR_FLAG;
