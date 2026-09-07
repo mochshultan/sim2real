@@ -122,6 +122,7 @@ class StateCheckerNode(Node):
                 self.joint_pos[i] = msg.position[ros_idx]
                 if len(msg.velocity) > ros_idx:
                     self.joint_vel[i] = msg.velocity[ros_idx]
+        self.joint_pos = (self.joint_pos + np.pi) % (2.0 * np.pi) - np.pi
         self.joint_count += 1
 
     def _cmd_cb(self, msg: Twist):

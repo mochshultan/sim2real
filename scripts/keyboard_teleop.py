@@ -71,6 +71,8 @@ class UnifiedTeleopNode(Node):
         self.vx = 0.0
         self.vy = 0.0
         self.wz = 0.0
+        self.input_source = "keyboard"
+        self.last_remote_input = 0.0
         self.current_state = "STANDBY"
         self.controller_feedback = "Menunggu status controller..."
         self.last_action = "Inisialisasi siap. Menunggu input Keyboard / Xbox."
@@ -124,9 +126,11 @@ class UnifiedTeleopNode(Node):
                 lx = msg.axes[0] if len(msg.axes) > 0 else 0.0
                 rx = msg.axes[3] if len(msg.axes) > 3 else (msg.axes[2] if len(msg.axes) > 2 else 0.0)
 
-                if abs(ly) >= DEADZONE: self.vx = round(float(np.clip(ly * MAX_VX, MIN_VX, MAX_VX)), 2)
-                if abs(lx) >= DEADZONE: self.vy = round(float(np.clip(-lx * MAX_VY, -MAX_VY, MAX_VY)), 2)
-                if abs(rx) >= DEADZONE: self.wz = round(float(np.clip(-rx * MAX_WZ, -MAX_WZ, MAX_WZ)), 2)
+                self.input_source = "remote"
+                self.last_remote_input = time.monotonic()
+                self.vx = round(float(np.clip(ly * MAX_VX, MIN_VX, MAX_VX)), 2) if np.isfinite(ly) and abs(ly) >= DEADZONE else 0.0
+                self.vy = round(float(np.clip(-lx * MAX_VY, -MAX_VY, MAX_VY)), 2) if np.isfinite(lx) and abs(lx) >= DEADZONE else 0.0
+                self.wz = round(float(np.clip(-rx * MAX_WZ, -MAX_WZ, MAX_WZ)), 2) if np.isfinite(rx) and abs(rx) >= DEADZONE else 0.0
 
             if len(msg.buttons) > 0 and msg.buttons[0] == 1:
                 self.current_state = "BERDIRI / STANDUP"
@@ -147,12 +151,11 @@ class UnifiedTeleopNode(Node):
     def _on_gamepad_event(self, state: XboxState, edges: Dict[str, Any]):
         """Triggered on any analog or digital event from LinuxGamepadReader."""
         with self.lock:
-            # 1. Update velocities from analog sticks
-            # Only override keyboard velocity if sticks are pushed past deadzone or if stick moved
-            if abs(state.lx) >= DEADZONE or abs(state.ly) >= DEADZONE or abs(state.rx) >= DEADZONE:
-                self.vx = state.vx
-                self.vy = state.vy
-                self.wz = state.wz
+            if state.connected:
+                self.input_source = "gamepad"
+                self.vx, self.vy, self.wz = state.vx, state.vy, state.wz
+            elif self.input_source == "gamepad":
+                self.vx = self.vy = self.wz = 0.0
 
             # 2. Button Edge Triggers (0 -> 1)
             # Button A: STANDUP
@@ -199,6 +202,8 @@ class UnifiedTeleopNode(Node):
 
     def _publish_loop(self):
         with self.lock:
+            if self.input_source == "remote" and time.monotonic() - self.last_remote_input > 0.25:
+                self.vx = self.vy = self.wz = 0.0
             # 1. Publish /cmd_vel
             twist = Twist()
             twist.linear.x = float(self.vx)
@@ -229,6 +234,7 @@ class UnifiedTeleopNode(Node):
 
     def handle_key(self, key: str):
         with self.lock:
+            self.input_source = "keyboard"
             k = key.lower()
             if k == '1':
                 self.current_state = "DUDUK / STANDBY"

@@ -36,6 +36,7 @@ Control nodes, teleoperation tools, calibration utilities, diagnostics, and brin
 
 | Script | Description |
 | :--- | :--- |
+| [`build.sh`](./build.sh) | Builds ROS 2 packages (`jaguar_control`, `serial_imu`) and sources the overlay workspace. |
 | [`bringup_canbus.sh`](./bringup_canbus.sh) | Sets up `can0` and `can1` SocketCAN interfaces at 1 Mbps with queue length 1000. |
 | [`bringup_imu.sh`](./bringup_imu.sh) | Sets `/dev/ttyUSB0` permissions and starts the `serial_imu talker` node. |
 | [`plot_torques.sh`](./plot_torques.sh) | Opens `rqt_plot` with 12 RobStride motor channels. |

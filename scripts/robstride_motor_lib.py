@@ -7,6 +7,8 @@ import can
 import copy
 import struct
 import math
+import threading
+import time
 
 LEGITIMATE_MOTORS = [
     "RobStride00",
@@ -125,6 +127,8 @@ class RobStrideMotorController:
     }
 
     bus = {}
+    bus_locks = {}
+    FEEDBACK_TIMEOUT = 0.25
 
     def __init__(self, bus="can0", motor_id=127, main_can_id=254, motor_dir=1, motor_type="RobStride00"):
         self.bus_name = bus
@@ -151,6 +155,11 @@ class RobStrideMotorController:
         self.vel_cur = 0.0
         self.tau_cur = 0.0
         self.temp_cur = 20.0
+        self.feedback_valid = False
+        self.last_feedback_time = 0.0
+        self.fault_reason = None
+        self._active = False
+        self._bus_lock = self.bus_locks.setdefault(bus, threading.RLock())
 
         if bus not in RobStrideMotorController.bus:
             try:
@@ -186,13 +195,36 @@ class RobStrideMotorController:
         assert self.angle_range[0] < self.angle_range[1], "Invalid Angle Range Specified."
 
     def set_angle_offset(self, angle_offset, deg=False):
+        if not math.isfinite(angle_offset):
+            raise ValueError("angle_offset must be finite")
+        self._invalidate_feedback("Angle calibration changed")
         if deg:
             self.angle_offset = angle_offset * math.pi / 180.0
         else:
             self.angle_offset = angle_offset
 
     def set_angle_scale(self, angle_scale):
+        if not math.isfinite(angle_scale) or angle_scale <= 0:
+            raise ValueError("angle_scale must be finite and positive")
+        self._invalidate_feedback("Angle scale changed")
         self.angle_scale = angle_scale
+
+    def feedback_fresh(self):
+        return self.feedback_valid and time.monotonic() - self.last_feedback_time <= self.FEEDBACK_TIMEOUT
+
+    def motion_ready(self):
+        return (self.fault_reason is None and self.feedback_fresh()
+                and (self.angle_range is None or self.angle_range[0] <= self.pos_cur <= self.angle_range[1]))
+
+    def _invalidate_feedback(self, reason):
+        self.feedback_valid = False
+        if self._active:
+            self.fault_reason = reason
+
+    def emergency_stop(self, reason="Operator stop"):
+        # Set the latch before waiting for the current bounded bus transaction.
+        self.fault_reason = reason
+        return self.disable_motor()
 
     def decode_data(self, data=[], format="f f"):
         format_list = format.split()
@@ -227,14 +259,15 @@ class RobStrideMotorController:
                 rdata.append(0x00)
         return rdata
 
-    def clear_can_rx(self, timeout=10, max_attempts=20):
+    def clear_can_rx(self, timeout=0, max_attempts=20):
         timeout_seconds = timeout / 1000.0
         attempts = 0
-        while attempts < max_attempts:
-            received_msg = RobStrideMotorController.bus[self.bus_name].recv(timeout=timeout_seconds)
-            if received_msg is None:
-                break
-            attempts += 1
+        with self._bus_lock:
+            while attempts < max_attempts:
+                received_msg = RobStrideMotorController.bus[self.bus_name].recv(timeout=timeout_seconds)
+                if received_msg is None:
+                    break
+                attempts += 1
 
     def write_single_param(self, param_name, value):
         param_info = self.PARAMETERS.get(param_name)
@@ -253,26 +286,57 @@ class RobStrideMotorController:
             cmd_mode=self.COMMAND_MODES["SINGLE_PARAM_WRITE"],
             data2=self.main_can_id,
             data1=data1,
-            timeout=2000,
+            timeout=20,
         )
         return self.parse_received_msg(received_msg_data, received_msg_arbitration_id)
 
-    def send_receive_can_message(self, cmd_mode, data2, data1, timeout=1000):
-        timeout_seconds = timeout / 1000.0
+    def send_receive_can_message(self, cmd_mode, data2, data1, timeout=20):
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be positive milliseconds")
+        timeout_seconds = min(timeout / 1000.0, 0.02)
         arbitration_id = (cmd_mode << 24) | (data2 << 8) | self.motor_id
         message = can.Message(arbitration_id=arbitration_id, data=data1, is_extended_id=True)
 
-        try:
-            RobStrideMotorController.bus[self.bus_name].send(message)
-        except Exception:
-            return None, None
-
-        received_msg = RobStrideMotorController.bus[self.bus_name].recv(timeout=timeout_seconds)
-        if received_msg:
-            return received_msg.data, received_msg.arbitration_id
+        with self._bus_lock:
+            try:
+                bus = RobStrideMotorController.bus[self.bus_name]
+                self.clear_can_rx()
+                bus.send(message, timeout=timeout_seconds)
+                deadline = time.monotonic() + timeout_seconds
+                for _ in range(128):
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    reply = bus.recv(timeout=remaining)
+                    if reply is None:
+                        break
+                    aid = reply.arbitration_id
+                    if (not reply.is_extended_id or reply.is_error_frame or reply.is_remote_frame
+                            or ((aid >> 8) & 0xFF) != self.motor_id
+                            or (aid & 0xFF) != self.main_can_id):
+                        continue
+                    if (aid >> 24) & 0x1F == self.COMMAND_MODES["FAULT_FEEDBACK"]:
+                        self.fault_reason = "Motor fault frame received"
+                        break
+                    if (aid >> 24) & 0x1F == self.COMMAND_MODES["MOTOR_FEEDBACK"]:
+                        return reply.data, aid
+            except (can.CanError, OSError, KeyError) as exc:
+                self._invalidate_feedback(f"CAN transaction failed: {exc}")
+                return None, None
+        self._invalidate_feedback("No matching feedback before CAN timeout")
         return None, None
 
     def parse_received_msg(self, data, arbitration_id):
+        if (data is None or arbitration_id is None or len(data) != 8
+                or ((arbitration_id >> 24) & 0x1F) != 2
+                or ((arbitration_id >> 8) & 0xFF) != self.motor_id
+                or (arbitration_id & 0xFF) != self.main_can_id):
+            self._invalidate_feedback("Invalid feedback frame")
+            return (None,) * 5
+        if (arbitration_id >> 16) & 0x3F:
+            self.fault_reason = "Motor reports a fault in feedback"
+            self.feedback_valid = False
+            return (None,) * 5
         if data is not None:
             motor_can_id = (arbitration_id >> 8) & 0xFF
             TWO_BYTES_BITS = 16
@@ -284,6 +348,16 @@ class RobStrideMotorController:
 
             if self.angle_offset is not None:
                 pos = pos + self.angle_offset
+
+            now = time.monotonic()
+            if self.feedback_fresh():
+                max_step = self.motorParams["V_MAX"] * self.angle_scale * (now - self.last_feedback_time) + 0.15
+                if abs(pos * self.angle_scale - self.pos_cur) > max_step:
+                    self.fault_reason = "Discontinuous encoder position; verify raw reference before restarting"
+                    self.feedback_valid = False
+                    return (None,) * 5
+            self.feedback_valid = True
+            self.last_feedback_time = now
             self.pos_cur = pos * self.angle_scale
             self.vel_cur = vel * self.angle_scale
             self.tau_cur = tau / self.angle_scale
@@ -296,12 +370,13 @@ class RobStrideMotorController:
         received_msg_data, received_msg_arbitration_id = self.send_receive_can_message(
             cmd_mode=self.COMMAND_MODES["MOTOR_ENABLE"],
             data2=self.main_can_id,
-            data1=[],
-            timeout=2000,
+            data1=[0] * 8,
+            timeout=20,
         )
         return self.parse_received_msg(received_msg_data, received_msg_arbitration_id)
 
     def disable_motor(self):
+        self._active = False
         self.clear_can_rx(0)
         received_msg_data, received_msg_arbitration_id = self.send_receive_can_message(
             cmd_mode=self.COMMAND_MODES["MOTOR_STOP"],
@@ -320,8 +395,8 @@ class RobStrideMotorController:
         received_msg_data, received_msg_arbitration_id = self.send_receive_can_message(
             cmd_mode=self.COMMAND_MODES["SET_MECHANICAL_ZERO"],
             data2=self.main_can_id,
-            data1=[1],
-            timeout=2000,
+            data1=[1] + [0] * 7,
+            timeout=20,
         )
         return self.parse_received_msg(received_msg_data, received_msg_arbitration_id)
 
@@ -335,7 +410,23 @@ class RobStrideMotorController:
         self.motor_id = new_motor_id
         return self.parse_received_msg(received_msg_data, received_msg_arbitration_id)
 
-    def send_control_command(self, p_ref, v_ref, kp, kd, tau_ff):
+    def send_control_command(self, p_ref, v_ref, kp, kd, tau_ff, timeout=20):
+        with self._bus_lock:
+            active = kp != 0 or kd != 0 or tau_ff != 0
+            if not all(math.isfinite(x) for x in (p_ref, v_ref, kp, kd, tau_ff)):
+                return self.emergency_stop("Non-finite motor command")
+            if self.fault_reason is not None:
+                return self.disable_motor()
+            if active and (not self.motion_ready() or kp < 0 or kd < 0
+                           or abs(p_ref - self.pos_cur) > 0.8):
+                return self.emergency_stop("Active command rejected: feedback, limits, or tracking error")
+            self._active = active
+            result = self._send_control_command(p_ref, v_ref, kp, kd, tau_ff, timeout)
+            if active and (not self.motion_ready()):
+                self.emergency_stop(self.fault_reason or "Feedback lost during active control")
+            return result
+
+    def _send_control_command(self, p_ref, v_ref, kp, kd, tau_ff, timeout):
         """
         Sends RobStride MIT Control Mode Command.
         Formula: tau = kp * (p_ref - pos) + kd * (v_ref - vel) + tau_ff
@@ -369,6 +460,7 @@ class RobStrideMotorController:
             cmd_mode=self.COMMAND_MODES["MOTOR_CONTROL"],
             data1=data1,
             data2=data2,
+            timeout=timeout,
         )
 
         return self.parse_received_msg(received_msg_data, received_msg_arbitration_id)

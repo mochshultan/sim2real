@@ -64,4 +64,4 @@ echo -e "${YELLOW}Tekan Ctrl+C untuk menghentikan driver IMU.${NC}"
 echo "-----------------------------------------------------"
 
 # 4. Launch serial_imu talker node
-exec ros2 run serial_imu talker
+exec ros2 run serial_imu talker --ros-args -p port:="$IMU_PORT"

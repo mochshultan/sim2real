@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include <chrono>
+#include <cmath>
 
 #ifdef __cplusplus
 extern "C" {
@@ -124,6 +125,11 @@ private:
     }
 
     ssize_t n = read(fd_, buf_, sizeof(buf_));
+    if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+      closeSerialPort();
+      std::memset(&raw_, 0, sizeof(raw_));
+      return;
+    }
     if (n <= 0) {
       return;
     }
@@ -134,8 +140,21 @@ private:
       int rev = ch_serial_input(&raw_, buf_[i]);
 
       if (raw_.nitem_code > 0 && raw_.item_code[raw_.nitem_code - 1] != KItemGWSOL) {
-        if (rev && raw_.nimu > 0) {
+        if (rev == 1 && raw_.nimu > 0) {
           const auto & imu_node = raw_.imu[raw_.nimu - 1];
+          bool has_acc = false, has_gyr = false, has_quat = false;
+          for (int j = 0; j < raw_.nitem_code; ++j) {
+            const auto item = raw_.item_code[j];
+            has_acc |= item == kItemAccRaw || item == KItemIMUSOL;
+            has_gyr |= item == kItemGyrRaw || item == KItemIMUSOL;
+            has_quat |= item == kItemRotationQuat || item == KItemIMUSOL;
+          }
+          double norm = 0;
+          bool finite = true;
+          for (float q : imu_node.quat) { finite &= std::isfinite(q); norm += q * q; }
+          for (float a : imu_node.acc) finite &= std::isfinite(a);
+          for (float g : imu_node.gyr) finite &= std::isfinite(g);
+          if (!has_acc || !has_gyr || !has_quat || !finite || std::abs(norm - 1.0) > 0.1) continue;
 
           imu_data.orientation.w = imu_node.quat[0];
           imu_data.orientation.x = imu_node.quat[1];

@@ -48,11 +48,17 @@ def main():
     print("Enabling Motors and setting MIT CONTROL_MODE...")
     for mid, motor in motors.items():
         can_id, pos, vel, tau, tem = motor.enable_motor()
-        print(f"Motor #{mid} -> Pos: {pos:.3f} rad, Vel: {vel:.3f}, Tau: {tau:.3f} Nm, Temp: {tem:.1f} C")
+        if pos is not None and vel is not None and tau is not None:
+            print(f"Motor #{mid} -> Pos: {pos:.3f} rad, Vel: {vel:.3f}, Tau: {tau:.3f} Nm, Temp: {tem:.1f} C")
+        else:
+            print(f"Motor #{mid} -> [WAIT/NO FEEDBACK] Enabled motor #{mid} (Feedback waiting)")
         motor.set_run_mode("CONTROL_MODE")
 
     start_time = time.time()
     dt = 1.0 / args.hz
+
+    # Clamp pos target to safe physical limits [-2.5, 2.5]
+    pos_target = np.clip(args.value, -2.5, 2.5) if args.task == "pos" else 0.0
 
     try:
         while (time.time() - start_time) < args.time:
@@ -60,18 +66,22 @@ def main():
                 if args.task == "sense" or args.task == "passive":
                     # Zero-torque passive sensing
                     can_id, pos, vel, tau, tem = motor.send_control_command(
-                        p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
+                        p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0, timeout=15
                     )
                 elif args.task == "pos":
                     can_id, pos, vel, tau, tem = motor.send_control_command(
-                        p_ref=args.value, v_ref=0.0, kp=args.kp, kd=args.kd, tau_ff=0.0
+                        p_ref=pos_target, v_ref=0.0, kp=args.kp, kd=args.kd, tau_ff=0.0, timeout=15
                     )
                 elif args.task == "torque":
+                    tau_target = np.clip(args.value, -10.0, 10.0)
                     can_id, pos, vel, tau, tem = motor.send_control_command(
-                        p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=args.value
+                        p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=tau_target, timeout=15
                     )
-                
-                print(f"\r[t={time.time() - start_time:.1f}s] Motor #{mid} | Pos: {pos:.3f} rad | Vel: {vel:.3f} rad/s | Tau: {tau:.3f} Nm | Temp: {tem:.1f}C", end="")
+
+                if pos is not None and vel is not None and tau is not None:
+                    print(f"\r[t={time.time() - start_time:.1f}s] Motor #{mid} | Pos: {pos:+.3f} rad | Vel: {vel:+.3f} rad/s | Tau: {tau:+.3f} Nm | Temp: {tem:4.1f}C", end="")
+                else:
+                    print(f"\r[t={time.time() - start_time:.1f}s] Motor #{mid} | [NO VALID TELEMETRY / TIMEOUT]", end="")
             time.sleep(dt)
     except KeyboardInterrupt:
         pass

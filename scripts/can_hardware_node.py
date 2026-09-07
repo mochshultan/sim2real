@@ -18,7 +18,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String, Float32MultiArray
+from std_msgs.msg import Bool, String, Float32MultiArray
 
 import parameters as P
 from robstride_motor_lib import RobStrideMotorController
@@ -40,8 +40,8 @@ NAME_TO_ROS_INDEX = {
 
 class RobotHardwareState:
     def __init__(self):
-        self.lock = threading.Lock()
-        self.pos = P.STANDBY_ANGLE.copy()
+        self.lock = threading.RLock()
+        self.pos = [float("nan")] * P.N_JOINTS
         self.vel = [0.0] * P.N_JOINTS
         self.tau = [0.0] * P.N_JOINTS
         self.temp = [25.0] * P.N_JOINTS
@@ -50,13 +50,14 @@ class RobotHardwareState:
 
 class RobotHardwareCommand:
     def __init__(self):
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.pos = P.STANDBY_ANGLE.copy()
         self.vel = [0.0] * P.N_JOINTS
         self.tau = [0.0] * P.N_JOINTS
         self.kp = P.KP_GAIN.copy()
         self.kd = P.KD_GAIN.copy()
         self.enabled = False
+        self.last_update = 0.0
 
 class CanHardwareDriverNode(Node):
     def __init__(self):
@@ -82,9 +83,11 @@ class CanHardwareDriverNode(Node):
         self.motors = [None] * P.N_JOINTS
         self.threads = []
         self.running = True
+        self.estopped = False
 
         # Subscribers
         self.create_subscription(JointState, "/joint_commands", self._cmd_cb, 10)
+        self.create_subscription(Bool, "/jaguar/emergency_stop", self._estop_cb, 10)
 
         # Publishers
         self.joint_state_pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -102,7 +105,18 @@ class CanHardwareDriverNode(Node):
         self.get_logger().info("CAN Hardware Driver Ready. Publishing /joint_states @ 200 Hz.")
 
     def _cmd_cb(self, msg: JointState):
+        names = [NAME_TO_ROS_INDEX.get(name) for name in msg.name]
+        if (len(msg.position) != 12 or len(msg.velocity) not in (0, 12)
+                or len(msg.effort) not in (0, 12, 24, 36)
+                or (msg.name and (len(names) != 12 or None in names or len(set(names)) != 12))
+                or not all(math.isfinite(x) for x in list(msg.position) + list(msg.velocity) + list(msg.effort))):
+            self._trip_fault("Malformed joint command")
+            return
         with self.cmd.lock:
+            if self.estopped:
+                return
+            self.cmd.vel = [0.0] * 12
+            self.cmd.tau = [0.0] * 12
             has_custom_gains = (len(msg.effort) >= 24)
             if msg.name:
                 for idx, name in enumerate(msg.name):
@@ -139,7 +153,36 @@ class CanHardwareDriverNode(Node):
                         self.cmd.kd[i] = self.default_coxa_kd if is_coxa else self.default_kd
                         if len(msg.effort) > i:
                             self.cmd.tau[i] = msg.effort[i]
-            self.cmd.enabled = True
+            self.cmd.enabled = any(x != 0 for x in self.cmd.kp + self.cmd.kd + self.cmd.tau)
+            self.cmd.last_update = time.monotonic()
+
+    def _estop_cb(self, msg):
+        if msg.data:
+            self._trip_fault("Emergency stop requested")
+
+    def _trip_fault(self, reason):
+        self.estopped = True
+        for motor in self.motors:
+            if motor is not None:
+                motor.fault_reason = reason
+        with self.cmd.lock:
+            self.cmd.enabled = False
+        self.get_logger().error(reason)
+
+    def _poll_motor(self, i):
+        with self.cmd.lock:
+            motor = self.motors[i]
+            if self.cmd.enabled and not self.estopped:
+                if (time.monotonic() - self.cmd.last_update > 0.1 or
+                        not all(m is not None and m.motion_ready() for m in self.motors)):
+                    self._trip_fault("Command timeout or missing motor feedback")
+                else:
+                    result = motor.send_control_command(self.cmd.pos[i], self.cmd.vel[i],
+                        self.cmd.kp[i], self.cmd.kd[i], self.cmd.tau[i], timeout=15)
+                    if not motor.motion_ready():
+                        self._trip_fault(motor.fault_reason or "Motor feedback lost")
+                    return result
+            return motor.send_control_command(0, 0, 0, 0, 0, timeout=10)
 
     def _setup_can(self):
         bus_list = sorted(list(set(P.DEVICE)))  # ["can0", "can1"]
@@ -166,18 +209,19 @@ class CanHardwareDriverNode(Node):
         self.get_logger().info(f"[{bus_name}] Enabling motors...")
         for i in indices:
             motor = self.motors[i]
-            can_id, pos, vel, tau, tem = motor.enable_motor()
-            self.get_logger().info(f"[{bus_name}] Motor #{P.CAN_ID[i]} ({P.JOINT_NAME[i]}) | Pos: {pos:.3f}, Temp: {tem:.1f}C")
-            time.sleep(0.05)
             motor.set_run_mode("CONTROL_MODE")
+            motor.send_control_command(0, 0, 0, 0, 0)
+            can_id, pos, vel, tau, tem = motor.enable_motor()
+            self.get_logger().info(f"[{bus_name}] Motor #{P.CAN_ID[i]} feedback: {pos!r}, temperature: {tem!r}")
             with self.state.lock:
-                self.state.pos[i] = pos
-                self.state.vel[i] = vel
-                self.state.tau[i] = tau
-                self.state.temp[i] = tem
+                if pos is not None:
+                    self.state.pos[i] = pos
+                    self.state.vel[i] = vel
+                    self.state.tau[i] = tau
+                    self.state.temp[i] = tem
 
-        # 3. Apply Offset Angles
-        self.get_logger().info(f"[{bus_name}] Applying angular calibration offsets...")
+        # 3. Apply Offset Angles and Joint Limits
+        self.get_logger().info(f"[{bus_name}] Applying angular calibration offsets and safety angle limits...")
         for i in indices:
             motor = self.motors[i]
             offset = 0.0
@@ -185,18 +229,29 @@ class CanHardwareDriverNode(Node):
                 offset = P.MOTOR_OFFSET_ANGLE[i]
             motor.set_angle_offset(offset)
 
+            is_coxa = (i % 3 == 0)
+            is_hip = (i % 3 == 1)
+            is_knee = (i % 3 == 2)
+            if is_coxa:
+                motor.set_angle_range(-0.50, +0.50)
+            elif is_hip:
+                motor.set_angle_range(-2.50, +0.20)
+            elif is_knee:
+                motor.set_angle_range(-0.20, +2.50)
+
         # 4. Safe Passive Standby (Kp=0, Kd=0 - Zero Torque Sensing Mode)
         self.get_logger().info(f"[{bus_name}] Setting motors to PASSIVE ZERO-TORQUE mode (Kp=0, Kd=0)...")
         for i in indices:
             motor = self.motors[i]
             can_id, pos, vel, tau, tem = motor.send_control_command(
-                p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
+                p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0, timeout=15
             )
             with self.state.lock:
-                if pos is not None: self.state.pos[i] = pos
-                if vel is not None: self.state.vel[i] = vel
-                if tau is not None: self.state.tau[i] = tau
-                if tem is not None: self.state.temp[i] = tem
+                if pos is not None and vel is not None and tau is not None:
+                    self.state.pos[i] = pos
+                    self.state.vel[i] = vel
+                    self.state.tau[i] = tau
+                    self.state.temp[i] = tem
 
         self.get_logger().info(f"[{bus_name}] Motor initialization complete. Running 200 Hz loop in SAFE PASSIVE mode.")
         with self.state.lock:
@@ -207,28 +262,12 @@ class CanHardwareDriverNode(Node):
         while self.running:
             t0 = time.time()
 
-            with self.cmd.lock:
-                p_ref = self.cmd.pos.copy()
-                v_ref = self.cmd.vel.copy()
-                t_ref = self.cmd.tau.copy()
-                kp_ref = self.cmd.kp.copy()
-                kd_ref = self.cmd.kd.copy()
-                enabled = self.cmd.enabled
-
             for i in indices:
                 motor = self.motors[i]
                 try:
-                    if enabled:
-                        can_id, pos, vel, tau, tem = motor.send_control_command(
-                            p_ref=p_ref[i], v_ref=v_ref[i], kp=kp_ref[i], kd=kd_ref[i], tau_ff=t_ref[i]
-                        )
-                    else:
-                        # SAFE PASSIVE: Zero torque, pure sensing when not commanded
-                        can_id, pos, vel, tau, tem = motor.send_control_command(
-                            p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
-                        )
+                    can_id, pos, vel, tau, tem = self._poll_motor(i)
 
-                    if pos is not None:
+                    if pos is not None and vel is not None and tau is not None:
                         with self.state.lock:
                             self.state.pos[i] = pos
                             self.state.vel[i] = vel
@@ -236,9 +275,10 @@ class CanHardwareDriverNode(Node):
                             self.state.temp[i] = tem
 
                     if tem is not None and tem > 75.0:
-                        self.get_logger().error(f"OVERHEAT WARNING: Motor #{P.CAN_ID[i]} ({P.JOINT_NAME[i]}) Temp={tem:.1f}C!")
+                        self._trip_fault(f"Motor overtemperature: {tem:.1f}C")
 
                 except Exception as e:
+                    self._trip_fault(f"CAN worker error: {e}")
                     with self.state.lock:
                         self.state.errors[i] += 1
 
@@ -252,6 +292,9 @@ class CanHardwareDriverNode(Node):
             pos = self.state.pos.copy()
             vel = self.state.vel.copy()
             tau = self.state.tau.copy()
+        for i, motor in enumerate(self.motors):
+            if motor is None or not motor.feedback_fresh():
+                pos[i] = vel[i] = tau[i] = float("nan")
 
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -276,7 +319,14 @@ class CanHardwareDriverNode(Node):
         self.status_pub.publish(status_msg)
 
     def disable_all_motors(self):
+        if getattr(self, "_shutdown_done", False):
+            return
+        self._shutdown_done = True
         self.running = False
+        self.estopped = True
+        for thread in self.threads:
+            if thread is not threading.current_thread():
+                thread.join()
         self.get_logger().info("Disabling all 12 RobStride RS00 motors...")
         for motor in self.motors:
             if motor is not None:

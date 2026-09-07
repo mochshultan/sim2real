@@ -15,7 +15,7 @@
 /* common type conversion */
 #define U1(p) (*((uint8_t *)(p)))
 #define I1(p) (*((int8_t  *)(p)))
-#define I2(p) (*((int16_t  *)(p)))
+static int16_t I2(uint8_t *p) {int16_t i; memcpy(&i,p,2); return i;}
 static uint16_t U2(uint8_t *p) {uint16_t u; memcpy(&u,p,2); return u;}
 static uint32_t U4(uint8_t *p) {uint32_t u; memcpy(&u,p,4); return u;}
 static float    R4(uint8_t *p) {float    r; memcpy(&r,p,4); return r;}
@@ -83,11 +83,42 @@ void ch_dump_imu_data(raw_t *raw)
 
 
 
+/* Validate the entire payload before changing any cached sensor data. */
+static int validate_data(raw_t *raw)
+{
+    int ofs = 0, count = 0;
+    const uint8_t *p = raw->buf + CH_HDR_SIZE;
+    while (ofs < raw->len) {
+        int size;
+        switch (p[ofs]) {
+            case kItemID: size = 2; break;
+            case kItemAccRaw:
+            case kItemGyrRaw:
+            case kItemMagRaw:
+            case kItemRotationEul: size = 7; break;
+            case kItemRotationQuat: size = 17; break;
+            case kItemPressure: size = 5; break;
+            case KItemIMUSOL: size = 76; break;
+            case KItemGWSOL:
+                if (raw->len - ofs < 8 || p[ofs + 2] > MAX_NODE_SIZE) return 0;
+                size = 8 + 76 * p[ofs + 2];
+                break;
+            default: return 0;
+        }
+        if (++count > (int)sizeof(raw->item_code) || size > raw->len - ofs) return 0;
+        ofs += size;
+    }
+    return count > 0;
+}
+
 /* parse the payload of a frame and feed into data section */
 static int parse_data(raw_t *raw)
 {
     int ofs = 0, i = 0;
     uint8_t *p = &raw->buf[CH_HDR_SIZE];
+    if (!validate_data(raw)) return -1;
+    memset(raw->imu, 0, sizeof(raw->imu));
+    raw->nimu = 0;
     memset(raw->item_code, 0, sizeof(raw->item_code));
     raw->nitem_code = 0;
 
@@ -126,6 +157,7 @@ static int parse_data(raw_t *raw)
                 ofs += 7;
                 break;
             case kItemRotationEul:
+                raw->nimu = 1;
                 raw->item_code[raw->nitem_code++] = kItemRotationEul;
                 raw->imu[0].eul[0] = (float)I2(p+ofs+1) / 100;
                 raw->imu[0].eul[1] = (float)I2(p+ofs+3) / 100;

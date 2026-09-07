@@ -49,6 +49,26 @@ STAND_POSE = np.array([
     0.0, -1.55,  1.35,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
+# ==============================================================================
+# PHYSICAL HARD JOINT LIMITS & SAFETY THRESHOLDS (NXP Jaguar Quadruped)
+# ==============================================================================
+JOINT_LIMITS_LOWER = np.array([
+    -0.50, -2.50, -0.20,  # BL: collar, hip, knee
+    -0.50, -2.50, -0.20,  # BR: collar, hip, knee
+    -0.50, -2.50, -0.20,  # FL: collar, hip, knee
+    -0.50, -2.50, -0.20,  # FR: collar, hip, knee
+], dtype=np.float64)
+
+JOINT_LIMITS_UPPER = np.array([
+    +0.50, +0.20, +2.50,  # BL: collar, hip, knee
+    +0.50, +0.20, +2.50,  # BR: collar, hip, knee
+    +0.50, +0.20, +2.50,  # FL: collar, hip, knee
+    +0.50, +0.20, +2.50,  # FR: collar, hip, knee
+], dtype=np.float64)
+
+MAX_ALLOWED_ERROR_RAD = 0.80  # Max allowable tracking error before Emergency Stop (rad)
+MAX_ALLOWED_TORQUE_NM = 14.0  # Max allowable joint torque before Emergency Stop (Nm)
+
 
 # ==============================================================================
 # TERMINAL INPUT HANDLER (Non-blocking keyboard reader)
@@ -95,7 +115,7 @@ class TerminalInputHandler:
 class SitStandController:
     def __init__(self):
         self.motors: List[Optional[RobStrideMotorController]] = [None] * P.N_JOINTS
-        self.joint_pos = np.zeros(P.N_JOINTS, dtype=np.float64)
+        self.joint_pos = np.full(P.N_JOINTS, np.nan, dtype=np.float64)
         self.joint_vel = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.joint_tau = np.zeros(P.N_JOINTS, dtype=np.float64)
         self.joint_tem = np.full(P.N_JOINTS, 25.0, dtype=np.float64)
@@ -262,11 +282,12 @@ class SitStandController:
                         motor_type=P.MOTOR_TYPE[i],
                         motor_dir=P.MOTOR_DIR[i]
                     )
-                    self.motors[i].enable_motor()
-                    time.sleep(0.01)
                     self.motors[i].set_run_mode("CONTROL_MODE")
+                    self.motors[i].send_control_command(0, 0, 0, 0, 0)
+                    self.motors[i].enable_motor()
                     if P.MOTOR_OFFSET_ANGLE[i]:
                         self.motors[i].set_angle_offset(P.MOTOR_OFFSET_ANGLE[i])
+                    self.motors[i].set_angle_range(JOINT_LIMITS_LOWER[i], JOINT_LIMITS_UPPER[i])
                 except Exception as e:
                     print(f"[ERROR] Gagal menghubungkan Motor #{P.CAN_ID[i]} pada {bus_name}: {e}")
 
@@ -285,7 +306,7 @@ class SitStandController:
                     can_id, pos, vel, tau, tem = motor.send_control_command(
                         p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
                     )
-                    if pos is not None:
+                    if pos is not None and vel is not None and tau is not None:
                         self.joint_pos[i] = pos
                         self.joint_vel[i] = vel
                         self.joint_tau[i] = tau
@@ -405,11 +426,16 @@ class SitStandController:
 
     def start_transition(self, target_state_name: str, target_pose: np.ndarray):
         with self.lock:
-            # Capture actual current joint positions as starting trajectory points
+            if (self.state == "EMERGENCY_STOP" or not self._motion_ready()
+                    or not np.all(np.isfinite(target_pose))):
+                self.status_msg = "Motion inhibited: all motors need fresh feedback within joint limits; restart after a fault."
+                return
             self.start_pos = self.joint_pos.copy()
-            # Calculate shortest angular path to prevent 360-degree motor spinning
-            diff = (target_pose - self.start_pos + np.pi) % (2 * np.pi) - np.pi
-            self.target_pos = self.start_pos + diff
+            self.cmd_pos = self.start_pos.copy()
+
+            # 2. Target pose is the absolute physical reference clamped to safe physical bounds
+            self.target_pos = np.clip(target_pose.copy(), JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
+
             self.target_state = target_state_name
             self.state = "TRANSITIONING"
             self.is_passive = False
@@ -419,8 +445,38 @@ class SitStandController:
             action_name = "DUDUK (0.0 rad)" if target_state_name == "SIT" else f"STANDUP (Hip Belakang {STAND_POSE[1]:.2f}, Knee Belakang +{STAND_POSE[2]:.2f})"
             self.status_msg = f"Memulai transisi halus ke {action_name} [Durasi: {self.duration:.1f}s, Kp: {self.kp:.1f}]..."
 
+    def _motion_ready(self):
+        return (np.all(np.isfinite(self.joint_pos))
+                and all(m is not None and m.motion_ready() for m in self.motors))
+
+    def _trip_fault(self, reason):
+        with self.lock:
+            self.is_passive = True
+            self.state = "EMERGENCY_STOP"
+            self.status_msg = reason
+            for motor in self.motors:
+                if motor is not None:
+                    motor.fault_reason = reason
+
+    def _poll_motor(self, i, kp_val, kd_val):
+        # A mode request cannot interleave between the decision and this send.
+        with self.lock:
+            motor = self.motors[i]
+            if not self.running or self.is_passive:
+                return motor.send_control_command(0, 0, 0, 0, 0)
+            if not self._motion_ready():
+                self._trip_fault("Motion inhibited: missing, stale, or invalid motor feedback")
+                return motor.disable_motor()
+            result = motor.send_control_command(
+                float(self.cmd_pos[i]), 0,
+                self.kp_coxa if i % 3 == 0 else kp_val,
+                self.kd_coxa if i % 3 == 0 else kd_val, 0)
+            if not motor.motion_ready():
+                self._trip_fault(motor.fault_reason or "Motor feedback lost")
+            return result
+
     def _control_loop(self):
-        """50 Hz (dt = 0.02s) continuous control and hardware CAN poll loop."""
+        """50 Hz (dt = 0.02s) continuous control, safety watchdog, and hardware CAN poll loop."""
         while self.running:
             t0 = time.time()
 
@@ -435,14 +491,64 @@ class SitStandController:
                 dur = self.duration
 
             if not is_passive:
+                if not self._motion_ready():
+                    self._trip_fault("Motion inhibited: motor feedback not ready")
+                    continue
+                # --- FAILSAFE 1: Position Tracking Error Watchdog (Anti-Cable Snap) ---
+                max_err = 0.0
+                max_err_idx = -1
+                for i in range(P.N_JOINTS):
+                    err = abs(self.joint_pos[i] - self.cmd_pos[i])
+                    if err > max_err:
+                        max_err = err
+                        max_err_idx = i
+
+                if max_err > MAX_ALLOWED_ERROR_RAD:
+                    self._trip_fault("Position tracking fault")
+                    with self.lock:
+                        self.is_passive = True
+                        self.state = "EMERGENCY_STOP"
+                        self.status_msg = f"🚨 [FAILSAFE DARURAT] Error {P.JOINT_NAME[max_err_idx]} = {max_err:.2f} rad > {MAX_ALLOWED_ERROR_RAD:.2f} rad! Torsi DIMATIKAN untuk mencegah kabel putus!"
+                    for m in self.motors:
+                        if m is not None:
+                            try:
+                                m.send_control_command(p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0)
+                            except Exception:
+                                pass
+                    continue
+
+                # --- FAILSAFE 2: Over-Torque Watchdog ---
+                max_tau = 0.0
+                max_tau_idx = -1
+                for i in range(P.N_JOINTS):
+                    if abs(self.joint_tau[i]) > max_tau:
+                        max_tau = abs(self.joint_tau[i])
+                        max_tau_idx = i
+
+                if max_tau > MAX_ALLOWED_TORQUE_NM:
+                    self._trip_fault("Motor torque limit exceeded")
+                    with self.lock:
+                        self.is_passive = True
+                        self.state = "EMERGENCY_STOP"
+                        self.status_msg = f"🚨 [FAILSAFE DARURAT] Over-torque {P.JOINT_NAME[max_tau_idx]} ({max_tau:.1f} Nm > {MAX_ALLOWED_TORQUE_NM:.1f} Nm)! Torsi dimatikan!"
+                    for m in self.motors:
+                        if m is not None:
+                            try:
+                                m.send_control_command(p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0)
+                            except Exception:
+                                pass
+                    continue
+
                 if current_state == "TRANSITIONING":
                     elapsed = time.time() - self.transition_start_time
                     progress = min(1.0, elapsed / dur)
 
                     # Smooth S-Curve (Cosine) Trajectory: s(t) = 0.5 * (1 - cos(pi * t))
-                    # Zero start velocity, zero end velocity, no jerk!
+                    # Zero endpoint velocity; endpoint acceleration is nonzero.
                     s = 0.5 * (1.0 - math.cos(math.pi * progress))
                     desired_pos = start_p + s * (target_p - start_p)
+                    # Guaranteed physical clamping
+                    desired_pos = np.clip(desired_pos, JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
 
                     with self.lock:
                         self.cmd_pos = desired_pos.copy()
@@ -461,36 +567,29 @@ class SitStandController:
                             self.state = "SIT (PASIF)"
                             self.status_msg = "✅ Posisi duduk stabil (0.5s). Motor otomatis dilemaskan (Mode PASIF)."
                 else:
-                    # Maintain target position
+                    # Maintain target position with physical clamping
                     with self.lock:
-                        self.cmd_pos = target_p.copy()
+                        self.cmd_pos = np.clip(target_p.copy(), JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
 
             # Send CAN commands & receive telemetry
             for i in range(P.N_JOINTS):
                 motor = self.motors[i]
                 if motor is not None:
                     try:
-                        if is_passive:
-                            # 100% Zero torque passive sensing
-                            can_id, pos, vel, tau, tem = motor.send_control_command(
-                                p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
-                            )
-                        else:
-                            is_coxa = (i % 3 == 0)
-                            kp_cmd = self.kp_coxa if is_coxa else kp_val
-                            kd_cmd = self.kd_coxa if is_coxa else kd_val
-                            can_id, pos, vel, tau, tem = motor.send_control_command(
-                                p_ref=self.cmd_pos[i], v_ref=0.0, kp=kp_cmd, kd=kd_cmd, tau_ff=0.0
-                            )
+                        can_id, pos, vel, tau, tem = self._poll_motor(i, kp_val, kd_val)
 
-                        if pos is not None:
+                        # Accept valid position/velocity/torque telemetry even if temperature is missing.
+                        if pos is not None and vel is not None and tau is not None:
                             with self.lock:
                                 self.joint_pos[i] = pos
                                 self.joint_vel[i] = vel
                                 self.joint_tau[i] = tau
                                 self.joint_tem[i] = tem
-                    except Exception:
-                        pass
+                        else:
+                            with self.lock:
+                                self.joint_pos[i] = self.joint_vel[i] = self.joint_tau[i] = self.joint_tem[i] = np.nan
+                    except Exception as exc:
+                        self._trip_fault(f"CAN error: {exc}")
 
             # Publish /joint_states to ROS 2 (50 Hz)
             if self.has_ros:
@@ -542,7 +641,9 @@ class SitStandController:
                     has_r = self.has_ros
 
                 # State Header & Badge
-                if is_pass:
+                if st == "EMERGENCY_STOP":
+                    state_badge = "\033[1;41;37m[ 🚨 STOP DARURAT (FAILSAFE TERPICU) ]\033[0m"
+                elif is_pass:
                     state_badge = "\033[1;33m[ 🛑 MODE PASIF (ZERO TORQUE) ]\033[0m"
                 elif st == "TRANSITIONING":
                     bar_len = 20
@@ -584,13 +685,19 @@ class SitStandController:
                     jname = P.JOINT_NAME[i]
                     curr = j_pos[i]
                     tgt = j_cmd[i] if not is_pass else 0.0
-                    diff = curr - tgt if not is_pass else 0.0
+                    diff = (curr - tgt + math.pi) % (2 * math.pi) - math.pi if not is_pass else 0.0
                     tem = j_tem[i]
 
                     # Colorize difference
-                    diff_str = f"{diff:+6.3f} rad" if not is_pass else "  --    "
+                    if not is_pass and abs(diff) > 0.4:
+                        diff_str = f"\033[1;31m{diff:+6.3f} rad\033[0m"
+                    elif not is_pass:
+                        diff_str = f"{diff:+6.3f} rad"
+                    else:
+                        diff_str = "  --    "
                     tgt_str = f"{tgt:+6.3f} rad" if not is_pass else "  --    "
-                    print(f" #{cid:<3} {dev:<6} {jname:<18} {curr:+8.4f} rad   {tgt_str:<14} {diff_str:<12} {tem:4.1f}°C")
+                    tem_str = f"{tem:4.1f}°C" if tem is not None else "\033[1;31mOFFLINE\033[0m"
+                    print(f" #{cid:<3} {dev:<6} {jname:<18} {curr:+8.4f} rad   {tgt_str:<14} {diff_str:<21} {tem_str}")
 
                 print("=" * 96)
                 print(" 🎮 KONTROL STIK XBOX BLUETOOTH / USB:")
@@ -619,8 +726,16 @@ class SitStandController:
             self.shutdown()
 
     def shutdown(self):
-        self.running = False
-        print("\n\nMematikan semua torsi motor secara aman...")
+        with self.lock:
+            if getattr(self, "_shutdown_done", False):
+                return
+            self._shutdown_done = True
+            self.running = False
+            self.is_passive = True
+        worker = getattr(self, "control_thread", None)
+        if worker is not None and worker is not threading.current_thread():
+            worker.join()
+        print("\nSending motor stop requests...")
         for motor in self.motors:
             if motor is not None:
                 try:
@@ -629,7 +744,7 @@ class SitStandController:
                     motor.disable_motor()
                 except Exception:
                     pass
-        print("✅ Seluruh motor telah dinonaktifkan (Torque Disabled).")
+        print("Stop requests completed; physical motor state is not independently verified.")
 
 
 def main():

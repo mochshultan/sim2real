@@ -54,6 +54,9 @@ public:
     default_coxa_kp_ = this->get_parameter("default_coxa_kp").as_double();
     default_coxa_kd_ = this->get_parameter("default_coxa_kd").as_double();
     rt_priority_ = this->get_parameter("rt_priority").as_int();
+    if (loop_hz_ < 1 || loop_hz_ > 1000 || rt_priority_ < 1 || rt_priority_ > 99) {
+      throw std::invalid_argument("rate_hz must be 1..1000 and rt_priority 1..99");
+    }
 
     buildNameMapping();
 
@@ -87,6 +90,8 @@ public:
 
     if (!hw_manager_.enableAndConfigureMotors()) {
       RCLCPP_ERROR(this->get_logger(), "Failed to configure RobStride motors!");
+      hw_manager_.shutdown();
+      throw std::runtime_error("Motor initialization failed");
     }
 
     // Diagnostics Timer (1 Hz)
@@ -149,12 +154,27 @@ private:
 
   void onJointCommand(const sensor_msgs::msg::JointState::SharedPtr msg)
   {
+    const auto effort_size = msg->effort.size();
+    if (msg->position.size() != N_JOINTS ||
+        (!msg->name.empty() && msg->name.size() != N_JOINTS) ||
+        (!msg->velocity.empty() && msg->velocity.size() != N_JOINTS) ||
+        (effort_size != 0 && effort_size != 12 && effort_size != 24 && effort_size != 36)) {
+      hw_manager_.triggerEmergencyStop("Malformed JointState command dimensions");
+      return;
+    }
+    std::vector<JointCommand> commands(N_JOINTS);
+    std::vector<bool> seen(N_JOINTS, false);
     bool has_custom_gains = (msg->effort.size() >= 24);
     if (msg->name.size() > 0) {
       for (size_t i = 0; i < msg->name.size(); ++i) {
         auto it = name_to_index_.find(msg->name[i]);
+        if (it == name_to_index_.end() || seen[it->second]) {
+          hw_manager_.triggerEmergencyStop("Unknown or repeated joint name");
+          return;
+        }
         if (it != name_to_index_.end()) {
           size_t idx = it->second;
+          seen[idx] = true;
           JointCommand cmd;
           cmd.position = (msg->position.size() > i) ? msg->position[i] : 0.0;
           cmd.velocity = (msg->velocity.size() > i) ? msg->velocity[i] : 0.0;
@@ -168,7 +188,7 @@ private:
             cmd.kp = is_coxa ? default_coxa_kp_ : default_kp_;
             cmd.kd = is_coxa ? default_coxa_kd_ : default_kd_;
           }
-          hw_manager_.setJointCommand(idx, cmd);
+          commands[idx] = cmd;
         }
       }
     } else if (msg->position.size() == N_JOINTS) {
@@ -186,13 +206,19 @@ private:
           cmd.kp = is_coxa ? default_coxa_kp_ : default_kp_;
           cmd.kd = is_coxa ? default_coxa_kd_ : default_kd_;
         }
-        hw_manager_.setJointCommand(i, cmd);
+        commands[i] = cmd;
       }
     }
+    hw_manager_.setJointCommands(commands);
   }
 
   void onMitCommand(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
+    if (msg->data.size() != 60 && msg->data.size() != 36) {
+      hw_manager_.triggerEmergencyStop("Malformed MIT command dimensions");
+      return;
+    }
+    std::vector<JointCommand> commands(N_JOINTS);
     // Format: 60 elements -> [12 pos, 12 vel, 12 kp, 12 kd, 12 effort]
     // Or 36 elements -> [12 pos, 12 vel, 12 effort] with default Kp/Kd
     if (msg->data.size() == 60) {
@@ -203,7 +229,7 @@ private:
         cmd.kp       = msg->data[24 + i];
         cmd.kd       = msg->data[36 + i];
         cmd.effort   = msg->data[48 + i];
-        hw_manager_.setJointCommand(i, cmd);
+        commands[i] = cmd;
       }
     } else if (msg->data.size() == 36) {
       for (size_t i = 0; i < N_JOINTS; ++i) {
@@ -214,9 +240,10 @@ private:
         bool is_coxa = (i % 3 == 0);
         cmd.kp       = is_coxa ? default_coxa_kp_ : default_kp_;
         cmd.kd       = is_coxa ? default_coxa_kd_ : default_kd_;
-        hw_manager_.setJointCommand(i, cmd);
+        commands[i] = cmd;
       }
     }
+    hw_manager_.setJointCommands(commands);
   }
 
   void onEmergencyStop(const std_msgs::msg::Bool::SharedPtr msg)

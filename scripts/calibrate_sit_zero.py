@@ -48,6 +48,23 @@ C_CLEAR   = "\033[2J\033[H"
 # FL: 6=Collar, 7=Hip, 8=Knee
 # FR: 9=Collar, 10=Hip, 11=Knee
 
+JOINT_LIMITS_LOWER = np.array([
+    -0.50, -2.50, -0.20,  # BL
+    -0.50, -2.50, -0.20,  # BR
+    -0.50, -2.50, -0.20,  # FL
+    -0.50, -2.50, -0.20,  # FR
+], dtype=np.float64)
+
+JOINT_LIMITS_UPPER = np.array([
+    +0.50, +0.20, +2.50,  # BL
+    +0.50, +0.20, +2.50,  # BR
+    +0.50, +0.20, +2.50,  # FL
+    +0.50, +0.20, +2.50,  # FR
+], dtype=np.float64)
+
+MAX_ALLOWED_ERROR_RAD = 0.80
+MAX_ALLOWED_TORQUE_NM = 14.0
+
 SINGLE_SELECTION_MAP: Dict[str, Tuple[str, List[int]]] = {
     # Front-Left (FL)
     '1': ('FL Coxa / Collar', [6]),
@@ -277,12 +294,23 @@ class SitZeroCalibrator:
                     motor.set_run_mode("CONTROL_MODE")
                     if P.MOTOR_OFFSET_ANGLE[i]:
                         motor.set_angle_offset(self.base_offsets[i])
+                    is_coxa = (i % 3 == 0)
+                    is_hip = (i % 3 == 1)
+                    is_knee = (i % 3 == 2)
+                    if is_coxa:
+                        motor.set_angle_range(-0.50, +0.50)
+                    elif is_hip:
+                        motor.set_angle_range(-2.50, +0.20)
+                    elif is_knee:
+                        motor.set_angle_range(-0.20, +2.50)
                     self.motors[i] = motor
                 except Exception as e:
                     print(f"\r\n{C_RED}[ERROR] Gagal menghubungkan Motor #{P.CAN_ID[i]} ({P.JOINT_NAME[i]}) pada {bus_name}: {e}{C_RESET}\r\n")
 
         self._read_all_motors_passive()
         with self.lock:
+            cur_norm = (self.joint_pos + np.pi) % (2 * np.pi) - np.pi
+            self.joint_pos = cur_norm.copy()
             self.cmd_pos = self.joint_pos.copy()
             self.start_pos = self.joint_pos.copy()
 
@@ -295,9 +323,9 @@ class SitZeroCalibrator:
             if motor is not None:
                 try:
                     _, pos, vel, tau, tem = motor.send_control_command(
-                        p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
+                        p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0, timeout=15
                     )
-                    if pos is not None:
+                    if pos is not None and vel is not None and tau is not None:
                         self.joint_pos[i] = pos
                         self.joint_vel[i] = vel
                         self.joint_tau[i] = tau
@@ -316,7 +344,8 @@ class SitZeroCalibrator:
                     except Exception:
                         pass
 
-            self.start_pos = self.joint_pos.copy()
+            cur_norm = (self.joint_pos + np.pi) % (2.0 * np.pi) - np.pi
+            self.start_pos = np.clip(cur_norm, JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
             self.transition_start_time = time.time()
             self.transition_duration = duration
             self.transition_progress = 0.0
@@ -335,10 +364,29 @@ class SitZeroCalibrator:
                     current_state = self.state
                     kp_val = self.kp
                     kd_val = self.kd
-                    target_q = self.delta_q.copy()
+                    target_q = np.clip(self.delta_q.copy(), JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
                     dur = self.transition_duration
 
                 if active:
+                    # Tracking error failsafe
+                    max_err = 0.0
+                    for idx in range(P.N_JOINTS):
+                        err = abs((self.joint_pos[idx] - self.cmd_pos[idx] + math.pi) % (2.0 * math.pi) - math.pi)
+                        if err > max_err:
+                            max_err = err
+                    if max_err > MAX_ALLOWED_ERROR_RAD:
+                        with self.lock:
+                            self.is_active = False
+                            self.state = "PASSIVE"
+                            self.status_msg = f"🚨 [FAILSAFE DARURAT] Tracking error ({max_err:.2f} rad > {MAX_ALLOWED_ERROR_RAD:.2f} rad)! Torsi dinonaktifkan!"
+                        for m in self.motors:
+                            if m is not None:
+                                try:
+                                    m.send_control_command(p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0, timeout=10)
+                                except Exception:
+                                    pass
+                        continue
+
                     if current_state == "TRANSITIONING":
                         elapsed = time.time() - self.transition_start_time
                         progress = min(1.0, elapsed / max(0.1, dur))
@@ -346,6 +394,7 @@ class SitZeroCalibrator:
                         # Smooth S-Curve (Cosine) Trajectory
                         s = 0.5 * (1.0 - math.cos(math.pi * progress))
                         desired_pos = self.start_pos + s * (target_q - self.start_pos)
+                        desired_pos = np.clip(desired_pos, JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
 
                         with self.lock:
                             self.cmd_pos = desired_pos.copy()
@@ -365,6 +414,7 @@ class SitZeroCalibrator:
                                     self.cmd_pos[i] += math.copysign(max_step, diff)
                                 else:
                                     self.cmd_pos[i] = target_q[i]
+                            self.cmd_pos = np.clip(self.cmd_pos, JOINT_LIMITS_LOWER, JOINT_LIMITS_UPPER)
 
                 # Send CAN commands & read feedback
                 for i in range(P.N_JOINTS):
@@ -373,17 +423,18 @@ class SitZeroCalibrator:
                         try:
                             if not active or current_state == "PASSIVE":
                                 _, pos, vel, tau, tem = motor.send_control_command(
-                                    p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0
+                                    p_ref=0.0, v_ref=0.0, kp=0.0, kd=0.0, tau_ff=0.0, timeout=10
                                 )
                             else:
                                 is_coxa = (i % 3 == 0)
                                 kp_cmd = self.kp_coxa if is_coxa else kp_val
                                 kd_cmd = self.kd_coxa if is_coxa else kd_val
+                                p_cmd_clamped = float(np.clip(self.cmd_pos[i], JOINT_LIMITS_LOWER[i], JOINT_LIMITS_UPPER[i]))
                                 _, pos, vel, tau, tem = motor.send_control_command(
-                                    p_ref=self.cmd_pos[i], v_ref=0.0, kp=kp_cmd, kd=kd_cmd, tau_ff=0.0
+                                    p_ref=p_cmd_clamped, v_ref=0.0, kp=kp_cmd, kd=kd_cmd, tau_ff=0.0, timeout=15
                                 )
 
-                            if pos is not None:
+                            if pos is not None and vel is not None and tau is not None:
                                 with self.lock:
                                     self.joint_pos[i] = pos
                                     self.joint_vel[i] = vel
@@ -391,10 +442,10 @@ class SitZeroCalibrator:
                                     self.joint_tem[i] = tem
 
                                 # Over-torque safety failsafe (>14.0 Nm)
-                                if abs(tau) > 14.0 and active:
+                                if abs(tau) > MAX_ALLOWED_TORQUE_NM and active:
                                     self.is_active = False
                                     self.state = "PASSIVE"
-                                    self.status_msg = f"🚨 [FAILSAFE] Over-torque pada {P.JOINT_NAME[i]} ({abs(tau):.1f} Nm > 14.0 Nm). Motor dinonaktifkan!"
+                                    self.status_msg = f"🚨 [FAILSAFE] Over-torque pada {P.JOINT_NAME[i]} ({abs(tau):.1f} Nm > {MAX_ALLOWED_TORQUE_NM:.1f} Nm). Motor dinonaktifkan!"
                         except Exception:
                             pass
             except Exception:

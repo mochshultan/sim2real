@@ -226,7 +226,7 @@ class LinuxGamepadReader:
                         try:
                             ev_bytes = os.read(fd, 8)
                             if len(ev_bytes) < 8:
-                                break
+                                raise OSError("Joystick disconnected")
                             t, val, ev_type, num = struct.unpack("<IhBB", ev_bytes)
 
                             is_btn = bool(ev_type & 0x01)
@@ -256,6 +256,10 @@ class LinuxGamepadReader:
                 with self.lock:
                     self.state.connected = False
                     self.state.name = "Terputus"
+                    self.state.lx = self.state.ly = self.state.rx = 0.0
+                    self.state.vx = self.state.vy = self.state.wz = 0.0
+                if self.callback:
+                    self.callback(self.state, {})
                 time.sleep(0.5)
 
     def _update_state_from_raw(self, raw_axes: List[float], raw_buttons: List[int], is_bt: bool):

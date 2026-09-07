@@ -151,7 +151,7 @@ inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_i
                  ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
                  (static_cast<uint32_t>(motor_id) & 0xFF) |
                  CAN_EFF_FLAG;
-  frame.can_dlc = 0;
+  frame.can_dlc = 8;
   return frame;
 }
 
@@ -217,21 +217,20 @@ struct MotorFeedback
 inline MotorFeedback parseFeedbackFrame(const struct can_frame & frame, const MotorParams & params)
 {
   MotorFeedback fb;
-  if (!(frame.can_id & CAN_EFF_FLAG)) {
+  if (!(frame.can_id & CAN_EFF_FLAG) || (frame.can_id & (CAN_RTR_FLAG | CAN_ERR_FLAG))) {
     return fb;
   }
 
   uint32_t raw_id = frame.can_id & CAN_EFF_MASK;
   uint8_t comm_mode = static_cast<uint8_t>((raw_id >> 24) & 0x1F);
 
-  // Only parse feedback frames (Command mode 1: Motor Control, 2: Motor Feedback)
-  if (comm_mode != CMD_MOTOR_CONTROL && comm_mode != CMD_MOTOR_FEEDBACK) {
+  if (comm_mode != CMD_MOTOR_FEEDBACK) {
     return fb;
   }
 
   fb.motor_id = static_cast<uint8_t>((raw_id >> 8) & 0xFF);
 
-  if (frame.can_dlc < 8) {
+  if (frame.can_dlc != 8) {
     return fb;
   }
 
@@ -244,6 +243,7 @@ inline MotorFeedback parseFeedbackFrame(const struct can_frame & frame, const Mo
   fb.velocity = uintToFloat(v_raw, params.v_min, params.v_max) * params.direction;
   fb.torque = uintToFloat(t_raw, params.t_min, params.t_max) * params.direction;
   fb.temperature = static_cast<double>(tem_raw) / 10.0;
+  fb.error = ((raw_id >> 16) & 0x3F) != 0;
   fb.valid = true;
 
   return fb;
