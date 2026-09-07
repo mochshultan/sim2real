@@ -8,6 +8,7 @@ int main()
   MotorParams params;
   auto frame = buildEnableMotorFrame(1);
   assert(frame.can_dlc == 8);
+  assert((frame.can_id & CAN_EFF_MASK & 0xFFFFU) == 0xFE01U);
   frame.can_id = CAN_EFF_FLAG | (2U << 24) | (4U << 8) | 0xFE;
   frame.can_dlc = 8;
   frame.data[0] = frame.data[2] = frame.data[4] = 0x7F;

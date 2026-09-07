@@ -148,8 +148,8 @@ inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_i
   std::memset(&frame, 0, sizeof(frame));
 
   frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_ENABLE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(motor_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(master_id) & 0xFF) |
+                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(motor_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
   return frame;
@@ -164,8 +164,8 @@ inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id 
   std::memset(&frame, 0, sizeof(frame));
 
   frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_STOP) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(motor_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(master_id) & 0xFF) |
+                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(motor_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
   return frame;
@@ -180,8 +180,8 @@ inline struct can_frame buildSetRunModeFrame(uint8_t motor_id, RunMode mode, uin
   std::memset(&frame, 0, sizeof(frame));
 
   frame.can_id = ((static_cast<uint32_t>(CMD_SINGLE_PARAM_WRITE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(motor_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(master_id) & 0xFF) |
+                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(motor_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
 
