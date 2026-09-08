@@ -28,8 +28,10 @@ echo "====================================================="
 echo " Building NXP Jaguar Control (ROS 2 Humble)          "
 echo "====================================================="
 
-echo "[1/3] Sourcing ROS 2 Humble..."
-if [ -f "/opt/ros/humble/setup.bash" ]; then
+echo "[1/3] Sourcing ROS 2..."
+if [ -f "/opt/ros/jazzy/setup.bash" ]; then
+    source /opt/ros/jazzy/setup.bash
+elif [ -f "/opt/ros/humble/setup.bash" ]; then
     source /opt/ros/humble/setup.bash
 elif [ -f "/opt/ros/foxy/setup.bash" ]; then
     source /opt/ros/foxy/setup.bash
@@ -38,10 +40,15 @@ else
 fi
 
 echo "[2/3] Running colcon build..."
+CMAKE_ARGS=""
+if [ -x "/usr/bin/python3" ]; then
+    CMAKE_ARGS="--cmake-args -DPython3_EXECUTABLE=/usr/bin/python3"
+fi
+
 if [ -d "$WORKSPACE_DIR/serial_imu" ]; then
-    colcon build --base-paths . serial_imu --packages-select jaguar_control serial_imu --symlink-install || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
+    colcon build --base-paths . serial_imu --packages-select jaguar_control serial_imu --symlink-install $CMAKE_ARGS || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
 else
-    colcon build --packages-select jaguar_control --symlink-install || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
+    colcon build --packages-select jaguar_control --symlink-install $CMAKE_ARGS || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
 fi
 
 echo "[3/3] Sourcing install/setup.bash..."

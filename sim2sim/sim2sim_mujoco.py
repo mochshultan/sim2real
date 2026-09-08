@@ -47,16 +47,25 @@ def export_checkpoint_to_jit(model_path: str, export_path: str) -> bool:
             DreamWaQActorCritic,
             FusedDreamWaQPolicy,
         )
+        ckpt = torch.load(model_path, map_location="cpu")
+        sd = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
+        critic_dim = 48
+        if "critic.mlp.0.weight" in sd:
+            critic_dim = sd["critic.mlp.0.weight"].shape[1]
+        elif "critic.critic.0.weight" in sd:
+            critic_dim = sd["critic.critic.0.weight"].shape[1]
+        elif "critic.0.weight" in sd:
+            critic_dim = sd["critic.0.weight"].shape[1]
+
         ac = DreamWaQActorCritic(
             history_len=5,
             obs_dim=45,
-            critic_dim=48,
+            critic_dim=critic_dim,
             action_dim=12,
             latent_dim=16,
             vel_dim=3,
         ).to("cpu")
-        ckpt = torch.load(model_path, map_location="cpu")
-        ac.load_state_dict(ckpt["model_state_dict"])
+        ac.load_state_dict(sd)
         ac.eval()
 
         fused = FusedDreamWaQPolicy(ac.cenet_encoder, ac.actor, history_len=5, obs_dim=45).to("cpu")
