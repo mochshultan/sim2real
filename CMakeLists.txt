@@ -47,6 +47,10 @@ if(BUILD_TESTING)
   target_include_directories(test_can_protocol PRIVATE include)
   target_compile_features(test_can_protocol PRIVATE cxx_std_17)
   add_test(NAME can_protocol COMMAND test_can_protocol)
+  add_executable(test_motion_safety tests/test_motion_safety.cpp)
+  target_include_directories(test_motion_safety PRIVATE include)
+  target_compile_features(test_motion_safety PRIVATE cxx_std_17)
+  add_test(NAME motion_safety COMMAND test_motion_safety)
 endif()
 
 target_link_libraries(robstride_can_node

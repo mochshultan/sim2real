@@ -4,6 +4,10 @@ nxp_jaguar_controller:
     torque_limit: 14.0
     shutdown_duration: 3.0
     shutdown_settle_delay: 0.5
+    safe_park_duration: 2.0
+    safe_park_kp: 14.0
+    safe_park_kd: 0.5
+    safe_park_double_press_window: 1.0
     cmd_timeout: 0.25
     joy_deadzone: 0.20
     action_ema_alpha: 0.0  # 0.0 = disabled (previously 0.55)

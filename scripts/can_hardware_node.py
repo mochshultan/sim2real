@@ -237,7 +237,7 @@ class CanHardwareDriverNode(Node):
             elif is_hip:
                 motor.set_angle_range(-2.50, +0.20)
             elif is_knee:
-                motor.set_angle_range(-0.20, +2.50)
+                motor.set_angle_range(-0.25, +2.50)
 
         # 4. Safe Passive Standby (Kp=0, Kd=0 - Zero Torque Sensing Mode)
         self.get_logger().info(f"[{bus_name}] Setting motors to PASSIVE ZERO-TORQUE mode (Kp=0, Kd=0)...")

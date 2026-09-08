@@ -68,10 +68,10 @@ def load_robot_init_state(config_path: str = ROBOT_CONFIG_PATH):
 
     if not joint_pos:
         joint_pos = {
-            "Fr_roll_joint": 0.0, "Fr_hip_pitch_joint": -1.40, "Fr_knee_joint": 1.30,
-            "Fl_roll_joint": 0.0, "Fl_hip_pitch_joint": -1.40, "Fl_knee_joint": 1.30,
-            "Br_roll_joint": 0.0, "Br_hip_pitch_joint": -1.30, "Br_knee_joint": 1.40,
-            "Bl_roll_joint": 0.0, "Bl_hip_pitch_joint": -1.30, "Bl_knee_joint": 1.40,
+            "Fr_roll_joint": 0.0, "Fr_hip_pitch_joint": -1.40, "Fr_knee_joint": 1.45,
+            "Fl_roll_joint": 0.0, "Fl_hip_pitch_joint": -1.40, "Fl_knee_joint": 1.45,
+            "Br_roll_joint": 0.0, "Br_hip_pitch_joint": -1.30, "Br_knee_joint": 1.55,
+            "Bl_roll_joint": 0.0, "Bl_hip_pitch_joint": -1.30, "Bl_knee_joint": 1.55,
         }
     return joint_pos, pos
 

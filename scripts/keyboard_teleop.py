@@ -186,19 +186,28 @@ class UnifiedTeleopNode(Node):
                 self.wz = 0.0
                 self.last_action = f"{C_YELLOW}[Xbox Y] Stop Kecepatan (Vx=0, Vy=0, Wz=0){C_RESET}"
 
-            # Button LB or Back: EMERGENCY STOP / SAFE SHUTDOWN
+            # LB/Back: hard emergency stop. RB: controlled safe park.
             if "btn_lb" in edges or "btn_back" in edges:
-                self.current_state = "SAFE SHUTDOWN"
+                self.current_state = "HARD E-STOP"
                 self.vx = 0.0
                 self.vy = 0.0
                 self.wz = 0.0
                 self.btn_standup_pulse = False
                 self.btn_walk_pulse = False
                 self.btn_sit_pulse = False
+                estop_msg = Bool()
+                estop_msg.data = True
+                self.estop_pub.publish(estop_msg)
+                self.last_action = f"{C_RED}[Xbox LB/Back] HARD E-STOP: semua motor dihentikan.{C_RESET}"
+            elif "btn_rb" in edges:
+                self.current_state = "SAFE PARK"
+                self.vx = 0.0
+                self.vy = 0.0
+                self.wz = 0.0
                 safe_msg = Bool()
                 safe_msg.data = True
                 self.safe_stop_pub.publish(safe_msg)
-                self.last_action = f"{C_RED}[Xbox LB/Back] SAFETY SWITCH DIPICU! Robot kembali ke RELAX POSE (nilai offset motor) dalam 3.0 detik lalu mati.{C_RESET}"
+                self.last_action = f"{C_YELLOW}[Xbox RB] SAFE PARK: menuju posisi duduk 0 rad.{C_RESET}"
 
     def _publish_loop(self):
         with self.lock:
@@ -305,8 +314,10 @@ class UnifiedTeleopNode(Node):
                 state_badge = f"{C_YELLOW}[ 🪑 {state_str} ]{C_RESET}"
 
             # Controller health parse
-            health_badge = f"{C_WHITE}Menunggu data RL...{C_RESET}"
-            if "Freq:" in self.controller_feedback and "Latency:" in self.controller_feedback:
+            health_badge = f"{C_WHITE}{self.controller_feedback}{C_RESET}"
+            if self.controller_feedback.startswith("WAITING_SENSORS"):
+                health_badge = f"{C_YELLOW}{self.controller_feedback}{C_RESET}"
+            elif "Freq:" in self.controller_feedback and "Latency:" in self.controller_feedback:
                 try:
                     parts = self.controller_feedback.split("|")
                     freq_part = [p for p in parts if "Freq:" in p][0].replace("Freq:", "").replace("Hz", "").strip()
@@ -350,7 +361,8 @@ class UnifiedTeleopNode(Node):
             output.append(f"  {C_BOLD}[Xbox X] / [1]{C_RESET} Duduk / Standby   {C_BOLD}[Xbox A] / [2]{C_RESET} Berdiri     {C_BOLD}[Xbox B] / [3]{C_RESET} Jalan (RL)")
             output.append(f"  {C_BOLD}[LeftStick Y] / [W/S]{C_RESET} Maju/Mundur     {C_BOLD}[LeftStick X] / [A/D]{C_RESET} Geser Samping")
             output.append(f"  {C_BOLD}[RightStick X] / [Q/E]{C_RESET} Putar (Yaw)")
-            output.append(f"  {C_BOLD}[Xbox Y] / [X]{C_RESET} Stop Kecepatan (V=0)    {C_BOLD}[Xbox LB] / [SPACE]{C_RESET} 🚨 EMERGENCY STOP")
+            output.append(f"  {C_BOLD}[Xbox Y] / [X]{C_RESET} Stop Kecepatan (V=0)")
+            output.append(f"  {C_BOLD}[Xbox RB] / [SPACE]{C_RESET} SAFE PARK ke 0 rad    {C_BOLD}[Xbox LB] / [Back]{C_RESET} HARD E-STOP")
             output.append(f"{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
             sys.stdout.write("\n".join(output) + "\n")
             sys.stdout.flush()

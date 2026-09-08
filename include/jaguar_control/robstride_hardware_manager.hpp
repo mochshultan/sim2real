@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <string>
 #include <memory>
 #include <chrono>
@@ -18,6 +19,8 @@ namespace robstride
 {
 
 constexpr size_t N_JOINTS = 12;
+// Feedback tolerance only; commanded positions retain their nominal limits.
+constexpr double POSITION_LIMIT_TOLERANCE = 0.2;
 
 struct JointConfig
 {
@@ -77,22 +80,22 @@ public:
     // BL (can1)
     joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3245, -0.50,  0.50, 20.0, 17.0, {}};
     joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1, +1.3483, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0488, -0.20,  2.50, 20.0, 17.0, {}};
+    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0488, -0.25,  2.50, 20.0, 17.0, {}};
 
     // BR (can0)
     joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1, +0.3517, -0.50,  0.50, 20.0, 17.0, {}};
     joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1, +1.3476, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0039, -0.20,  2.50, 20.0, 17.0, {}};
+    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0039, -0.25,  2.50, 20.0, 17.0, {}};
 
     // FL (can1)
     joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.50,  0.50, 20.0, 17.0, {}};
     joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1, +1.2127, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1, +0.0967, -0.20,  2.50, 20.0, 17.0, {}};
+    joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1, +0.0967, -0.25,  2.50, 20.0, 17.0, {}};
 
     // FR (can0)
     joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1, +0.1881, -0.50,  0.50, 20.0, 17.0, {}};
     joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1, +1.1767, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1, +0.2427, -0.20,  2.50, 20.0, 17.0, {}};
+    joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1, +0.2427, -0.25,  2.50, 20.0, 17.0, {}};
 
     for (size_t i = 0; i < N_JOINTS; ++i) {
       joint_configs_[i].motor_params.direction = joint_configs_[i].direction;
@@ -187,6 +190,19 @@ public:
     return true;
   }
 
+  bool safeParkRequested() const { return safe_park_requested_; }
+
+  void setSafeParkActive(bool active)
+  {
+    std::lock_guard<std::mutex> lock(cmd_mutex_);
+    if (active && !safe_park_active_) {
+      soft_fault_since_ = {};
+      safe_park_started_ = std::chrono::steady_clock::now();
+    }
+    safe_park_active_ = active;
+    if (active) safe_park_requested_ = false;
+  }
+
   void setPassiveMode(bool passive)
   {
     is_passive_mode_ = passive;
@@ -238,21 +254,7 @@ public:
       triggerEmergencyStop("Command watchdog expired");
     }
 
-    // Tracking error watchdog (Anti-Cable Snap)
-    if (!is_passive_mode_ && !emergency_stopped_) {
-      std::lock_guard<std::mutex> lock_state(state_mutex_);
-      for (size_t i = 0; i < N_JOINTS; ++i) {
-        const auto & state = states_[i];
-        const auto & cfg = joint_configs_[i];
-        double age = std::chrono::duration<double>(now - state.last_feedback_time).count();
-        if (!state.feedback_valid || age > feedback_timeout_sec_ ||
-            state.position < cfg.pos_min || state.position > cfg.pos_max ||
-            std::abs(state.position - commands_[i].position) > 0.80) {
-          triggerEmergencyStop("Feedback or tracking fault on " + cfg.name);
-          break;
-        }
-      }
-    }
+    checkMotionSafety(now);
 
     // 1. Send Commands to Motors
     {
@@ -268,7 +270,11 @@ public:
           // Zero torque, zero gains
           frame = buildMitControlFrame(cfg.can_id, 0.0, 0.0, 0.0, 0.0, 0.0, cfg.motor_params);
         } else {
-          const auto & cmd = commands_[i];
+          auto cmd = commands_[i];
+          if (safe_park_requested_) {
+            // Bounded low-gain hold while the controller starts its park trajectory.
+            cmd = {park_hold_pos_[i], 0.0, 14.0, 0.5, 0.0};
+          }
           double p_clamped = std::clamp(cmd.position, cfg.pos_min, cfg.pos_max);
           frame = buildMitControlFrame(
             cfg.can_id,
@@ -286,6 +292,62 @@ public:
 
     // 2. Read Incoming Motor Feedback
     readIncomingFeedbacks();
+  }
+
+  // Called under cmd_mutex_ by the communication loop; public for offline tests.
+  void checkMotionSafety(const std::chrono::steady_clock::time_point & now)
+  {
+    if (is_passive_mode_ || emergency_stopped_) { soft_fault_since_ = {}; return; }
+    if (safe_park_requested_ &&
+        std::chrono::duration<double>(now - park_request_time_).count() > 0.25) {
+      triggerEmergencyStop("SAFE_PARK controller acknowledgement timed out");
+      return;
+    }
+    if (safe_park_active_ &&
+        std::chrono::duration<double>(now - safe_park_started_).count() > 10.0) {
+      triggerEmergencyStop("SAFE_PARK completion timed out");
+      return;
+    }
+    std::lock_guard<std::mutex> lock_state(state_mutex_);
+    bool soft_fault = false;
+    std::string reason;
+    for (size_t i = 0; i < N_JOINTS; ++i) {
+      const auto & state = states_[i];
+      const auto & cfg = joint_configs_[i];
+      const double age = std::chrono::duration<double>(now - state.last_feedback_time).count();
+      const double extra = std::max({cfg.pos_min - state.position,
+                                    state.position - cfg.pos_max, 0.0});
+      if (!state.feedback_valid || age > feedback_timeout_sec_ ||
+          !std::isfinite(state.position) || extra > POSITION_LIMIT_TOLERANCE + 0.2) {
+        triggerEmergencyStop("Invalid/stale feedback or severe position excursion on " + cfg.name);
+        return;
+      }
+      const double error = std::abs(state.position - commands_[i].position);
+      // Existing modest overshoot can recover during park, but may not worsen.
+      const double limit = safe_park_active_ ?
+        std::max(POSITION_LIMIT_TOLERANCE, park_initial_extra_[i] + 0.05) :
+        POSITION_LIMIT_TOLERANCE;
+      if (extra > limit || error > 1.57) {
+        soft_fault = true;
+        reason = cfg.name + " tracking=" + std::to_string(error) +
+          " rad (limit=1.57), position excess=" + std::to_string(extra);
+      }
+      if (!safe_park_active_) {
+        park_hold_pos_[i] = state.position;
+        park_initial_extra_[i] = extra;
+      }
+    }
+    if (safe_park_requested_) return;
+    if (!soft_fault) { soft_fault_since_ = {}; return; }
+    if (soft_fault_since_ == std::chrono::steady_clock::time_point{}) soft_fault_since_ = now;
+    if (std::chrono::duration<double>(now - soft_fault_since_).count() < 0.1) return;
+    if (safe_park_active_) {
+      triggerEmergencyStop("Fault during SAFE_PARK: " + reason);
+    } else {
+      park_request_time_ = now;
+      safe_park_requested_ = true;
+      std::cerr << "[RobStrideHardwareManager] SAFE_PARK requested: " << reason << std::endl;
+    }
   }
 
   void readIncomingFeedbacks()
@@ -405,6 +467,13 @@ private:
   std::atomic<bool> emergency_stopped_;
   std::atomic<bool> is_passive_mode_;
 
+  std::atomic<bool> safe_park_requested_{false};
+  bool safe_park_active_ = false;
+  std::array<double, N_JOINTS> park_hold_pos_{};
+  std::array<double, N_JOINTS> park_initial_extra_{};
+  std::chrono::steady_clock::time_point soft_fault_since_{};
+  std::chrono::steady_clock::time_point park_request_time_{};
+  std::chrono::steady_clock::time_point safe_park_started_{};
   double watchdog_timeout_sec_;
   const double feedback_timeout_sec_ = 0.25;
   std::chrono::steady_clock::time_point last_command_time_;

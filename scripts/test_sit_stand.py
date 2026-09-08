@@ -2,7 +2,7 @@
 """
 🐾 NXP Jaguar: Standalone Sit & Stand Transition Tester (CAN Direct)
 Interactive Terminal Control & Bluetooth/USB Xbox Gamepad interface for testing smooth,
-non-aggressive Sit (0.0 rad) and Stand (Front Hip -1.55, Front Knee +1.35, Rear Hip -1.55, Rear Knee +1.35) transitions.
+non-aggressive Sit (0.0 rad) and Stand (Front Hip -1.55, Front Knee +1.45, Rear Hip -1.55, Rear Knee +1.55) transitions.
 
 Supports:
 - Direct Linux Bluetooth & USB Xbox Gamepad (/dev/input/js*)
@@ -41,22 +41,22 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose (Kaki belakang: Hip -1.55 rad, Knee +1.35 rad; Kaki depan: Hip -1.55 rad, Knee +1.35 rad)
+# Standing pose (Kaki belakang: Hip -1.55 rad, Knee +1.55 rad; Kaki depan: Hip -1.55 rad, Knee +1.45 rad)
 STAND_POSE = np.array([
-    0.0, -1.55,  1.35,  # BL: collar, hip, knee
-    0.0, -1.55,  1.35,  # BR: collar, hip, knee
-    0.0, -1.55,  1.35,  # FL: collar, hip, knee
-    0.0, -1.55,  1.35,  # FR: collar, hip, knee
+    0.0, -1.55,  1.55,  # BL: collar, hip, knee
+    0.0, -1.55,  1.55,  # BR: collar, hip, knee
+    0.0, -1.55,  1.45,  # FL: collar, hip, knee
+    0.0, -1.55,  1.45,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 # ==============================================================================
 # PHYSICAL HARD JOINT LIMITS & SAFETY THRESHOLDS (NXP Jaguar Quadruped)
 # ==============================================================================
 JOINT_LIMITS_LOWER = np.array([
-    -0.50, -2.50, -0.20,  # BL: collar, hip, knee
-    -0.50, -2.50, -0.20,  # BR: collar, hip, knee
-    -0.50, -2.50, -0.20,  # FL: collar, hip, knee
-    -0.50, -2.50, -0.20,  # FR: collar, hip, knee
+    -0.50, -2.50, -0.25,  # BL: collar, hip, knee
+    -0.50, -2.50, -0.25,  # BR: collar, hip, knee
+    -0.50, -2.50, -0.25,  # FL: collar, hip, knee
+    -0.50, -2.50, -0.25,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 JOINT_LIMITS_UPPER = np.array([

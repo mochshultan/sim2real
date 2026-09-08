@@ -52,10 +52,10 @@ SIT_POSE = np.zeros(P.N_JOINTS, dtype=np.float64)
 # FR: 9=Collar, 10=Hip, 11=Knee
 
 JOINT_LIMITS_LOWER = np.array([
-    -0.50, -2.50, -0.20,  # BL
-    -0.50, -2.50, -0.20,  # BR
-    -0.50, -2.50, -0.20,  # FL
-    -0.50, -2.50, -0.20,  # FR
+    -0.50, -2.50, -0.25,  # BL
+    -0.50, -2.50, -0.25,  # BR
+    -0.50, -2.50, -0.25,  # FL
+    -0.50, -2.50, -0.25,  # FR
 ], dtype=np.float64)
 
 JOINT_LIMITS_UPPER = np.array([
@@ -306,7 +306,7 @@ class StandPoseCalibrator:
                     elif is_hip:
                         motor.set_angle_range(-2.50, +0.20)
                     elif is_knee:
-                        motor.set_angle_range(-0.20, +2.50)
+                        motor.set_angle_range(-0.25, +2.50)
                     self.motors[i] = motor
                 except Exception as e:
                     print(f"\r\n{C_RED}[ERROR] Gagal menghubungkan Motor #{P.CAN_ID[i]} ({P.JOINT_NAME[i]}) pada {bus_name}: {e}{C_RESET}\r\n")

@@ -67,13 +67,13 @@ RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0 (nxp_jaguar.py):
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.3, Knee: +1.4
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.4, Knee: +1.3
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.3, Knee: +1.55
+#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.4, Knee: +1.45
 DEFAULT_ANGLE = [
-     0.0, -1.30,  1.40,  # BL
-     0.0, -1.30,  1.40,  # BR
-     0.0, -1.40,  1.30,  # FL
-     0.0, -1.40,  1.30,  # FR
+     0.0, -1.30,  1.55,  # BL
+     0.0, -1.30,  1.55,  # BR
+     0.0, -1.40,  1.45,  # FL
+     0.0, -1.40,  1.45,  # FR
 ]
 
 import os

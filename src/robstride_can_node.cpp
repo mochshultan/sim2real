@@ -81,6 +81,11 @@ public:
       std::bind(&RobStrideCanNode::onEmergencyStop, this, std::placeholders::_1)
     );
 
+    safe_park_pub_ = this->create_publisher<std_msgs::msg::Bool>("/jaguar/hardware_safe_park", 10);
+    safe_park_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+      "/jaguar/safe_park_active", 10,
+      [this](std_msgs::msg::Bool::SharedPtr msg) { hw_manager_.setSafeParkActive(msg->data); });
+
     // Initialize CAN Hardware
     if (!hw_manager_.initializeBuses()) {
       RCLCPP_ERROR(this->get_logger(), "Failed to open CAN buses! Exiting...");
@@ -277,6 +282,12 @@ private:
       // 1. Step CAN communication
       hw_manager_.stepCommunicationCycle();
 
+      if (hw_manager_.safeParkRequested()) {
+        std_msgs::msg::Bool request;
+        request.data = true;
+        safe_park_pub_->publish(request);
+      }
+
       // 2. Publish Joint States
       auto states = hw_manager_.getAllJointStates();
       js_msg.header.stamp = this->get_clock()->now();
@@ -354,6 +365,8 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr mit_cmd_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr estop_sub_;
 
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr safe_park_pub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr safe_park_sub_;
   rclcpp::TimerBase::SharedPtr diag_timer_;
   std::thread rt_thread_;
 };
