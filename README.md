@@ -235,6 +235,19 @@ source /home/erc/sim2real/install/setup.bash
 ros2 launch jaguar_control sim2real.launch.py
 ```
 
+The launch file starts the teleop hub on the robot PC for direct Xbox input.
+For interactive keyboard control, disable the launch-managed instance and run
+the hub in a separate robot-PC terminal:
+
+```bash
+ros2 launch jaguar_control sim2real.launch.py with_teleop:=false
+# In another terminal on the robot PC:
+ros2 run jaguar_control keyboard_teleop.py
+```
+
+The hub reads `/dev/input/js*` directly, so the separate `joy_node` remains
+disabled by default. Velocity uses `/cmd_vel`; mode-button pulses use `/joy`.
+
 ## 9. Diagnostic and Calibration Utilities
 
 > [!NOTE]
@@ -335,4 +348,3 @@ With $w_{\text{ang\_l2}} = -0.5$, this term penalizes:
 1. **Yaw Stall**: Resisting turning commands or failing to pivot around $Z$ when steering is requested.
 2. **Uncommanded Yaw Drift**: Spinning out, twisting, or drifting off heading when commanded to walk straight or stand still ($\omega_{\text{cmd}, z} = 0$).
 Together, these terms maintain precise heading and drive execution across challenging rough terrains and obstacles.
-

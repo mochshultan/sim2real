@@ -28,8 +28,13 @@ def generate_launch_description():
     )
     with_joy_arg = DeclareLaunchArgument(
         "with_joy",
+        default_value="false",
+        description="Launch optional joy_node remapped to /joy_raw",
+    )
+    with_teleop_arg = DeclareLaunchArgument(
+        "with_teleop",
         default_value="true",
-        description="Launch joy_node (set to true if using physical gamepad /dev/input/js0)",
+        description="Launch unified keyboard/Xbox teleoperation hub",
     )
     with_hardware_arg = DeclareLaunchArgument(
         "with_hardware",
@@ -51,6 +56,7 @@ def generate_launch_description():
     policy_path = LaunchConfiguration("policy_path")
     with_imu = LaunchConfiguration("with_imu")
     with_joy = LaunchConfiguration("with_joy")
+    with_teleop = LaunchConfiguration("with_teleop")
     with_hardware = LaunchConfiguration("with_hardware")
     use_cpp_hardware = LaunchConfiguration("use_cpp_hardware")
     with_controller = LaunchConfiguration("with_controller")
@@ -64,14 +70,24 @@ def generate_launch_description():
         condition=IfCondition(with_imu),
     )
 
-    # 2. Joystick Teleop Node
+    # 2. Raw joystick source for keyboard_teleop. Keep raw events away from the
+    # controller's normalized /joy mode topic.
     joy_node = Node(
         package="joy",
         executable="joy_node",
         name="joy_node",
         output="screen",
         parameters=[config_file],
+        remappings=[("/joy", "/joy_raw")],
         condition=IfCondition(with_joy),
+    )
+
+    teleop_node = Node(
+        package="jaguar_control",
+        executable="keyboard_teleop.py",
+        name="jaguar_unified_teleop",
+        output="screen",
+        condition=IfCondition(with_teleop),
     )
 
     # 3A. RobStride C++ Hard Real-Time CAN Node (Default, Deterministic 200 Hz)
@@ -116,11 +132,13 @@ def generate_launch_description():
         policy_path_arg,
         with_imu_arg,
         with_joy_arg,
+        with_teleop_arg,
         with_hardware_arg,
         use_cpp_hardware_arg,
         with_controller_arg,
         imu_node,
         joy_node,
+        teleop_node,
         cpp_hardware_node,
         py_hardware_node,
         controller_node,

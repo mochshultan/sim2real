@@ -26,6 +26,7 @@ JSIOCGNAME = lambda length: 0x80006a13 + (length << 16)
 JSIOCGAXES = 0x80016a11
 JSIOCGBUTTONS = 0x80016a12
 DEADZONE_DEFAULT = 0.10
+MAX_EVENTS_PER_BATCH = 64
 
 CALIBRATION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamepad_calibration.json")
 
@@ -79,9 +80,16 @@ class XboxState:
         self.vy: float = 0.0        # Lateral velocity (m/s)
         self.wz: float = 0.0        # Yaw rate (rad/s)
 
-    def compute_velocities(self, max_vx: float = 1.0, max_vy: float = 1.0, max_wz: float = 1.0, deadzone: float = DEADZONE_DEFAULT):
+    def compute_velocities(
+        self,
+        max_vx: float = 1.0,
+        max_vy: float = 1.0,
+        max_wz: float = 1.0,
+        deadzone: float = DEADZONE_DEFAULT,
+        calibration: Optional[Dict[str, Any]] = None,
+    ):
         """Computes robot command velocities with auto-calibrated zero-offset and deadzone."""
-        calib = load_gamepad_calibration()
+        calib = calibration
 
         def process_axis(raw_val: float, axis_name: str) -> float:
             if calib and "axes" in calib and axis_name in calib["axes"]:
@@ -145,6 +153,9 @@ class LinuxGamepadReader:
     def __init__(self, callback: Optional[Callable[[XboxState, Dict[str, Any]], None]] = None, deadzone: float = DEADZONE_DEFAULT):
         self.callback = callback
         self.deadzone = deadzone
+        # Calibration is static while a teleop process is running. Loading it once
+        # avoids filesystem I/O and JSON parsing on every joystick event.
+        self.calibration = load_gamepad_calibration()
         self.state = XboxState()
         self.prev_state = XboxState()
         self.lock = threading.RLock()
@@ -220,9 +231,10 @@ class LinuxGamepadReader:
                     if not rlist:
                         continue
 
-                    # Drain all pending events in batch
+                    # Drain a bounded batch. A continuously busy device must not
+                    # postpone the callback indefinitely while waiting for an empty queue.
                     events_parsed = 0
-                    while True:
+                    while events_parsed < MAX_EVENTS_PER_BATCH:
                         try:
                             ev_bytes = os.read(fd, 8)
                             if len(ev_bytes) < 8:
@@ -263,6 +275,8 @@ class LinuxGamepadReader:
                 time.sleep(0.5)
 
     def _update_state_from_raw(self, raw_axes: List[float], raw_buttons: List[int], is_bt: bool):
+        callback_state = None
+        rising_edges = {}
         with self.lock:
             self.state.last_update_time = time.time()
 
@@ -333,10 +347,12 @@ class LinuxGamepadReader:
                     self.state.dpad_down = 1 if raw_axes[7] > 0.5 else 0
 
             # Compute velocities
-            self.state.compute_velocities(deadzone=self.deadzone)
+            self.state.compute_velocities(
+                deadzone=self.deadzone,
+                calibration=self.calibration,
+            )
 
             # Detect rising edges (button presses 0 -> 1)
-            rising_edges = {}
             for btn_name in ["btn_a", "btn_b", "btn_x", "btn_y", "btn_lb", "btn_rb",
                              "btn_back", "btn_start", "btn_guide", "btn_thumb_l", "btn_thumb_r",
                              "dpad_up", "dpad_down", "dpad_left", "dpad_right"]:
@@ -346,13 +362,15 @@ class LinuxGamepadReader:
                     rising_edges[btn_name] = True
 
             self.prev_state = self.state.copy()
+            callback_state = self.state.copy()
 
-            # Callback invocation
-            if self.callback is not None:
-                try:
-                    self.callback(self.state.copy(), rising_edges)
-                except Exception as e:
-                    pass
+        # Do not hold the reader lock while a ROS callback publishes messages or
+        # waits for another lock. This keeps event draining responsive.
+        if self.callback is not None:
+            try:
+                self.callback(callback_state, rising_edges)
+            except Exception:
+                pass
 
 
 def main():

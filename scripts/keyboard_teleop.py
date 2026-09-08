@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy, Imu
 from std_msgs.msg import Bool, String
@@ -46,6 +47,14 @@ MAX_VX = 1.0
 MIN_VX = -1.0
 MAX_VY = 1.0
 MAX_WZ = 1.0
+PUBLISH_PERIOD = 0.02
+UI_REFRESH_PERIOD = 0.25
+COMMAND_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
 
 
 class UnifiedTeleopNode(Node):
@@ -53,8 +62,9 @@ class UnifiedTeleopNode(Node):
         super().__init__("jaguar_unified_teleop")
 
         # Publishers
-        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
-        self.joy_pub = self.create_publisher(Joy, "/joy", 10)
+        # /cmd_vel is the only velocity command path. /joy carries mode pulses only.
+        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", COMMAND_QOS)
+        self.joy_pub = self.create_publisher(Joy, "/joy", 1)
         self.safe_stop_pub = self.create_publisher(Bool, "/jaguar/safe_stop", 10)
         self.estop_pub = self.create_publisher(Bool, "/jaguar/emergency_stop", 10)
 
@@ -63,9 +73,11 @@ class UnifiedTeleopNode(Node):
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, 10)
         self.create_subscription(Imu, "/imu/data", self._imu_cb, 10)
 
-        # Subscriber for ROS 2 Gamepad from Remote PC (if Remote PC runs joy_node)
-        self.create_subscription(Joy, "/joy_remote", self._ros_joy_cb, 10)
-        self.create_subscription(Joy, "/joy_raw", self._ros_joy_cb, 10)
+        # Optional normalized/raw ROS 2 gamepad sources.
+        self.create_subscription(
+            Joy, "/joy_remote", lambda msg: self._ros_joy_cb(msg, "remote"), 1)
+        self.create_subscription(
+            Joy, "/joy_raw", lambda msg: self._ros_joy_cb(msg, "raw"), 1)
 
         # State Variables
         self.vx = 0.0
@@ -73,6 +85,7 @@ class UnifiedTeleopNode(Node):
         self.wz = 0.0
         self.input_source = "keyboard"
         self.last_remote_input = 0.0
+        self.previous_ros_buttons = {"remote": [], "raw": []}
         self.current_state = "STANDBY"
         self.controller_feedback = "Menunggu status controller..."
         self.last_action = "Inisialisasi siap. Menunggu input Keyboard / Xbox."
@@ -89,8 +102,8 @@ class UnifiedTeleopNode(Node):
         # Initialize Direct Linux Gamepad Reader
         self.gamepad_reader = LinuxGamepadReader(callback=self._on_gamepad_event, deadzone=DEADZONE)
 
-        # Publish loop at 20 Hz
-        self.timer = self.create_timer(0.05, self._publish_loop)
+        # Match the policy/controller loop so fresh stick events reach it within one cycle.
+        self.timer = self.create_timer(PUBLISH_PERIOD, self._publish_loop)
 
         # Terminal handler
         self.old_settings = None
@@ -118,29 +131,40 @@ class UnifiedTeleopNode(Node):
         with self.lock:
             self.imu_rpy = [np.degrees(roll), np.degrees(pitch), np.degrees(yaw)]
 
-    def _ros_joy_cb(self, msg: Joy):
+    def _ros_joy_cb(self, msg: Joy, source: str = "remote"):
         """Callback for standard ROS 2 Joy topic from remote nodes."""
+        # joy_node may expose the same local device already handled directly by
+        # LinuxGamepadReader. Prefer the direct, calibrated path in that case.
+        if source == "raw" and self.gamepad_reader.is_connected():
+            return
+
         with self.lock:
+            previous = self.previous_ros_buttons[source]
+            current = list(msg.buttons)
+            self.previous_ros_buttons[source] = current
+            pressed = lambda i: (i < len(current) and current[i] == 1
+                                 and (i >= len(previous) or previous[i] != 1))
+
             if len(msg.axes) >= 2:
                 ly = msg.axes[1] if len(msg.axes) > 1 else 0.0
                 lx = msg.axes[0] if len(msg.axes) > 0 else 0.0
                 rx = msg.axes[3] if len(msg.axes) > 3 else (msg.axes[2] if len(msg.axes) > 2 else 0.0)
 
-                self.input_source = "remote"
+                self.input_source = source
                 self.last_remote_input = time.monotonic()
                 self.vx = round(float(np.clip(ly * MAX_VX, MIN_VX, MAX_VX)), 2) if np.isfinite(ly) and abs(ly) >= DEADZONE else 0.0
                 self.vy = round(float(np.clip(-lx * MAX_VY, -MAX_VY, MAX_VY)), 2) if np.isfinite(lx) and abs(lx) >= DEADZONE else 0.0
                 self.wz = round(float(np.clip(-rx * MAX_WZ, -MAX_WZ, MAX_WZ)), 2) if np.isfinite(rx) and abs(rx) >= DEADZONE else 0.0
 
-            if len(msg.buttons) > 0 and msg.buttons[0] == 1:
+            if pressed(0):
                 self.current_state = "BERDIRI / STANDUP"
                 self.btn_standup_pulse = True
                 self.last_action = f"{C_CYAN}[ROS Joy A] Transisi ke BERDIRI (STANDUP){C_RESET}"
-            elif len(msg.buttons) > 1 and msg.buttons[1] == 1:
+            elif pressed(1):
                 self.current_state = "JALAN / WALK (RL)"
                 self.btn_walk_pulse = True
                 self.last_action = f"{C_GREEN}[ROS Joy B] Mode JALAN Aktif (RL Policy PPO){C_RESET}"
-            elif len(msg.buttons) > 2 and msg.buttons[2] == 1:
+            elif pressed(2):
                 self.current_state = "DUDUK / STANDBY"
                 self.btn_sit_pulse = True
                 self.vx = 0.0
@@ -211,35 +235,28 @@ class UnifiedTeleopNode(Node):
 
     def _publish_loop(self):
         with self.lock:
-            if self.input_source == "remote" and time.monotonic() - self.last_remote_input > 0.25:
+            if self.input_source in ("remote", "raw") and time.monotonic() - self.last_remote_input > 0.25:
                 self.vx = self.vy = self.wz = 0.0
-            # 1. Publish /cmd_vel
-            twist = Twist()
-            twist.linear.x = float(self.vx)
-            twist.linear.y = float(self.vy)
-            twist.angular.z = float(self.wz)
-            self.cmd_vel_pub.publish(twist)
-
-            # 2. Publish /joy
-            joy = Joy()
-            joy.header.stamp = self.get_clock().now().to_msg()
-            # Buttons: [0: Standup, 1: Walk, 2: Sit/Estop]
+            vx, vy, wz = self.vx, self.vy, self.wz
             btn0 = 1 if self.btn_standup_pulse else 0
             btn1 = 1 if self.btn_walk_pulse else 0
             btn2 = 1 if self.btn_sit_pulse else 0
-            joy.buttons = [btn0, btn1, btn2, 0, 0, 0, 0, 0]
-
-            # Clear pulses after single transmission
             self.btn_standup_pulse = False
             self.btn_walk_pulse = False
             self.btn_sit_pulse = False
 
-            # Axes: [0: left_stick_h (vy), 1: left_stick_v (vx), 2: 0, 3: right_stick_h (wz)]
-            ax_vx = float(np.clip(self.vx / MAX_VX, -1.0, 1.0))
-            ax_vy = float(np.clip(self.vy / MAX_VY, -1.0, 1.0))
-            ax_wz = float(np.clip(self.wz / MAX_WZ, -1.0, 1.0))
-            joy.axes = [ax_vy, ax_vx, 0.0, ax_wz, 0.0, 0.0]
-            self.joy_pub.publish(joy)
+        # Publish outside the shared input/UI lock.
+        twist = Twist()
+        twist.linear.x = float(vx)
+        twist.linear.y = float(vy)
+        twist.angular.z = float(wz)
+        self.cmd_vel_pub.publish(twist)
+
+        joy = Joy()
+        joy.header.stamp = self.get_clock().now().to_msg()
+        joy.buttons = [btn0, btn1, btn2, 0, 0, 0, 0, 0]
+        joy.axes = []
+        self.joy_pub.publish(joy)
 
     def handle_key(self, key: str):
         with self.lock:
@@ -364,8 +381,8 @@ class UnifiedTeleopNode(Node):
             output.append(f"  {C_BOLD}[Xbox Y] / [X]{C_RESET} Stop Kecepatan (V=0)")
             output.append(f"  {C_BOLD}[Xbox RB] / [SPACE]{C_RESET} SAFE PARK ke 0 rad    {C_BOLD}[Xbox LB] / [Back]{C_RESET} HARD E-STOP")
             output.append(f"{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
-            sys.stdout.write("\n".join(output) + "\n")
-            sys.stdout.flush()
+        sys.stdout.write("\n".join(output) + "\n")
+        sys.stdout.flush()
 
 
 def run_keyboard_listener(node: UnifiedTeleopNode):
@@ -377,18 +394,20 @@ def run_keyboard_listener(node: UnifiedTeleopNode):
     node.old_settings = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())
 
+    last_render = 0.0
     try:
         while node.running:
-            rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
+            rlist, _, _ = select.select([sys.stdin], [], [], PUBLISH_PERIOD)
             if rlist:
                 key = sys.stdin.read(1)
                 if key == '\x03':  # Ctrl+C
                     break
                 node.handle_key(key)
+
+            now = time.monotonic()
+            if rlist or now - last_render >= UI_REFRESH_PERIOD:
                 node.render_ui()
-            else:
-                node.render_ui()
-                time.sleep(0.05)
+                last_render = now
     except Exception:
         pass
     finally:
@@ -417,7 +436,8 @@ def main(args=None):
             except Exception:
                 pass
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
         print("\nUnified Teleop Node dimatikan.")
 
 

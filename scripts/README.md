@@ -15,7 +15,7 @@ Control nodes, teleoperation tools, calibration utilities, diagnostics, and brin
 
 | Script | Type | Description |
 | :--- | :---: | :--- |
-| [`keyboard_teleop.py`](./keyboard_teleop.py) | ROS 2 Node | Teleoperation interface for keyboard input, Bluetooth or USB gamepads, and ROS 2 `/joy` topics. |
+| [`keyboard_teleop.py`](./keyboard_teleop.py) | ROS 2 Node | Normalizes keyboard, direct Bluetooth/USB gamepad, and ROS 2 `/joy_raw` input. Publishes velocity on `/cmd_vel` and mode pulses on `/joy`. |
 | [`gamepad_reader.py`](./gamepad_reader.py) | Tool / Module | Non-blocking Linux gamepad reader for `/dev/input/js*`. Maps Bluetooth Xbox (15 buttons) and USB xpad (11 buttons). |
 | [`remote_xbox_forwarder.py`](./remote_xbox_forwarder.py) | Standalone | UDP forwarder for Xbox controllers connected to an operator laptop. |
 

@@ -13,7 +13,7 @@ import torch
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import Imu, Joy, JointState
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray, String
@@ -78,6 +78,12 @@ FEEDBACK_LIMITS_UPPER = ISAAC_LIMITS_UPPER + POSITION_LIMIT_TOLERANCE
 
 ACTION_SCALE = 0.25      # Policy action scaling factor
 CONTROL_DT = 0.02        # 50 Hz control loop (20 ms)
+COMMAND_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
 
 # Gain Scheduling Constants dynamically sourced from parameters.py (config/sim2real.yaml)
 
@@ -117,14 +123,6 @@ ROS_NAME_TO_ISAAC_IDX = {
     'BR_knee_joint': 10,  'Br_knee_joint': 10,
     'BL_knee_joint': 11,  'Bl_knee_joint': 11,
 }
-
-def apply_deadzone_linear(val: float, dz: float) -> float:
-    """Linearly rescales axis value outside deadzone so response is continuous and zero-centered."""
-    if abs(val) <= dz:
-        return 0.0
-    sign = 1.0 if val > 0 else -1.0
-    return sign * (abs(val) - dz) / max(1e-4, 1.0 - dz)
-
 
 class JaguarObservationBuilder:
     def __init__(self, history_len: int = 5):
@@ -196,7 +194,6 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("safe_park_kd", 0.5)
         self.declare_parameter("safe_park_double_press_window", 1.0)
         self.declare_parameter("cmd_timeout", 0.25)       # Seconds of no input before zeroing cmd_vel (Watchdog)
-        self.declare_parameter("joy_deadzone", 0.20)      # 20% deadzone to prevent analog stick drift
         self.declare_parameter("action_ema_alpha", 0.0)   # Action EMA filter (0.0 = disabled, raw policy actions)
 
         # Gain Parameters (Stiffness & Damping)
@@ -239,7 +236,6 @@ class NXPJaguarControllerNode(Node):
                 self.safe_park_double_press_window <= 0):
             raise ValueError("Invalid safe-park safety parameters")
         self.cmd_timeout = float(self.get_parameter("cmd_timeout").value)
-        self.joy_deadzone = float(self.get_parameter("joy_deadzone").value)
         self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
         self.sitdown_settle_delay = 0.5
         self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
@@ -311,7 +307,7 @@ class NXPJaguarControllerNode(Node):
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(JointState, "/joint_states", self._joint_state_cb, 10)
-        self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 10)
+        self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, COMMAND_QOS)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
         self.create_subscription(Bool, "/jaguar/safe_stop", self._safe_stop_cb, 10)
         self.create_subscription(Bool, "/jaguar/emergency_stop", self._estop_cb, 10)
@@ -524,13 +520,8 @@ class NXPJaguarControllerNode(Node):
         if self.state == "DISABLED" or not self._sensors_ready():
             return
         if len(msg.buttons) > 1:
-            # LB/Back are hard emergency stop; RB requests safe park.
-            if (len(msg.buttons) > 4 and msg.buttons[4] == 1) or (len(msg.buttons) > 6 and msg.buttons[6] == 1):
-                self._trigger_hard_estop("Xbox LB/Back hard emergency stop")
-            elif len(msg.buttons) > 5 and msg.buttons[5] == 1:
-                self._request_safe_park(now, "Xbox RB safe-park request")
             # Button 0 (X / Cross / Key '2'): Stand Up (Berdiri)
-            elif pressed(0) and self.state in ["STARTUP_SIT", "STANDBY", "SIT_HOLD"]:
+            if pressed(0) and self.state in ["STARTUP_SIT", "STANDBY", "SIT_HOLD"]:
                 self.state = "STANDUP"
                 self.transition_start_time = now
                 with self.state_lock:
@@ -562,21 +553,9 @@ class NXPJaguarControllerNode(Node):
                         self.filtered_action[:] = 0.0
                     self.get_logger().info(f"[CONTROLLER] State transition -> SITDOWN ({self.transition_duration:.1f}s smooth S-curve)")
 
-        # Joystick axes with 20% Deadzone & Linear Rescaling (Max: 0.8 m/s, 0.5 m/s, 0.8 rad/s)
-        if len(msg.axes) >= 2:
-            with self.state_lock:
-                raw_vx = msg.axes[1]
-                raw_vy = msg.axes[0]
-                raw_wz = msg.axes[3] if len(msg.axes) > 3 else (msg.axes[2] if len(msg.axes) >= 3 else 0.0)
-
-                scaled_vx = apply_deadzone_linear(raw_vx, self.joy_deadzone)
-                scaled_vy = apply_deadzone_linear(raw_vy, self.joy_deadzone)
-                scaled_wz = apply_deadzone_linear(raw_wz, self.joy_deadzone)
-
-                self.cmd_vel[0] = float(np.clip(scaled_vx * 1.0, -1.0, 1.0))
-                self.cmd_vel[1] = float(np.clip(scaled_vy * 1.0, -1.0, 1.0))
-                self.cmd_vel[2] = float(np.clip(scaled_wz * 1.0, -1.0, 1.0))
-                self.last_cmd_time = now
+        # Velocity is accepted only through /cmd_vel. Keeping mode pulses and
+        # analog commands on separate topics prevents callback-order overwrites
+        # and avoids applying a second joystick deadzone here.
 
     def _control_loop(self):
         t_start = time.perf_counter()
