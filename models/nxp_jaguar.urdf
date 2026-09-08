@@ -175,7 +175,7 @@
   
   <joint name="Fr_hip_pitch_joint" type="revolute">
     
-    <origin rpy="0 0.20 0" xyz="0.053 -0.005 0.000"/>
+    <origin rpy="0 0 0" xyz="0.053 -0.005 0.000"/>
     
     <parent link="Fr_coxa_link"/>
     
@@ -183,7 +183,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-1.80" upper="0.00" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -230,7 +230,7 @@
   
   <joint name="Fr_knee_joint" type="revolute">
     
-    <origin rpy="0 0.10 0" xyz="-0.157 -0.0935 0.088"/>
+    <origin rpy="0 0 0" xyz="-0.157 -0.0935 0.088"/>
     
     <parent link="Fr_thigh_link"/>
     
@@ -238,7 +238,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-0.10" upper="1.50" velocity="20"/>
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
     
   </joint>
   
@@ -352,7 +352,7 @@
   
   <joint name="Fl_hip_pitch_joint" type="revolute">
     
-    <origin rpy="0 0.20 0" xyz="0.053 -0.005 0.000"/>
+    <origin rpy="0 0 0" xyz="0.053 -0.005 0.000"/>
     
     <parent link="Fl_coxa_link"/>
     
@@ -360,7 +360,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-1.80" upper="0.00" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -407,7 +407,7 @@
   
   <joint name="Fl_knee_joint" type="revolute">
     
-    <origin rpy="0 0.10 0" xyz="-0.157 0.0935 0.088"/>
+    <origin rpy="0 0 0" xyz="-0.157 0.0935 0.088"/>
     
     <parent link="Fl_thigh_link"/>
     
@@ -415,7 +415,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-0.10" upper="1.50" velocity="20"/>
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
     
   </joint>
   
@@ -529,7 +529,7 @@
   
   <joint name="Br_hip_pitch_joint" type="revolute">
     
-    <origin rpy="0 0.20 0" xyz="-0.053 -0.005 0.000"/>
+    <origin rpy="0 0 0" xyz="-0.053 -0.005 0.000"/>
     
     <parent link="Br_coxa_link"/>
     
@@ -537,7 +537,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-1.80" upper="0.00" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -584,7 +584,7 @@
   
   <joint name="Br_knee_joint" type="revolute">
     
-    <origin rpy="0 0.10 0" xyz="-0.157 -0.0935 0.088"/>
+    <origin rpy="0 0 0" xyz="-0.157 -0.0935 0.088"/>
     
     <parent link="Br_thigh_link"/>
     
@@ -592,7 +592,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-0.10" upper="1.50" velocity="20"/>
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
     
   </joint>
   
@@ -706,7 +706,7 @@
   
   <joint name="Bl_hip_pitch_joint" type="revolute">
     
-    <origin rpy="0 0.20 0" xyz="-0.053 -0.005 0.000"/>
+    <origin rpy="0 0 0" xyz="-0.053 -0.005 0.000"/>
     
     <parent link="Bl_coxa_link"/>
     
@@ -714,7 +714,7 @@
     
     <axis xyz="0 1 0"/>
     
-    <limit effort="14" lower="-1.80" upper="0.00" velocity="20"/>
+    <limit effort="14" lower="-3.14" upper="0.00" velocity="20"/>
     
   </joint>
   
@@ -761,7 +761,7 @@
   
   <joint name="Bl_knee_joint" type="revolute">
     
-    <origin rpy="0 0.10 0" xyz="-0.157 0.0935 0.088"/>
+    <origin rpy="0 0 0" xyz="-0.157 0.0935 0.088"/>
     
     <parent link="Bl_thigh_link"/>
     
@@ -771,7 +771,7 @@
     
     <!-- <limit lower="0.00" upper="1.70" effort="14" velocity="20" /> -->
     
-    <limit effort="14" lower="-0.10" upper="1.50" velocity="20"/>
+    <limit effort="14" lower="-0.10" upper="2.80" velocity="20"/>
     
   </joint>
   
@@ -962,28 +962,17 @@
     
   </ros2_control>
   
-
-  <!-- Unitree-style analytical primitive sphere foot contact (R = 0.01894m, D = 37.88mm, Protrusion = 0.0mm, Gap = 0mm) -->
+  <!-- Authentic Distal Foot Pad (Exact CAD Foot Pad Extents, 100% Invisible) -->
   <joint name="Fr_foot_fixed" type="fixed" dont_collapse="true">
-    <origin rpy="0 0 0" xyz="0.1035 -0.0175 -0.1445"/>
+    <origin rpy="0 0 0" xyz="0.1035 -0.0175 -0.1544"/>
     <parent link="Fr_tibia_link"/>
     <child link="Fr_foot"/>
   </joint>
-  
   <link name="Fr_foot">
-    <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry>
-        <sphere radius="0.01894"/>
-      </geometry>
-      <material name="black_Fr">
-        <color rgba="0.1 0.1 0.1 1"/>
-      </material>
-    </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.01894"/>
+        <box size="0.046 0.035 0.018"/>
       </geometry>
     </collision>
     <inertial>
@@ -992,28 +981,17 @@
     </inertial>
   </link>
 
-
-  <!-- Unitree-style analytical primitive sphere foot contact (R = 0.01894m, D = 37.88mm, Protrusion = 0.0mm, Gap = 0mm) -->
+  <!-- Authentic Distal Foot Pad (Exact CAD Foot Pad Extents, 100% Invisible) -->
   <joint name="Fl_foot_fixed" type="fixed" dont_collapse="true">
-    <origin rpy="0 0 0" xyz="0.1035 0.0175 -0.1445"/>
+    <origin rpy="0 0 0" xyz="0.1035 0.0175 -0.1544"/>
     <parent link="Fl_tibia_link"/>
     <child link="Fl_foot"/>
   </joint>
-  
   <link name="Fl_foot">
-    <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry>
-        <sphere radius="0.01894"/>
-      </geometry>
-      <material name="black_Fl">
-        <color rgba="0.1 0.1 0.1 1"/>
-      </material>
-    </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.01894"/>
+        <box size="0.046 0.035 0.018"/>
       </geometry>
     </collision>
     <inertial>
@@ -1022,28 +1000,17 @@
     </inertial>
   </link>
 
-
-  <!-- Unitree-style analytical primitive sphere foot contact (R = 0.01894m, D = 37.88mm, Protrusion = 0.0mm, Gap = 0mm) -->
+  <!-- Authentic Distal Foot Pad (Exact CAD Foot Pad Extents, 100% Invisible) -->
   <joint name="Br_foot_fixed" type="fixed" dont_collapse="true">
-    <origin rpy="0 0 0" xyz="0.1035 -0.0175 -0.1445"/>
+    <origin rpy="0 0 0" xyz="0.1035 -0.0175 -0.1544"/>
     <parent link="Br_tibia_link"/>
     <child link="Br_foot"/>
   </joint>
-  
   <link name="Br_foot">
-    <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry>
-        <sphere radius="0.01894"/>
-      </geometry>
-      <material name="black_Br">
-        <color rgba="0.1 0.1 0.1 1"/>
-      </material>
-    </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.01894"/>
+        <box size="0.046 0.035 0.018"/>
       </geometry>
     </collision>
     <inertial>
@@ -1052,28 +1019,17 @@
     </inertial>
   </link>
 
-
-  <!-- Unitree-style analytical primitive sphere foot contact (R = 0.01894m, D = 37.88mm, Protrusion = 0.0mm, Gap = 0mm) -->
+  <!-- Authentic Distal Foot Pad (Exact CAD Foot Pad Extents, 100% Invisible) -->
   <joint name="Bl_foot_fixed" type="fixed" dont_collapse="true">
-    <origin rpy="0 0 0" xyz="0.1035 0.0175 -0.1445"/>
+    <origin rpy="0 0 0" xyz="0.1035 0.0175 -0.1544"/>
     <parent link="Bl_tibia_link"/>
     <child link="Bl_foot"/>
   </joint>
-  
   <link name="Bl_foot">
-    <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry>
-        <sphere radius="0.01894"/>
-      </geometry>
-      <material name="black_Bl">
-        <color rgba="0.1 0.1 0.1 1"/>
-      </material>
-    </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.01894"/>
+        <box size="0.046 0.035 0.018"/>
       </geometry>
     </collision>
     <inertial>

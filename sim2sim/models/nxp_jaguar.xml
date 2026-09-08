@@ -41,8 +41,8 @@
           <body name="Fr_tibia_link" pos="-0.157 -0.0935 0.088">
             <inertial pos="0.060866 -0.017421 -0.080173" quat="0.666658 -0.235727 -0.235727 0.666658" mass="0.18" diaginertia="0.000726 0.000718529 4.14708e-05"/>
             <joint name="Fr_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-17 17"/>
-            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Fr_tibia_pitch" friction="1.2 0.05 0.05"/>
-            <geom name="Fr_foot" type="sphere" pos="0.1035 -0.0175 -0.1445" size="0.01894" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Fr_tibia_pitch"/>
+            <geom name="Fr_foot" type="box" size="0.023 0.0175 0.009" pos="0.1035 -0.0175 -0.1544" group="3" friction="1.2 0.05 0.05"/>
           </body>
         </body>
       </body>
@@ -59,8 +59,8 @@
           <body name="Fl_tibia_link" pos="-0.157 0.0935 0.088">
             <inertial pos="0.060954 0.017516 -0.080316" quat="0.666573 -0.235968 -0.235968 0.666573" mass="0.18" diaginertia="0.000726 0.000717925 4.10753e-05"/>
             <joint name="Fl_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-17 17"/>
-            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Fl_tibia_pitch" friction="1.2 0.05 0.05"/>
-            <geom name="Fl_foot" type="sphere" pos="0.1035 0.0175 -0.1445" size="0.01894" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Fl_tibia_pitch"/>
+            <geom name="Fl_foot" type="box" size="0.023 0.0175 0.009" pos="0.1035 0.0175 -0.1544" group="3" friction="1.2 0.05 0.05"/>
           </body>
         </body>
       </body>
@@ -77,8 +77,8 @@
           <body name="Br_tibia_link" pos="-0.157 -0.0935 0.088">
             <inertial pos="0.060866 -0.017421 -0.080173" quat="0.666658 -0.235727 -0.235727 0.666658" mass="0.18" diaginertia="0.000726 0.000718529 4.14708e-05"/>
             <joint name="Br_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-17 17"/>
-            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Br_tibia_pitch" friction="1.2 0.05 0.05"/>
-            <geom name="Br_foot" type="sphere" pos="0.1035 -0.0175 -0.1445" size="0.01894" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Br_tibia_pitch"/>
+            <geom name="Br_foot" type="box" size="0.023 0.0175 0.009" pos="0.1035 -0.0175 -0.1544" group="3" friction="1.2 0.05 0.05"/>
           </body>
         </body>
       </body>
@@ -95,8 +95,8 @@
           <body name="Bl_tibia_link" pos="-0.157 0.0935 0.088">
             <inertial pos="0.060954 0.017516 -0.080316" quat="0.666573 -0.235968 -0.235968 0.666573" mass="0.18" diaginertia="0.000726 0.000717925 4.10753e-05"/>
             <joint name="Bl_knee_joint" pos="0 0 0" axis="0 1 0" range="-0.1 2.8" actuatorfrcrange="-17 17"/>
-            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Bl_tibia_pitch" friction="1.2 0.05 0.05"/>
-            <geom name="Bl_foot" type="sphere" pos="0.1035 0.0175 -0.1445" size="0.01894" rgba="0.1 0.1 0.1 1" friction="1.2 0.05 0.05"/>
+            <geom type="mesh" rgba="0.85 0.2 0.2 1" mesh="Bl_tibia_pitch"/>
+            <geom name="Bl_foot" type="box" size="0.023 0.0175 0.009" pos="0.1035 0.0175 -0.1544" group="3" friction="1.2 0.05 0.05"/>
           </body>
         </body>
       </body>
