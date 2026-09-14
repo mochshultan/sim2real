@@ -332,19 +332,17 @@ class LinuxJoystickHandler:
         if is_stick_active:
             # Vx: Axis 1 (Negative is Up/Forward, Positive is Down/Backward)
             if ly < 0.0:
-                vx = (-ly) * 1.2 * speed_mult
+                vx = (-ly) * 1.0 * speed_mult
             else:
-                vx = (-ly) * 0.8 * speed_mult
+                vx = (-ly) * 1.0 * speed_mult
 
             # Vy: Axis 0 (Negative is Left -> +Vy, Positive is Right -> -Vy)
-            vy = (-lx) * 0.6 * speed_mult
+            vy = (-lx) * 1.0 * speed_mult
 
             # Wz: Axis 3 (Negative is Left -> +Wz CCW, Positive is Right -> -Wz CW)
-            wz = (-rx) * 1.5 * speed_mult
+            wz = (-rx) * 1.0 * speed_mult
 
-            teleop.cmd_vel[0] = vx
-            teleop.cmd_vel[1] = vy
-            teleop.cmd_vel[2] = wz
+            teleop.cmd_vel[:] = np.clip([vx, vy, wz], -1.0, 1.0)
             self.stick_was_active = True
             teleop.last_input_source = "gamepad"
             if teleop.state == "WALK":
@@ -436,29 +434,29 @@ class TeleopController:
         c = char.upper()
         # W / S : Forward / Backward
         if c == 'W':
-            self.cmd_vel[0] = min(1.2, self.cmd_vel[0] + 0.2)
+            self.cmd_vel[0] = min(1.0, self.cmd_vel[0] + 0.2)
             self.last_action_msg = "KB: Maju (Vx +0.2)"
             self.last_input_source = "keyboard"
         elif c == 'S':
-            self.cmd_vel[0] = max(-0.8, self.cmd_vel[0] - 0.2)
+            self.cmd_vel[0] = max(-1.0, self.cmd_vel[0] - 0.2)
             self.last_action_msg = "KB: Mundur (Vx -0.2)"
             self.last_input_source = "keyboard"
         # A / D : Lateral Left / Right
         elif c == 'A':
-            self.cmd_vel[1] = min(0.6, self.cmd_vel[1] + 0.15)
+            self.cmd_vel[1] = min(1.0, self.cmd_vel[1] + 0.15)
             self.last_action_msg = "KB: Geser Kiri (Vy +0.15)"
             self.last_input_source = "keyboard"
         elif c == 'D':
-            self.cmd_vel[1] = max(-0.6, self.cmd_vel[1] - 0.15)
+            self.cmd_vel[1] = max(-1.0, self.cmd_vel[1] - 0.15)
             self.last_action_msg = "KB: Geser Kanan (Vy -0.15)"
             self.last_input_source = "keyboard"
         # Q / E : Turn Left / Right
         elif c == 'Q':
-            self.cmd_vel[2] = min(1.5, self.cmd_vel[2] + 0.3)
+            self.cmd_vel[2] = min(1.0, self.cmd_vel[2] + 0.3)
             self.last_action_msg = "KB: Putar Kiri (Wz +0.3)"
             self.last_input_source = "keyboard"
         elif c == 'E':
-            self.cmd_vel[2] = max(-1.5, self.cmd_vel[2] - 0.3)
+            self.cmd_vel[2] = max(-1.0, self.cmd_vel[2] - 0.3)
             self.last_action_msg = "KB: Putar Kanan (Wz -0.3)"
             self.last_input_source = "keyboard"
         # Space : Stop

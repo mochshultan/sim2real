@@ -140,12 +140,12 @@ ros2 run jaguar_control keyboard_teleop.py
 | `1` | `STANDBY` | Drives all joints to zero position ($0.0\text{ rad}$) and clears velocity targets. |
 | `2` | `STANDUP` | Executes a 2-second quintic S-curve trajectory to nominal stance angles $q_0$. |
 | `3` | `WALK` | Activates 50 Hz neural network policy inference. |
-| `W` | Surge Forward ($+v_x$) | Increments forward velocity by $+0.1\text{ m/s}$ (max $+1.2\text{ m/s}$). |
-| `S` | Surge Backward ($-v_x$) | Increments backward velocity by $-0.1\text{ m/s}$ (max $-0.8\text{ m/s}$). |
-| `A` | Sway Left ($+v_y$) | Increments lateral velocity by $+0.1\text{ m/s}$ (max $+0.5\text{ m/s}$). |
-| `D` | Sway Right ($-v_y$) | Increments lateral velocity by $-0.1\text{ m/s}$ (max $-0.5\text{ m/s}$). |
-| `Q` | Yaw Left ($+\omega_z$) | Increments counterclockwise yaw by $+0.2\text{ rad/s}$ (max $+1.2\text{ rad/s}$). |
-| `E` | Yaw Right ($-\omega_z$) | Increments clockwise yaw by $-0.2\text{ rad/s}$ (max $-1.2\text{ rad/s}$). |
+| `W` | Surge Forward ($+v_x$) | Increments forward velocity by $+0.1\text{ m/s}$ (max $+1.0\text{ m/s}$). |
+| `S` | Surge Backward ($-v_x$) | Increments backward velocity by $-0.1\text{ m/s}$ (max $-1.0\text{ m/s}$). |
+| `A` | Sway Left ($+v_y$) | Increments lateral velocity by $+0.1\text{ m/s}$ (max $+1.0\text{ m/s}$). |
+| `D` | Sway Right ($-v_y$) | Increments lateral velocity by $-0.1\text{ m/s}$ (max $-1.0\text{ m/s}$). |
+| `Q` | Yaw Left ($+\omega_z$) | Increments counterclockwise yaw by $+0.2\text{ rad/s}$ (max $+1.0\text{ rad/s}$). |
+| `E` | Yaw Right ($-\omega_z$) | Increments clockwise yaw by $-0.2\text{ rad/s}$ (max $-1.0\text{ rad/s}$). |
 | `X` | Brake | Sets planar command velocities to zero while keeping policy active. |
 | `SPACE` | Emergency Stop | Cuts motor commands and commands transition to `STANDBY`. |
 

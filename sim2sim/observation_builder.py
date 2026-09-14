@@ -109,8 +109,8 @@ class ObservationBuilder:
         self.history_buf = np.zeros((1, history_len, self.obs_dim), dtype=np.float32)
 
     def reset_history(self, initial_obs_45d: np.ndarray):
-        for i in range(self.history_len):
-            self.history_buf[0, i, :] = initial_obs_45d
+        self.history_buf.fill(0.0)
+        self.history_buf[0, -1, :] = initial_obs_45d
         self.last_action[:] = 0.0
 
     def build_step_observation(
@@ -135,11 +135,12 @@ class ObservationBuilder:
         rel_joint_pos = joint_pos_isaac - DEFAULT_JOINT_POS_ISAAC
 
         obs_45d = np.concatenate([
-            ang_vel,                     # 3D: wx, wy, wz (body frame)
+            ang_vel * 0.25,              # DreamWaQ angular velocity scale
             proj_gravity,                # 3D: projected gravity (body frame)
-            cmd,                         # 3D: vx_cmd, vy_cmd, wz_cmd
-            rel_joint_pos,               # 12D: q - q0 (Isaac order)
-            joint_vel_isaac,             # 12D: q_dot (Isaac order)
+            cmd * np.array([2.0, 2.0, 0.25], dtype=np.float32),
+                                         # DreamWaQ command scales
+            rel_joint_pos,               # 12D: q - q0 (scale 1.0)
+            joint_vel_isaac * 0.05,      # DreamWaQ joint velocity scale
             self.last_action,            # 12D: a_{t-1}
         ], axis=0).astype(np.float32)
 

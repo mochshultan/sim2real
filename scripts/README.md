@@ -25,6 +25,7 @@ Control nodes, teleoperation tools, calibration utilities, diagnostics, and brin
 | :--- | :---: | :--- |
 | [`calibrate_sit_zero.py`](./calibrate_sit_zero.py) | Interactive Tool | Calibrates hip and knee angles in steps of 0.05 rad and saves offsets with `[S]`. |
 | [`calibrate_stand_pose.py`](./calibrate_stand_pose.py) | Interactive Tool | Tunes standing joint angles in steps of 0.05 rad and prints posture values on exit with `[S]`. |
+| [`calibrate_parallel_link.py`](./calibrate_parallel_link.py) | Interactive Tool | Holds one suspended leg with low-gain impedance control and independently tests hip motion and the 1:1 knee parallelogram transmission. |
 | [`test_sit_stand.py`](./test_sit_stand.py) | Interactive Tool | Tests sit (0 rad) and stand transitions with S-curve cosine trajectories via keyboard or gamepad. |
 | [`check_states.py`](./check_states.py) | ROS 2 Node | Terminal dashboard displaying sensor rates and joint order mappings. |
 | [`check_joints.py`](./check_joints.py) | Standalone Tool | Reads motor encoder angles over CAN with zero control gains ($K_p=0, K_d=0$). |

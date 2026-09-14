@@ -106,24 +106,24 @@ class TeleopController:
         c = char.upper()
         # W / S : Forward / Backward
         if c == 'W':
-            self.cmd_vel[0] = min(1.2, self.cmd_vel[0] + 0.2)
+            self.cmd_vel[0] = min(1.0, self.cmd_vel[0] + 0.2)
             self._print_status("Maju (Vx +0.2)")
         elif c == 'S':
-            self.cmd_vel[0] = max(-0.8, self.cmd_vel[0] - 0.2)
+            self.cmd_vel[0] = max(-1.0, self.cmd_vel[0] - 0.2)
             self._print_status("Mundur (Vx -0.2)")
         # A / D : Lateral Left / Right
         elif c == 'A':
-            self.cmd_vel[1] = min(0.6, self.cmd_vel[1] + 0.15)
+            self.cmd_vel[1] = min(1.0, self.cmd_vel[1] + 0.15)
             self._print_status("Geser Kiri (Vy +0.15)")
         elif c == 'D':
-            self.cmd_vel[1] = max(-0.6, self.cmd_vel[1] - 0.15)
+            self.cmd_vel[1] = max(-1.0, self.cmd_vel[1] - 0.15)
             self._print_status("Geser Kanan (Vy -0.15)")
         # Q / E : Turn Left / Right
         elif c == 'Q':
-            self.cmd_vel[2] = min(1.5, self.cmd_vel[2] + 0.3)
+            self.cmd_vel[2] = min(1.0, self.cmd_vel[2] + 0.3)
             self._print_status("Putar Kiri (Wz +0.3)")
         elif c == 'E':
-            self.cmd_vel[2] = max(-1.5, self.cmd_vel[2] - 0.3)
+            self.cmd_vel[2] = max(-1.0, self.cmd_vel[2] - 0.3)
             self._print_status("Putar Kanan (Wz -0.3)")
         # Space : Stop
         elif char == ' ':
@@ -288,7 +288,10 @@ def main():
                 policy_obs = policy_obs.clone()
                 policy_obs[:, 6:9] = torch.tensor(teleop.cmd_vel, device=policy_obs.device)
                 if history is None or history.shape[0] != policy_obs.shape[0]:
-                    history = policy_obs.unsqueeze(1).repeat(1, 5, 1)
+                    history = torch.zeros(
+                        policy_obs.shape[0], 5, policy_obs.shape[-1], device=policy_obs.device, dtype=policy_obs.dtype
+                    )
+                    history[:, -1, :] = policy_obs
                 else:
                     history = torch.cat((history[:, 1:], policy_obs.unsqueeze(1)), dim=1)
                 policy_input = history

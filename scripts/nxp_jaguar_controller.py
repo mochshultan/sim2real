@@ -54,8 +54,8 @@ RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range
 # Default Standing Pose synchronized with Isaac Lab NXP Jaguar (nxp_jaguar.py)
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.40, -1.40, -1.30, -1.30,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.45,  1.45,  1.55,  1.55,   # Knees (Fr, Fl, Br, Bl)
+   -1.35, -1.35, -1.35, -1.35,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.40,  1.40,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 # Hard Physical Limits in Isaac Lab Joint Order: 4 Rolls (Fr, Fl, Br, Bl), 4 Hips, 4 Knees
@@ -133,8 +133,8 @@ class JaguarObservationBuilder:
         self.history_buf = np.zeros((1, history_len, self.obs_dim), dtype=np.float32)
 
     def reset_history(self, initial_obs_45d: np.ndarray):
-        for i in range(self.history_len):
-            self.history_buf[0, i, :] = initial_obs_45d
+        self.history_buf.fill(0.0)
+        self.history_buf[0, -1, :] = initial_obs_45d
         self.last_action[:] = 0.0
 
     def build_step_observation(self, ang_vel, quat, cmd, joint_pos, joint_vel) -> np.ndarray:
@@ -156,11 +156,12 @@ class JaguarObservationBuilder:
         rel_joint_pos = joint_pos - DEFAULT_JOINT_POS
 
         obs_45d = np.concatenate([
-            ang_vel,                     # 3D: wx, wy, wz
+            ang_vel * 0.25,              # DreamWaQ angular velocity scale
             [gx, gy, gz],                # 3D: projected gravity
-            cmd,                         # 3D: vx_cmd, vy_cmd, wz_cmd
-            rel_joint_pos,               # 12D: q - q0
-            joint_vel,                   # 12D: q_dot
+            cmd * np.array([2.0, 2.0, 0.25], dtype=np.float32),
+                                         # DreamWaQ command scales
+            rel_joint_pos,               # 12D: q - q0 (scale 1.0)
+            joint_vel * 0.05,            # DreamWaQ joint velocity scale
             self.last_action,            # 12D: a_{t-1}
         ], axis=0).astype(np.float32)
 
@@ -261,10 +262,23 @@ class NXPJaguarControllerNode(Node):
         self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
         self.policy = torch.jit.load(policy_param, map_location="cpu")
         self.policy.eval()
+        self.policy_expects_temporal = True
         with torch.no_grad():
-            probe = self.policy(torch.zeros((1, 5, 45), dtype=torch.float32))
+            try:
+                probe = self.policy(torch.zeros((1, 5, 45), dtype=torch.float32))
+                if tuple(probe.shape) == (1, 12) and torch.isfinite(probe).all():
+                    self.policy_expects_temporal = True
+                else:
+                    self.policy_expects_temporal = False
+            except Exception:
+                self.policy_expects_temporal = False
+
+            if not self.policy_expects_temporal:
+                probe = self.policy(torch.zeros((1, 45), dtype=torch.float32))
+
         if tuple(probe.shape) != (1, 12) or not torch.isfinite(probe).all():
             raise RuntimeError(f"Policy contract failure: expected finite (1,12), got {tuple(probe.shape)}")
+        self.get_logger().info(f"Policy verified: expects_temporal={self.policy_expects_temporal}, output_shape={tuple(probe.shape)}")
 
         self.obs_builder = JaguarObservationBuilder()
         self.state_lock = threading.Lock()
@@ -539,7 +553,7 @@ class NXPJaguarControllerNode(Node):
                     self.obs_builder.reset_history(init_obs)
                 ema_info = f"alpha={self.action_ema_alpha}" if self.action_ema_alpha > 0.0 else "DISABLED"
                 self.get_logger().info(
-                    f"[CONTROLLER] State transition -> WALK (DreamWaQ CENet | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Leg[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}] | Action EMA: {ema_info})"
+                    f"[CONTROLLER] State transition -> WALK (Baseline PPO / Adaptive Policy | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Leg[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}] | Action EMA: {ema_info})"
                 )
             # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif pressed(2):
@@ -697,9 +711,13 @@ class NXPJaguarControllerNode(Node):
             obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
             history_tensor = self.obs_builder.update_and_get_history(obs_45d)
 
-            # 2. Neural Network Forward Inference (Fused CENet + Actor JIT Model)
+            # 2. Neural Network Forward Inference
             with torch.no_grad():
-                actions = self.policy(history_tensor)
+                if self.policy_expects_temporal:
+                    actions = self.policy(history_tensor)
+                else:
+                    obs_tensor = torch.from_numpy(obs_45d).unsqueeze(0).float()
+                    actions = self.policy(obs_tensor)
 
             raw_action = actions.squeeze(0).cpu().numpy()
             if raw_action.shape != (12,) or not np.all(np.isfinite(raw_action)):
