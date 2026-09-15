@@ -21,11 +21,38 @@ class AdaptiveBaselinePolicy(nn.Module):
         return self.base_policy(obs)
 
 def main():
-    raw_policy_path = "/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline/2026-09-14_17-32-43/exported/policy.pt"
-    out_policy_path = "/home/shultan/jaguar_sim2real/models/policy.pt"
-    out_baseline_3000_path = "/home/shultan/jaguar_sim2real/models/policy_baseline_3000.pt"
+    import argparse
+    import shutil
 
-    raw_policy = torch.jit.load(raw_policy_path, map_location="cpu")
+    parser = argparse.ArgumentParser(description="Export adaptive TorchScript policy for sim2real")
+    parser.add_argument(
+        "--raw-policy",
+        type=str,
+        default="/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia/2026-09-15_10-46-44/exported/policy.pt",
+        help="Path to raw TorchScript policy exported from Isaac Lab / RSL-RL",
+    )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default="baseline_tibia_2500",
+        help="Model tag for versioned output filename",
+    )
+    parser.add_argument(
+        "--models-dir",
+        type=str,
+        default="/home/shultan/jaguar_sim2real/models",
+        help="Target models directory",
+    )
+    parser.add_argument(
+        "--set-default",
+        action="store_true",
+        default=True,
+        help="Also overwrite policy.pt and policy.onnx as default",
+    )
+    args = parser.parse_args()
+
+    os.makedirs(args.models_dir, exist_ok=True)
+    raw_policy = torch.jit.load(args.raw_policy, map_location="cpu")
     raw_policy.eval()
 
     wrapper = AdaptiveBaselinePolicy(raw_policy)
@@ -51,10 +78,27 @@ def main():
     assert (out_raw - out_2d).abs().max().item() < 1e-6, "2D output mismatch!"
     assert (out_raw - out_1d).abs().max().item() < 1e-6, "1D output mismatch!"
 
-    torch.jit.save(scripted_policy, out_policy_path)
-    torch.jit.save(scripted_policy, out_baseline_3000_path)
+    versioned_path = os.path.join(args.models_dir, f"policy_{args.tag}.pt")
+    torch.jit.save(scripted_policy, versioned_path)
+    print(f"[SUCCESS] Exported adaptive policy to: {versioned_path}")
 
-    print(f"[SUCCESS] Exported adaptive policy to:\n  -> {out_policy_path}\n  -> {out_baseline_3000_path}")
+    if args.set_default:
+        default_path = os.path.join(args.models_dir, "policy.pt")
+        torch.jit.save(scripted_policy, default_path)
+        print(f"[SUCCESS] Updated active default: {default_path}")
+
+        # Also copy ONNX files if present alongside raw policy
+        raw_dir = os.path.dirname(args.raw_policy)
+        raw_onnx = os.path.join(raw_dir, "policy.onnx")
+        raw_onnx_data = os.path.join(raw_dir, "policy.onnx.data")
+        if os.path.exists(raw_onnx):
+            shutil.copy2(raw_onnx, os.path.join(args.models_dir, f"policy_{args.tag}.onnx"))
+            shutil.copy2(raw_onnx, os.path.join(args.models_dir, "policy.onnx"))
+            print(f"[SUCCESS] Updated policy_{args.tag}.onnx and policy.onnx")
+        if os.path.exists(raw_onnx_data):
+            shutil.copy2(raw_onnx_data, os.path.join(args.models_dir, f"policy_{args.tag}.onnx.data"))
+            shutil.copy2(raw_onnx_data, os.path.join(args.models_dir, "policy.onnx.data"))
+            print(f"[SUCCESS] Updated policy_{args.tag}.onnx.data and policy.onnx.data")
 
 if __name__ == "__main__":
     main()
