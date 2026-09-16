@@ -4,6 +4,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,6 +52,11 @@ def generate_launch_description():
         default_value="true",
         description="Launch NXP Jaguar RL controller node",
     )
+    startup_clear_faults_arg = DeclareLaunchArgument(
+        "startup_clear_faults",
+        default_value="true",
+        description="Clear latched RobStride faults once, before startup enable (C++ hardware only)",
+    )
 
     config_file = LaunchConfiguration("config_file")
     policy_path = LaunchConfiguration("policy_path")
@@ -60,6 +66,7 @@ def generate_launch_description():
     with_hardware = LaunchConfiguration("with_hardware")
     use_cpp_hardware = LaunchConfiguration("use_cpp_hardware")
     with_controller = LaunchConfiguration("with_controller")
+    startup_clear_faults = LaunchConfiguration("startup_clear_faults")
 
     # 1. IMU Driver Node
     imu_node = Node(
@@ -96,7 +103,7 @@ def generate_launch_description():
         executable="robstride_can_node",
         name="robstride_can_hardware",
         output="screen",
-        parameters=[config_file],
+        parameters=[config_file, {"startup_clear_faults": ParameterValue(startup_clear_faults, value_type=bool)}],
         condition=IfCondition(
             PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' == 'true'"])
         ),
@@ -136,6 +143,7 @@ def generate_launch_description():
         with_hardware_arg,
         use_cpp_hardware_arg,
         with_controller_arg,
+        startup_clear_faults_arg,
         imu_node,
         joy_node,
         teleop_node,

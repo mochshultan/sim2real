@@ -11,6 +11,7 @@ find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -37,6 +38,7 @@ target_include_directories(robstride_can_node PUBLIC
 ament_target_dependencies(robstride_can_node
   rclcpp
   std_msgs
+  std_srvs
   sensor_msgs
   geometry_msgs
   nav_msgs

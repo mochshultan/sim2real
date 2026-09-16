@@ -124,10 +124,31 @@ public:
     return true;
   }
 
-  bool enableAndConfigureMotors()
+  bool enableAndConfigureMotors(bool clear_faults_on_startup = false)
   {
     if (!bus_can0_ || !bus_can1_ || !bus_can0_->isOpen() || !bus_can1_->isOpen()) {
       return false;
+    }
+
+    if (clear_faults_on_startup) {
+      std::cout << "[RobStrideHardwareManager] Startup fault-clear requested for all 12 motors (motors disabled)..." << std::endl;
+      startup_clearing_ = true;
+      for (const auto & cfg : joint_configs_) {
+        auto * bus = cfg.bus_name == "can0" ? bus_can0_.get() : bus_can1_.get();
+        if (!bus || !bus->sendFrame(buildStopMotorFrame(cfg.can_id, 0xFE, true))) {
+          startup_clearing_ = false;
+          std::cerr << "[RobStrideHardwareManager] Startup fault-clear CAN write failed on " << cfg.name << std::endl;
+          disableAllMotors();
+          return false;
+        }
+        usleep(10000);
+      }
+      usleep(50000);
+      // Log pre-clear reports, but do not latch an old fault before the motor
+      // has had a chance to process the clear command. Any subsequent fault
+      // during enable/operation still triggers the ordinary emergency stop.
+      readIncomingFeedbacks();
+      startup_clearing_ = false;
     }
 
     std::cout << "[RobStrideHardwareManager] Enabling all 12 RobStride RS00 motors..." << std::endl;
@@ -136,7 +157,7 @@ public:
       RobStrideCanBus * bus = (cfg.bus_name == "can0") ? bus_can0_.get() : bus_can1_.get();
       if (!bus || !bus->isOpen()) continue;
 
-      // Clear the previous operating state before enabling impedance mode.
+      // Configure impedance mode while the motor is stopped.
       const can_frame sequence[] = {
         buildStopMotorFrame(cfg.can_id),
         buildSetTorqueLimitFrame(cfg.can_id, cfg.max_effort),
@@ -150,11 +171,25 @@ public:
         }
         usleep(10000);
         readIncomingFeedbacks();
+        if (emergency_stopped_) {
+          disableAllMotors();
+          return false;
+        }
       }
     }
 
     // Flush RX queues to capture initial positions
     readIncomingFeedbacks();
+    if (emergency_stopped_) {
+      disableAllMotors();
+      return false;
+    }
+    // Startup readiness requires replies to passive commands sent after enable,
+    // not feedback left over from the fault-clear/configuration sequence.
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      for (auto & state : states_) state.feedback_valid = false;
+    }
 
     initialized_ = true;
     is_passive_mode_ = true;
@@ -211,11 +246,21 @@ public:
 
   void triggerEmergencyStop(const std::string & reason)
   {
-    if (!emergency_stopped_.exchange(true)) {
+    if (!emergency_stopped_.exchange(true) || reset_in_progress_) {
       std::cerr << "[RobStrideHardwareManager] EMERGENCY STOP: " << reason << std::endl;
     }
+    reset_in_progress_ = false;
     // Only the communication thread (or shutdown after join) writes to CAN.
   }
+
+  bool requestFaultReset()
+  {
+    if (!initialized_ || !emergency_stopped_ || reset_in_progress_ || reset_requested_) return false;
+    reset_requested_ = true;
+    return true;
+  }
+
+  bool isResetInProgress() const { return reset_in_progress_ || reset_requested_; }
 
   void disableAllMotors()
   {
@@ -248,6 +293,8 @@ public:
     readIncomingFeedbacks();
     auto now = std::chrono::steady_clock::now();
     std::lock_guard<std::mutex> lock_commands(cmd_mutex_);
+    if (reset_requested_.exchange(false)) startFaultReset(now);
+    if (reset_in_progress_) verifyFaultReset(now);
     double cmd_age_sec = std::chrono::duration<double>(now - last_command_time_).count();
 
     bool timeout = (cmd_age_sec > watchdog_timeout_sec_);
@@ -265,7 +312,9 @@ public:
         if (!bus || !bus->isOpen()) continue;
 
         struct can_frame frame;
-        if (emergency_stopped_) {
+        if (reset_in_progress_ && reset_enable_sent_) {
+          frame = buildMitControlFrame(cfg.can_id, 0, 0, 0, 0, 0, cfg.motor_params);
+        } else if (emergency_stopped_) {
           frame = buildStopMotorFrame(cfg.can_id);
         } else if (is_passive_mode_) {
           // Zero torque, zero gains
@@ -353,13 +402,11 @@ public:
 
   void readIncomingFeedbacks()
   {
-    auto now = std::chrono::steady_clock::now();
-
     // Read all pending frames on can0
     if (bus_can0_ && bus_can0_->isOpen()) {
       struct can_frame frame;
       for (int n = 0; n < 256 && bus_can0_->receiveFrame(frame); ++n) {
-        processFeedbackFrame(frame, "can0", now);
+        processFeedbackFrame(frame, "can0", std::chrono::steady_clock::now());
       }
     }
 
@@ -367,7 +414,7 @@ public:
     if (bus_can1_ && bus_can1_->isOpen()) {
       struct can_frame frame;
       for (int n = 0; n < 256 && bus_can1_->receiveFrame(frame); ++n) {
-        processFeedbackFrame(frame, "can1", now);
+        processFeedbackFrame(frame, "can1", std::chrono::steady_clock::now());
       }
     }
   }
@@ -383,7 +430,18 @@ public:
       const auto & cfg = joint_configs_[i];
       if (cfg.bus_name == bus_name && cfg.can_id == motor_id) {
         if (((raw_id >> 24) & 0x1F) == 21) {
-          triggerEmergencyStop("Motor fault frame from " + cfg.name);
+          uint32_t fault = 0, warning = 0;
+          if (frame.can_dlc == 8) {
+            for (int byte = 0; byte < 4; ++byte) {
+              fault |= static_cast<uint32_t>(frame.data[byte]) << (8 * byte);
+              warning |= static_cast<uint32_t>(frame.data[4 + byte]) << (8 * byte);
+            }
+          }
+          std::cerr << "[RobStrideHardwareManager] MOTOR_FAULT " << cfg.name
+                    << " bus=" << bus_name << " id=" << static_cast<int>(cfg.can_id)
+                    << " fault=0x" << std::hex << fault << " warning=0x" << warning
+                    << std::dec << " dlc=" << static_cast<int>(frame.can_dlc) << std::endl;
+          if (!startup_clearing_) triggerEmergencyStop("Motor fault frame from " + cfg.name);
           std::lock_guard<std::mutex> lock(state_mutex_);
           states_[i].feedback_valid = false;
           break;
@@ -393,10 +451,24 @@ public:
           std::lock_guard<std::mutex> lock(state_mutex_);
           double position = fb.position - cfg.angle_offset;
           double dt = std::chrono::duration<double>(now - states_[i].last_feedback_time).count();
-          if (fb.error || (states_[i].feedback_valid && dt <= feedback_timeout_sec_ &&
-              std::abs(position - states_[i].position) > cfg.motor_params.v_max * dt + 0.15)) {
+          const double jump = std::abs(position - states_[i].position);
+          const double allowed_jump = cfg.motor_params.v_max * std::max(0.0, dt) + 0.15;
+          const bool encoder_jump = states_[i].feedback_valid && dt >= 0 &&
+            dt <= feedback_timeout_sec_ && jump > allowed_jump;
+          if (fb.error || encoder_jump) {
+            std::cerr << "[RobStrideHardwareManager] FEEDBACK_FAULT " << cfg.name
+                      << " bus=" << bus_name << " id=" << static_cast<int>(cfg.can_id)
+                      << " motor_error_bits=0x" << std::hex << ((raw_id >> 16) & 0x3F)
+                      << std::dec << " encoder_jump=" << encoder_jump
+                      << " previous_valid=" << states_[i].feedback_valid
+                      << " previous_rad=" << states_[i].position
+                      << " current_rad=" << position << " delta_rad=" << jump
+                      << " allowed_rad=" << allowed_jump << " dt_s=" << dt
+                      << " velocity_rad_s=" << fb.velocity
+                      << " torque_nm=" << fb.torque << " temperature_c=" << fb.temperature
+                      << std::endl;
             states_[i].feedback_valid = false;
-            triggerEmergencyStop("Invalid encoder or motor fault on " + cfg.name);
+            if (!startup_clearing_) triggerEmergencyStop("Invalid encoder or motor fault on " + cfg.name);
             break;
           }
           states_[i].position = position;
@@ -454,6 +526,73 @@ public:
   bool isPassiveMode() const { return is_passive_mode_; }
 
 private:
+  void startFaultReset(const std::chrono::steady_clock::time_point & now)
+  {
+    is_passive_mode_ = true;
+    safe_park_requested_ = false;
+    safe_park_active_ = false;
+    soft_fault_since_ = {};
+    for (auto & cmd : commands_) cmd = {};
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      for (auto & state : states_) state.feedback_valid = false;
+    }
+    for (const auto & cfg : joint_configs_) {
+      auto * bus = cfg.bus_name == "can0" ? bus_can0_.get() : bus_can1_.get();
+      if (!bus || !bus->sendFrame(buildStopMotorFrame(cfg.can_id, 0xFE, true))) {
+        std::cerr << "[RobStrideHardwareManager] Fault reset failed: CAN write on " << cfg.name << std::endl;
+        disableAllMotors();
+        return;
+      }
+    }
+    reset_started_ = now;
+    reset_enable_sent_ = false;
+    reset_in_progress_ = true;
+    std::cerr << "[RobStrideHardwareManager] Fault reset requested; waiting for fresh fault-free feedback from all motors" << std::endl;
+  }
+
+  void verifyFaultReset(const std::chrono::steady_clock::time_point & now)
+  {
+    if (now - reset_started_ > std::chrono::seconds(2)) {
+      reset_in_progress_ = false;
+      std::cerr << "[RobStrideHardwareManager] Fault reset failed: feedback timeout; motors remain stopped" << std::endl;
+      return;
+    }
+    if (!reset_enable_sent_) {
+      if (now - reset_started_ < std::chrono::milliseconds(50)) return;
+      for (const auto & cfg : joint_configs_) {
+        auto * bus = cfg.bus_name == "can0" ? bus_can0_.get() : bus_can1_.get();
+        if (!bus || !bus->sendFrame(buildMitControlFrame(cfg.can_id, 0, 0, 0, 0, 0, cfg.motor_params)) ||
+            !bus->sendFrame(buildEnableMotorFrame(cfg.can_id))) {
+          triggerEmergencyStop("Fault reset CAN write failed on " + cfg.name);
+          return;
+        }
+      }
+      {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        for (auto & state : states_) state.feedback_valid = false;
+      }
+      reset_enabled_at_ = now;
+      reset_enable_sent_ = true;
+      return;
+    }
+    if (now - reset_enabled_at_ < std::chrono::milliseconds(100)) return;
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    for (size_t i = 0; i < N_JOINTS; ++i) {
+      const auto & state = states_[i];
+      const auto & cfg = joint_configs_[i];
+      if (!state.feedback_valid || state.last_feedback_time < reset_enabled_at_ ||
+          now - state.last_feedback_time > std::chrono::milliseconds(250) ||
+          !std::isfinite(state.position) ||
+          state.position < cfg.pos_min - POSITION_LIMIT_TOLERANCE ||
+          state.position > cfg.pos_max + POSITION_LIMIT_TOLERANCE) return;
+    }
+    reset_in_progress_ = false;
+    last_command_time_ = now;
+    emergency_stopped_ = false;
+    std::cerr << "[RobStrideHardwareManager] Fault reset complete; motors passive, controller reset required before motion" << std::endl;
+  }
+
   std::vector<JointConfig> joint_configs_;
   std::vector<JointCommand> commands_;
   std::vector<JointStateData> states_;
@@ -466,6 +605,12 @@ private:
 
   std::atomic<bool> initialized_;
   std::atomic<bool> emergency_stopped_;
+  std::atomic<bool> reset_requested_{false};
+  std::atomic<bool> reset_in_progress_{false};
+  bool startup_clearing_ = false;
+  bool reset_enable_sent_ = false;
+  std::chrono::steady_clock::time_point reset_started_{};
+  std::chrono::steady_clock::time_point reset_enabled_at_{};
   std::atomic<bool> is_passive_mode_;
 
   std::atomic<bool> safe_park_requested_{false};

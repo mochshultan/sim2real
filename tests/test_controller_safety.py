@@ -2,6 +2,7 @@
 import ast
 from pathlib import Path
 import time
+import threading
 import unittest
 from unittest.mock import Mock, patch
 import numpy as np
@@ -9,13 +10,15 @@ import numpy as np
 source = ast.parse((Path(__file__).parents[1] / 'scripts/nxp_jaguar_controller.py').read_text())
 cls = next(n for n in source.body if isinstance(n, ast.ClassDef) and n.name == 'NXPJaguarControllerNode')
 methods = {'_trigger_safe_shutdown', '_persistent_fault', '_hardware_safe_park_cb',
-           '_request_safe_park', '_sensors_ready', '_joy_cb'}
+           '_request_safe_park', '_sensors_ready', '_joy_cb',
+           '_hardware_status_cb', '_reset_controller_cb'}
 cls.bases = []
 cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in methods]
-namespace = dict(np=np, time=time, Bool=Mock, Joy=Mock,
+namespace = dict(np=np, time=time, Bool=Mock, Joy=Mock, String=Mock,
                  ISAAC_LIMITS_LOWER=np.full(12, -0.5), ISAAC_LIMITS_UPPER=np.full(12, 0.5),
                  FEEDBACK_LIMITS_LOWER=np.full(12, -0.7), FEEDBACK_LIMITS_UPPER=np.full(12, 0.7),
-                 SIT_JOINT_POS=np.zeros(12))
+                 SIT_JOINT_POS=np.zeros(12), JaguarObservationBuilder=Mock,
+                 threading=threading)
 exec(compile(ast.Module(body=[cls], type_ignores=[]), '<controller safety methods>', 'exec'), namespace)
 Controller = namespace['NXPJaguarControllerNode']
 
@@ -100,6 +103,33 @@ class SafetyTests(unittest.TestCase):
         node.joint_pos[:] = 0.0
         with patch.object(time, 'monotonic', return_value=1.3):
             self.assertFalse(node._sensors_ready(check_limits=False))
+
+    def test_manual_controller_reset_requires_hardware_recovery(self):
+        node = self.node
+        node.state = 'DISABLED'
+        node.hardware_status = 'PASSIVE_ZERO_TORQUE'
+        node.last_hardware_status_time = time.monotonic()
+        node.fault_stop_seen = False
+        node.state_lock = threading.Lock()
+        node.cmd_vel = np.ones(3)
+        node.filtered_action = np.ones(12)
+        node.joint_pos = np.zeros(12)
+        node.overtorque_counter = 2
+        node.last_safe_park_request = 1.0
+        node.get_logger = Mock()
+        response = Mock()
+
+        node._reset_controller_cb(None, response)
+        self.assertFalse(response.success)
+        self.assertEqual(node.state, 'DISABLED')
+
+        node._hardware_status_cb(Mock(data='EMERGENCY_STOPPED'))
+        node._hardware_status_cb(Mock(data='PASSIVE_ZERO_TORQUE'))
+        node._reset_controller_cb(None, response)
+        self.assertTrue(response.success)
+        self.assertEqual(node.state, 'STANDBY')
+        np.testing.assert_allclose(node.cmd_vel, 0)
+        np.testing.assert_allclose(node.filtered_action, 0)
 
 
 if __name__ == '__main__':

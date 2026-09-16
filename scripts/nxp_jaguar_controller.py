@@ -17,6 +17,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from sensor_msgs.msg import Imu, Joy, JointState
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray, String
+from std_srvs.srv import Trigger
 
 # ==============================================================================
 # 1. NXP JAGUAR JOINT ORDER & NOMINAL CONFIGURATION
@@ -325,6 +326,9 @@ class NXPJaguarControllerNode(Node):
         self.last_sensor_wait_report = 0.0
         self.overtorque_counter = 0
         self.soft_fault_times = {}
+        self.hardware_status = ""
+        self.last_hardware_status_time = 0.0
+        self.fault_stop_seen = False
 
         # Transition interpolation variables
         self.transition_start_pos = SIT_JOINT_POS.copy()
@@ -349,6 +353,8 @@ class NXPJaguarControllerNode(Node):
         self.create_subscription(Bool, "/jaguar/emergency_stop", self._estop_cb, 10)
 
         self.create_subscription(Bool, "/jaguar/hardware_safe_park", self._hardware_safe_park_cb, 10)
+        self.create_subscription(String, "/jaguar/hardware_status", self._hardware_status_cb, 10)
+        self.create_service(Trigger, "/jaguar/reset_controller", self._reset_controller_cb)
 
         # Publishers
         self.safe_park_active_pub = self.create_publisher(Bool, "/jaguar/safe_park_active", 10)
@@ -377,8 +383,9 @@ class NXPJaguarControllerNode(Node):
     def _trigger_hard_estop(self, reason: str):
         if self.state == "DISABLED":
             return
-        self.get_logger().error(f"[FAULT] {reason}. Motion inhibited until driver/controller restart.")
+        self.get_logger().error(f"[FAULT] {reason}. Motion inhibited until manual hardware/controller reset.")
         self.state = "DISABLED"
+        self.fault_stop_seen = False
         with self.state_lock:
             self.cmd_vel[:] = 0.0
         stop = Bool()
@@ -390,6 +397,37 @@ class NXPJaguarControllerNode(Node):
         passive.velocity = [0.0] * 12
         passive.effort = [0.0] * 24
         self.joint_cmd_pub.publish(passive)
+
+    def _hardware_status_cb(self, msg: String):
+        self.hardware_status = msg.data
+        self.last_hardware_status_time = time.monotonic()
+        if self.state == "DISABLED" and msg.data in ("EMERGENCY_STOPPED", "RESETTING_FAULT"):
+            self.fault_stop_seen = True
+
+    def _reset_controller_cb(self, request, response):
+        del request
+        hardware_ready = (self.hardware_status == "PASSIVE_ZERO_TORQUE"
+                          and time.monotonic() - self.last_hardware_status_time <= 2.0)
+        if (self.state != "DISABLED" or not self.fault_stop_seen
+                or not hardware_ready or not self._sensors_ready()):
+            response.success = False
+            response.message = "Reset rejected: controller must be DISABLED, hardware passive, and all sensors fresh/in limits."
+            return response
+        with self.state_lock:
+            self.cmd_vel[:] = 0.0
+            self.filtered_action[:] = 0.0
+            self.transition_start_pos = self.joint_pos.copy()
+            self.transition_target_pos = self.joint_pos.copy()
+            self.obs_builder = JaguarObservationBuilder()
+        self.overtorque_counter = 0
+        self.soft_fault_times.clear()
+        self.last_safe_park_request = 0.0
+        self.fault_stop_seen = False
+        self.state = "STANDBY"
+        response.success = True
+        response.message = "Controller reset to STANDBY (passive). Re-arm motion manually."
+        self.get_logger().info("[CONTROLLER] Manual fault reset -> STANDBY (passive)")
+        return response
 
     def _trigger_safe_shutdown(self, now: float, reason: str):
         if self.state == "SAFE_PARK" or not self._sensors_ready(check_limits=False):

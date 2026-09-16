@@ -4,6 +4,7 @@
 #include <std_msgs/msg/float64_multi_array.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 #include <pthread.h>
 #include <sched.h>
@@ -47,6 +48,7 @@ public:
     this->declare_parameter<double>("default_coxa_kp", 20.0);
     this->declare_parameter<double>("default_coxa_kd", 1.5);
     this->declare_parameter<int>("rt_priority", 80);
+    this->declare_parameter<bool>("startup_clear_faults", false);
 
     loop_hz_ = this->get_parameter("rate_hz").as_int();
     default_kp_ = this->get_parameter("default_kp").as_double();
@@ -86,6 +88,16 @@ public:
       "/jaguar/safe_park_active", 10,
       [this](std_msgs::msg::Bool::SharedPtr msg) { hw_manager_.setSafeParkActive(msg->data); });
 
+    reset_fault_srv_ = this->create_service<std_srvs::srv::Trigger>(
+      "/jaguar/reset_fault",
+      [this](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+             std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        response->success = hw_manager_.requestFaultReset();
+        response->message = response->success
+          ? "Reset queued. Watch /jaguar/hardware_status; reset the controller only after PASSIVE_ZERO_TORQUE."
+          : "Reset rejected: hardware must be initialized, emergency-stopped, and not already resetting.";
+      });
+
     // Initialize CAN Hardware
     if (!hw_manager_.initializeBuses()) {
       RCLCPP_ERROR(this->get_logger(), "Failed to open CAN buses! Exiting...");
@@ -93,7 +105,7 @@ public:
       return;
     }
 
-    if (!hw_manager_.enableAndConfigureMotors()) {
+    if (!hw_manager_.enableAndConfigureMotors(this->get_parameter("startup_clear_faults").as_bool())) {
       RCLCPP_ERROR(this->get_logger(), "Failed to configure RobStride motors!");
       hw_manager_.shutdown();
       throw std::runtime_error("Motor initialization failed");
@@ -335,7 +347,9 @@ private:
     }
 
     std_msgs::msg::String status_msg;
-    if (hw_manager_.isEmergencyStopped()) {
+    if (hw_manager_.isResetInProgress()) {
+      status_msg.data = "RESETTING_FAULT";
+    } else if (hw_manager_.isEmergencyStopped()) {
       status_msg.data = "EMERGENCY_STOPPED";
     } else if (hw_manager_.isPassiveMode()) {
       status_msg.data = "PASSIVE_ZERO_TORQUE";
@@ -367,6 +381,7 @@ private:
 
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr safe_park_pub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr safe_park_sub_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_fault_srv_;
   rclcpp::TimerBase::SharedPtr diag_timer_;
   std::thread rt_thread_;
 };

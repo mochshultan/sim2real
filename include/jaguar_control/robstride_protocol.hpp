@@ -161,7 +161,8 @@ inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_i
 /**
  * @brief Builds Motor Stop / Disable Frame
  */
-inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFE)
+inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFE,
+                                            bool clear_fault = false)
 {
   struct can_frame frame;
   std::memset(&frame, 0, sizeof(frame));
@@ -171,6 +172,8 @@ inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id 
                  (static_cast<uint32_t>(motor_id) & 0xFF) |
                  CAN_EFF_FLAG;
   frame.can_dlc = 8;
+  // RobStride private protocol: byte 0 = 1 requests fault clearing while disabled.
+  frame.data[0] = clear_fault ? 1 : 0;
   return frame;
 }
 
