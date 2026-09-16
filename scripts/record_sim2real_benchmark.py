@@ -50,11 +50,11 @@ DEFAULT_JOINT_POS = np.array([
 ], dtype=np.float32)
 
 class Sim2RealBenchmarkRecorder(Node):
-    def __init__(self, out_dir: str, max_vx: float = 0.5, record_bag: bool = False):
+    def __init__(self, out_dir: str, record_bag: bool = False):
         super().__init__("jaguar_benchmark_recorder")
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
-        self.max_vx = max_vx
+        self.max_vx = 0.5
         self.record_bag = record_bag
         self.bag_proc = None
 
@@ -334,13 +334,13 @@ class Sim2RealBenchmarkRecorder(Node):
 
 def main():
     parser = argparse.ArgumentParser(description="Record 15s Benchmark Trajectory in Sim2Real")
-    parser.add_argument("--out-dir", type=str, default="/home/shultan/jaguar_sim2real/benchmark_data", help="Output directory")
-    parser.add_argument("--max-vx", type=float, default=0.5, help="Peak forward velocity (m/s)")
+    default_out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "benchmark_data")
+    parser.add_argument("--out-dir", type=str, default=default_out_dir, help="Output directory")
     parser.add_argument("--bag", action="store_true", help="Also record ROS 2 bag")
     args = parser.parse_args()
 
     rclpy.init()
-    node = Sim2RealBenchmarkRecorder(out_dir=args.out_dir, max_vx=args.max_vx, record_bag=args.bag)
+    node = Sim2RealBenchmarkRecorder(out_dir=args.out_dir, record_bag=args.bag)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
