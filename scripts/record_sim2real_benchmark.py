@@ -50,7 +50,7 @@ DEFAULT_JOINT_POS = np.array([
 ], dtype=np.float32)
 
 class Sim2RealBenchmarkRecorder(Node):
-    def __init__(self, out_dir: str, max_vx: float = 0.5, record_bag: bool = False):
+    def __init__(self, out_dir: str, max_vx: float = 0.3, record_bag: bool = False):
         super().__init__("jaguar_benchmark_recorder")
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
@@ -335,7 +335,7 @@ class Sim2RealBenchmarkRecorder(Node):
 def main():
     parser = argparse.ArgumentParser(description="Record 15s Benchmark Trajectory in Sim2Real")
     parser.add_argument("--out-dir", type=str, default="/home/shultan/jaguar_sim2real/benchmark_data", help="Output directory")
-    parser.add_argument("--max-vx", type=float, default=0.5, help="Peak forward velocity (m/s)")
+    parser.add_argument("--max-vx", type=float, default=0.3, help="Peak forward velocity (m/s)")
     parser.add_argument("--bag", action="store_true", help="Also record ROS 2 bag")
     args = parser.parse_args()
 
