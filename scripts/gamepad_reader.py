@@ -82,9 +82,9 @@ class XboxState:
 
     def compute_velocities(
         self,
-        max_vx: float = 1.0,
-        max_vy: float = 1.0,
-        max_wz: float = 1.0,
+        max_vx: float = 1.5,
+        max_vy: float = 1.5,
+        max_wz: float = 1.2,
         deadzone: float = DEADZONE_DEFAULT,
         calibration: Optional[Dict[str, Any]] = None,
     ):
@@ -150,9 +150,19 @@ class LinuxGamepadReader:
     non-blocking batch event draining, and support for both Bluetooth and USB Xbox controllers.
     """
 
-    def __init__(self, callback: Optional[Callable[[XboxState, Dict[str, Any]], None]] = None, deadzone: float = DEADZONE_DEFAULT):
+    def __init__(
+        self,
+        callback: Optional[Callable[[XboxState, Dict[str, Any]], None]] = None,
+        deadzone: float = DEADZONE_DEFAULT,
+        max_vx: float = 1.5,
+        max_vy: float = 1.5,
+        max_wz: float = 1.2,
+    ):
         self.callback = callback
         self.deadzone = deadzone
+        self.max_vx = max_vx
+        self.max_vy = max_vy
+        self.max_wz = max_wz
         # Calibration is static while a teleop process is running. Loading it once
         # avoids filesystem I/O and JSON parsing on every joystick event.
         self.calibration = load_gamepad_calibration()
@@ -348,6 +358,9 @@ class LinuxGamepadReader:
 
             # Compute velocities
             self.state.compute_velocities(
+                max_vx=self.max_vx,
+                max_vy=self.max_vy,
+                max_wz=self.max_wz,
                 deadzone=self.deadzone,
                 calibration=self.calibration,
             )

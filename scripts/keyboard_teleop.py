@@ -43,10 +43,10 @@ C_WHITE   = "\033[1;37m"
 C_CLEAR   = "\033[2J\033[H"
 
 DEADZONE = 0.10
-MAX_VX = 1.0
-MIN_VX = -1.0
-MAX_VY = 1.0
-MAX_WZ = 1.0
+MAX_VX = 1.5
+MIN_VX = -1.5
+MAX_VY = 1.5
+MAX_WZ = 1.2
 PUBLISH_PERIOD = 0.02
 UI_REFRESH_PERIOD = 0.25
 COMMAND_QOS = QoSProfile(
@@ -100,7 +100,13 @@ class UnifiedTeleopNode(Node):
         self.running = True
 
         # Initialize Direct Linux Gamepad Reader
-        self.gamepad_reader = LinuxGamepadReader(callback=self._on_gamepad_event, deadzone=DEADZONE)
+        self.gamepad_reader = LinuxGamepadReader(
+            callback=self._on_gamepad_event,
+            deadzone=DEADZONE,
+            max_vx=MAX_VX,
+            max_vy=MAX_VY,
+            max_wz=MAX_WZ,
+        )
 
         # Match the policy/controller loop so fresh stick events reach it within one cycle.
         self.timer = self.create_timer(PUBLISH_PERIOD, self._publish_loop)
