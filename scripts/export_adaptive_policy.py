@@ -94,21 +94,19 @@ def main():
 
         # Copy checkpoint to models directory
         shutil.copy2(args.checkpoint, os.path.join(args.models_dir, f"model_{args.tag}.pt"))
-        if args.set_default:
-            shutil.copy2(args.checkpoint, os.path.join(args.models_dir, "model_2999.pt"))
 
         # If raw_policy exists, update its state dict with checkpoint weights
-        if os.path.isfile(args.raw_policy):
+        if args.raw_policy and os.path.isfile(args.raw_policy):
             raw_policy = torch.jit.load(args.raw_policy, map_location="cpu")
             clean_sd = {k: v for k, v in actor_sd.items() if k in raw_policy.state_dict()}
             raw_policy.load_state_dict(clean_sd)
             raw_policy.eval()
 
-        # Build PyTorch model for ONNX export
+        # Build PyTorch model for ONNX and fallback TorchScript export
         py_model = PyTorchBaselinePolicyWrapper(actor_sd)
         py_model.eval()
 
-        # Export ONNX
+        # Export ONNX (self-contained legacy exporter)
         onnx_tag_path = os.path.join(args.models_dir, f"policy_{args.tag}.onnx")
         torch.onnx.export(
             py_model,
@@ -117,6 +115,7 @@ def main():
             input_names=["obs"],
             output_names=["actions"],
             opset_version=18,
+            dynamo=False,
         )
         print(f"[SUCCESS] Exported ONNX model to: {onnx_tag_path}")
         if args.set_default:
@@ -132,9 +131,14 @@ def main():
             print(f"[SUCCESS] Updated default ONNX model: {onnx_def_path}")
 
     if raw_policy is None:
-        assert os.path.isfile(args.raw_policy), f"Policy file not found: {args.raw_policy}"
-        raw_policy = torch.jit.load(args.raw_policy, map_location="cpu")
-        raw_policy.eval()
+        if args.raw_policy and os.path.isfile(args.raw_policy):
+            raw_policy = torch.jit.load(args.raw_policy, map_location="cpu")
+            raw_policy.eval()
+        elif "py_model" in locals() and py_model is not None:
+            raw_policy = torch.jit.trace(py_model, torch.zeros(1, 45, dtype=torch.float32))
+            raw_policy.eval()
+        else:
+            raise FileNotFoundError(f"Policy file not found: {args.raw_policy}")
 
     # Save raw policy
     raw_tag_path = os.path.join(args.models_dir, f"policy_{args.tag}_raw.pt")
