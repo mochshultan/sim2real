@@ -195,7 +195,9 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("safe_park_kd", 0.5)
         self.declare_parameter("safe_park_double_press_window", 1.0)
         self.declare_parameter("cmd_timeout", 0.25)       # Seconds of no input before zeroing cmd_vel (Watchdog)
-        self.declare_parameter("action_ema_alpha", 0.0)   # Action EMA filter (0.0 = disabled, raw policy actions)
+        self.declare_parameter("action_ema_alpha", 0.0)   # Action EMA filter (0.0 = disabled per user request)
+        self.declare_parameter("walk_ramp_duration", 0.8) # Soft-start cosine ramp duration when entering WALK (s)
+        self.declare_parameter("imu_upside_down", True)   # True if IMU is mounted rotated 180 deg around X on chassis
 
         # Gain Parameters (Stiffness & Damping)
         self.declare_parameter("rl_kp_pitch", RL_KP_PITCH)
@@ -246,6 +248,9 @@ class NXPJaguarControllerNode(Node):
             raise ValueError("Invalid safe-park safety parameters")
         self.cmd_timeout = float(self.get_parameter("cmd_timeout").value)
         self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
+        self.walk_ramp_duration = float(self.get_parameter("walk_ramp_duration").value)
+        self.imu_upside_down = bool(self.get_parameter("imu_upside_down").value)
+        self.walk_start_time = 0.0
         self.sitdown_settle_delay = 0.5
         self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
         self.last_cmd_time = 0.0
@@ -457,25 +462,35 @@ class NXPJaguarControllerNode(Node):
             self.imu_received = False
             return
         with self.state_lock:
-            # Reorient IMU frame if mounted upside-down (Roll 180 deg)
             qx = msg.orientation.x
             qy = msg.orientation.y
             qz = msg.orientation.z
             qw = msg.orientation.w
 
-            body_qx = qw
-            body_qy = qz
-            body_qz = -qy
-            body_qw = -qx
+            if self.imu_upside_down:
+                # Reorient IMU frame if mounted upside-down (Roll 180 deg: q_body = q_raw * q_rotX(pi))
+                body_qx = qw
+                body_qy = qz
+                body_qz = -qy
+                body_qw = -qx
+
+                self.body_ang_vel[0] = msg.angular_velocity.x
+                self.body_ang_vel[1] = -msg.angular_velocity.y
+                self.body_ang_vel[2] = -msg.angular_velocity.z
+            else:
+                body_qx = qx
+                body_qy = qy
+                body_qz = qz
+                body_qw = qw
+
+                self.body_ang_vel[0] = msg.angular_velocity.x
+                self.body_ang_vel[1] = msg.angular_velocity.y
+                self.body_ang_vel[2] = msg.angular_velocity.z
 
             self.body_quat[0] = body_qx
             self.body_quat[1] = body_qy
             self.body_quat[2] = body_qz
             self.body_quat[3] = body_qw
-
-            self.body_ang_vel[0] = msg.angular_velocity.x
-            self.body_ang_vel[1] = -msg.angular_velocity.y
-            self.body_ang_vel[2] = -msg.angular_velocity.z
 
             self.imu_received = True
             self.last_imu_time = time.monotonic()
@@ -484,9 +499,9 @@ class NXPJaguarControllerNode(Node):
         now = self.get_clock().now().nanoseconds / 1e9
         with self.state_lock:
             cmd_deadzone = 0.10
-            vx = float(np.clip(msg.linear.x, -1.0, 1.0))
-            vy = float(np.clip(msg.linear.y, -1.0, 1.0))
-            wz = float(np.clip(msg.angular.z, -1.0, 1.0))
+            vx = float(np.clip(msg.linear.x, -1.5, 1.5))
+            vy = float(np.clip(msg.linear.y, -1.5, 1.5))
+            wz = float(np.clip(msg.angular.z, -1.2, 1.2))
             self.cmd_vel[0] = vx if abs(vx) >= cmd_deadzone else 0.0
             self.cmd_vel[1] = vy if abs(vy) >= cmd_deadzone else 0.0
             self.cmd_vel[2] = wz if abs(wz) >= cmd_deadzone else 0.0
@@ -624,14 +639,25 @@ class NXPJaguarControllerNode(Node):
                 self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
             # Button 1 (Circle / B / Key '3'): Start RL Walking (Jalan RL)
             elif pressed(1) and self.state == "STAND_HOLD":
+                # Pre-flight safety check: verify projected gravity before enabling WALK
+                bx, by, bz, bw = self.body_quat
+                gz = -(1.0 - 2.0 * (bx * bx + by * by))
+                if gz > -0.5:
+                    self.get_logger().error(
+                        f"[CONTROLLER ERROR] Refusing to start WALK! Projected gravity gz={gz:+.2f} > -0.5 "
+                        f"(robot upside-down or IMU inversion incorrect!). Expected gz ≈ -1.0."
+                    )
+                    return
                 self.state = "WALK"
+                self.walk_start_time = now
                 with self.state_lock:
                     self.filtered_action[:] = 0.0
+                    self.cmd_vel[:] = 0.0
                     init_obs = self.obs_builder.build_step_observation(self.body_ang_vel, self.body_quat, self.cmd_vel, self.joint_pos, self.joint_vel)
                     self.obs_builder.reset_history(init_obs)
-                ema_info = f"alpha={self.action_ema_alpha}" if self.action_ema_alpha > 0.0 else "DISABLED"
+                ema_info = f"alpha={self.action_ema_alpha:.2f}" if self.action_ema_alpha > 0.0 else "DISABLED"
                 self.get_logger().info(
-                    f"[CONTROLLER] State transition -> WALK (Baseline PPO / Adaptive Policy | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Leg[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}] | Action EMA: {ema_info})"
+                    f"[CONTROLLER] State transition -> WALK (Baseline PPO | Ramp: {self.walk_ramp_duration:.1f}s | Action EMA: {ema_info} | Init gz: {gz:+.2f} | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Leg[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}])"
                 )
             # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif pressed(2):
@@ -812,12 +838,23 @@ class NXPJaguarControllerNode(Node):
             else:
                 self.filtered_action = raw_action.copy()
 
-            target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * self.filtered_action
+            # Smooth soft-start / ramp into WALK mode (cosine S-curve) to eliminate initial step shock
+            walk_elapsed = now - self.walk_start_time
+            if self.walk_ramp_duration > 0.0 and walk_elapsed < self.walk_ramp_duration:
+                ramp = 0.5 * (1.0 - math.cos(math.pi * (walk_elapsed / self.walk_ramp_duration)))
+            else:
+                ramp = 1.0
+
+            applied_action = ramp * self.filtered_action
+            target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * applied_action
             target_vel = np.zeros(12, dtype=np.float32)
 
-            # Impedance tracking gains for RL (Coxa: Kp=20, Kd=1.5 | Leg: Kp=25, Kd=1.5)
+            # Impedance tracking gains for RL with smooth damping transition
             cmd_kp = self.rl_kp[:]
-            cmd_kd = self.rl_kd[:]
+            cmd_kd = [
+                float((1.0 - ramp) * tkd + ramp * rkd)
+                for tkd, rkd in zip(self.transition_kd, self.rl_kd)
+            ]
 
             # 3. Publish Debug State Vector
             debug_msg = Float32MultiArray()

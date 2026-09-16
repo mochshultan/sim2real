@@ -72,6 +72,7 @@ class StateCheckerNode(Node):
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
 
         # 4 Hz terminal refresh
+        self.raw_quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
         self.timer = self.create_timer(0.25, self._display_dashboard)
 
     def _imu_cb(self, msg: Imu):
@@ -81,6 +82,8 @@ class StateCheckerNode(Node):
         qy = msg.orientation.y
         qz = msg.orientation.z
         qw = msg.orientation.w
+
+        self.raw_quat = np.array([qx, qy, qz, qw], dtype=np.float32)
 
         body_qx = qw
         body_qy = qz
@@ -97,12 +100,12 @@ class StateCheckerNode(Node):
 
     def _joy_cb(self, msg: Joy):
         if len(msg.axes) >= 2:
-            self.cmd_vel[0] = msg.axes[1] * 1.0
-            self.cmd_vel[1] = msg.axes[0] * 1.0
+            self.cmd_vel[0] = msg.axes[1] * 1.5
+            self.cmd_vel[1] = msg.axes[0] * 1.5
             if len(msg.axes) > 3:
-                self.cmd_vel[2] = msg.axes[3] * 1.0
+                self.cmd_vel[2] = msg.axes[3] * 1.2
             elif len(msg.axes) >= 3:
-                self.cmd_vel[2] = msg.axes[2] * 1.0
+                self.cmd_vel[2] = msg.axes[2] * 1.2
             self.cmd_count += 1
 
     def _joint_cb(self, msg: JointState):
@@ -136,26 +139,32 @@ class StateCheckerNode(Node):
         gy = -2.0 * (qy * qz + qw * qx)
         gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
 
+        rqx, rqy, rqz, rqw = self.raw_quat
+        rgx = -2.0 * (rqx * rqz - rqw * rqy)
+        rgy = -2.0 * (rqy * rqz + rqw * rqx)
+        rgz = -(1.0 - 2.0 * (rqx * rqx + rqy * rqy))
+
         rel_pos = self.joint_pos - DEFAULT_JOINT_POS
 
         # Clear screen
         sys.stdout.write("\033[2J\033[H")
         print("=" * 80)
-        print(" 🐾 NXP JAGUAR: 48-D ACTOR OBSERVATION STATE & JOINT DIAGNOSTIC DASHBOARD")
+        print(" 🐾 NXP JAGUAR: 45-D ACTOR OBSERVATION STATE & JOINT DIAGNOSTIC DASHBOARD")
         print("=" * 80)
 
         # 1. IMU & Commands
-        print(f"📡 SENSOR STATUS | IMU Msg: {self.imu_count:6d} | Joint Msg: {self.joint_count:6d}")
+        print(f"📡 SENSOR STATUS | IMU Msg: {self.imu_count:6d} | Joint Msg: {self.joint_count:6d} | Cmd Msg: {self.cmd_count:6d}")
         print("-" * 80)
         print("1. BASE VELOCITY & GRAVITY PROJECTION:")
-        print(f"   • Base Lin Vel  [0:3] : [{self.lin_vel[0]:+6.2f}, {self.lin_vel[1]:+6.2f}, {self.lin_vel[2]:+6.2f}] m/s")
-        print(f"   • Base Ang Vel  [3:6] : [{self.ang_vel[0]:+6.2f}, {self.ang_vel[1]:+6.2f}, {self.ang_vel[2]:+6.2f}] rad/s")
-        print(f"   • Proj Gravity  [6:9] : [{gx:+6.2f}, {gy:+6.2f}, {gz:+6.2f}] (Upright is [0.0, 0.0, -1.0])")
-        print(f"   • Velocity Cmd [9:12] : [{self.cmd_vel[0]:+6.2f}, {self.cmd_vel[1]:+6.2f}, {self.cmd_vel[2]:+6.2f}]")
+        print(f"   • Raw IMU Quat [xyzw] : [{rqx:+6.3f}, {rqy:+6.3f}, {rqz:+6.3f}, {rqw:+6.3f}] (Raw gz={rgz:+5.2f})")
+        print(f"   • Body Frame Quat     : [{qx:+6.3f}, {qy:+6.3f}, {qz:+6.3f}, {qw:+6.3f}]")
+        print(f"   • Base Ang Vel  [0:3] : [{self.ang_vel[0]:+6.2f}, {self.ang_vel[1]:+6.2f}, {self.ang_vel[2]:+6.2f}] rad/s")
+        print(f"   • Proj Gravity  [3:6] : [{gx:+6.2f}, {gy:+6.2f}, {gz:+6.2f}] (Upright MUST be [0.0, 0.0, -1.0])")
+        print(f"   • Velocity Cmd  [6:9] : [{self.cmd_vel[0]:+6.2f}, {self.cmd_vel[1]:+6.2f}, {self.cmd_vel[2]:+6.2f}] (Max: ±1.5 m/s, ±1.2 rad/s)")
         print("-" * 80)
 
         # 2. Joint Status Table
-        print("2. 12-JOINT STATE ORDER (Isaac Lab Actor Dimension [12:36]):")
+        print("2. 12-JOINT STATE ORDER (Isaac Lab Actor Dimension [9:33]):")
         print(f"   {'Index':<6} {'Joint Name (Isaac Lab)':<24} {'q_curr (rad)':<14} {'q0_nom':<10} {'q - q0 (rel)':<14} {'q_dot (rad/s)':<14}")
         print("   " + "-" * 76)
 
@@ -173,12 +182,15 @@ class StateCheckerNode(Node):
         print("3. AUTOMATED SANITY CHECKS:")
         imu_ok = (self.imu_count > 0)
         joints_ok = (self.joint_count > 0)
-        grav_ok = (abs(gz - (-1.0)) < 0.25)
+        grav_ok = (gz < -0.5)
         standing_error = np.max(np.abs(rel_pos))
 
         print(f"   [{'OK' if imu_ok else 'FAIL'}] IMU Stream Active: {'Received' if imu_ok else 'Waiting for /imu/data or /Imu_data'}")
         print(f"   [{'OK' if joints_ok else 'FAIL'}] Joint State Stream: {'Received 12 joints' if joints_ok else 'Waiting for /joint_states'}")
-        print(f"   [{'OK' if grav_ok else 'WARN'}] Robot Orientation: {'Upright' if grav_ok else 'Tilted / Inverted'}")
+        if grav_ok:
+            print(f"   [OK]   Gravity Vector: Upright (gz={gz:+.2f} ≈ -1.0) -> SAFE for WALK mode")
+        else:
+            print(f"   [FAIL] Gravity Vector: INVERTED / TILTED (gz={gz:+.2f} > -0.5) -> ROBOT WILL TANTRUM IF WALK ENABLED!")
         print(f"   [{'OK' if standing_error < 0.3 else 'WARN'}] Max Deviation from Stand Pose: {standing_error:.3f} rad")
         print("=" * 80)
         print(" Press Ctrl+C to exit diagnostic tool.")
