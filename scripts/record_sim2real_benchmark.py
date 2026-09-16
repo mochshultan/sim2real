@@ -8,6 +8,7 @@ Executes standard evaluation trajectory:
   4. Forward cmd_vel ramp 0.5 to 0.0 m/s (2.0s)
   5. Return to Stand hold (3.0s)
 Saves all data to compressed .npz archive and optional rosbag2.
+Supports starting from sitting (auto-standup prep) or already standing!
 """
 
 import argparse
@@ -24,7 +25,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import Imu, JointState, Joy
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, String
 
 ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
 ROS_NAME_TO_ISAAC_IDX = {
@@ -73,6 +74,7 @@ class Sim2RealBenchmarkRecorder(Node):
         self.create_subscription(JointState, "/joint_states", self._joint_cb, 10)
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
+        self.create_subscription(String, "/jaguar/status", self._status_cb, 10)
 
         # Current live state
         self.latest_obs_45d = np.zeros(45, dtype=np.float32)
@@ -81,6 +83,7 @@ class Sim2RealBenchmarkRecorder(Node):
         self.latest_joint_tau = np.zeros(12, dtype=np.float32)
         self.latest_quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
         self.latest_ang_vel = np.zeros(3, dtype=np.float32)
+        self.controller_state = "UNKNOWN"
         self.obs_received = False
         self.joints_received = False
         self.imu_received = False
@@ -108,12 +111,19 @@ class Sim2RealBenchmarkRecorder(Node):
         self.log_quat = []
 
         self.bench_start_time = None
+        self.prep_start_time = None
         self.current_phase = "WAIT_READY"
         self.timer = self.create_timer(0.02, self._control_and_record_loop)  # 50 Hz loop
 
         self.get_logger().info(
             f"[RECORDER] Benchmark Node Started! Protocol: 3s Stand -> 5s Walk(0) -> 2s Accel(0->{self.max_vx}) -> 2s Decel({self.max_vx}->0) -> 3s Stand"
         )
+
+    def _status_cb(self, msg: String):
+        # Parses "State: <STATE> | ..."
+        if "State: " in msg.data:
+            state_part = msg.data.split("State: ")[1].split(" |")[0].strip()
+            self.controller_state = state_part
 
     def _debug_cb(self, msg: Float32MultiArray):
         if len(msg.data) >= 45:
@@ -167,26 +177,48 @@ class Sim2RealBenchmarkRecorder(Node):
         msg.angular.z = float(wz)
         self.cmd_pub.publish(msg)
 
+    def _is_robot_standing(self) -> bool:
+        # Check either via controller state or joint angles
+        if self.controller_state == "STAND_HOLD":
+            return True
+        # If hips are near -1.6 rad and knees near 1.4 rad
+        avg_hip = float(np.mean(self.latest_joint_pos[4:8]))
+        avg_knee = float(np.mean(self.latest_joint_pos[8:12]))
+        return (avg_hip < -1.0) and (avg_knee > 0.8)
+
     def _control_and_record_loop(self):
         now = time.monotonic()
 
-        # Step 0: Check Readiness
+        # Step 0: Check Sensors Readiness
         if self.current_phase == "WAIT_READY":
             if not self.joints_received or not self.imu_received:
                 self.get_logger().info("[RECORDER] Waiting for /joint_states and /Imu_data streams...", throttle_duration_sec=2.0)
                 return
-            self.get_logger().info("[RECORDER] Sensors OK. Starting 15s Benchmark Protocol...")
-            self.bench_start_time = now
-            self.current_phase = "STAND_HOLD"
-            # Trigger Button 0 (STANDUP / STAND_HOLD)
-            self._send_joy_button(0)
-            if self.record_bag:
-                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                bag_path = os.path.join(self.out_dir, f"bag_sim2real_{timestamp_str}")
-                self.bag_proc = subprocess.Popen([
-                    "ros2", "bag", "record", "-o", bag_path,
-                    "/jaguar/state_debug", "/joint_states", "/Imu_data", "/cmd_vel", "/joy"
-                ])
+
+            if self._is_robot_standing():
+                self.get_logger().info("[RECORDER] Robot is ALREADY STANDING! Starting 15s Benchmark Protocol immediately...")
+                self._start_benchmark(now)
+            else:
+                self.get_logger().info("[RECORDER] Robot is SITTING. Sending STANDUP command and waiting for robot to stand...")
+                self.prep_start_time = now
+                self.current_phase = "STANDUP_PREP"
+                self._send_joy_button(0)
+            return
+
+        # Step 0B: Standup Preparation if started from sitting
+        if self.current_phase == "STANDUP_PREP":
+            elapsed_prep = now - self.prep_start_time
+            # Keep commanding Button 0 briefly
+            if elapsed_prep < 1.0 and int(elapsed_prep / 0.3) % 2 == 0:
+                self._send_joy_button(0)
+
+            # Wait for standup duration (approx 2.5 - 3.0s) and verify standing pose
+            if elapsed_prep >= 3.0 and self._is_robot_standing():
+                self.get_logger().info("✅ Robot has successfully stood up! Starting 15s Benchmark Protocol...")
+                self._start_benchmark(now)
+            else:
+                sys.stdout.write(f"\r⏳ [STANDUP PREP: {elapsed_prep:4.1f}s / 3.0s] Waiting for robot to stand up firmly...")
+                sys.stdout.flush()
             return
 
         elapsed = now - self.bench_start_time
@@ -197,15 +229,13 @@ class Sim2RealBenchmarkRecorder(Node):
         if elapsed < self.t_stand_hold:
             self.current_phase = "STAND_HOLD"
             cmd_vx = 0.0
-            # Periodically pulse Button 0 to ensure STAND_HOLD state
             if int(elapsed / 0.5) % 2 == 0:
                 self._send_joy_button(0)
 
         # 2. 3.0 -> 8.0s: WALK mode idle (5.0s, cmd_vel = 0)
         elif elapsed < (self.t_stand_hold + self.t_walk_idle):
             if self.current_phase != "WALK_IDLE":
-                self.get_logger().info(f"[{elapsed:5.2f}s] -> Phase: WALK_IDLE (cmd_vel = 0)")
-                # Send Button 1 to enter WALK
+                self.get_logger().info(f"\n[{elapsed:5.2f}s] -> Phase: WALK_IDLE (cmd_vel = 0)")
                 self._send_joy_button(1)
             self.current_phase = "WALK_IDLE"
             cmd_vx = 0.0
@@ -225,7 +255,7 @@ class Sim2RealBenchmarkRecorder(Node):
         # 5. 12.0 -> 15.0s: Return to STAND_HOLD
         elif elapsed <= self.total_duration:
             if self.current_phase != "RETURN_STAND":
-                self.get_logger().info(f"[{elapsed:5.2f}s] -> Phase: RETURN_STAND (Switch to Stand Pose)")
+                self.get_logger().info(f"\n[{elapsed:5.2f}s] -> Phase: RETURN_STAND (Switch to Stand Pose)")
                 self._send_joy_button(0)
             self.current_phase = "RETURN_STAND"
             cmd_vx = 0.0
@@ -257,6 +287,18 @@ class Sim2RealBenchmarkRecorder(Node):
             f"Samples: {len(self.log_time)}"
         )
         sys.stdout.flush()
+
+    def _start_benchmark(self, now):
+        self.bench_start_time = now
+        self.current_phase = "STAND_HOLD"
+        self._send_joy_button(0)
+        if self.record_bag:
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            bag_path = os.path.join(self.out_dir, f"bag_sim2real_{timestamp_str}")
+            self.bag_proc = subprocess.Popen([
+                "ros2", "bag", "record", "-o", bag_path,
+                "/jaguar/state_debug", "/joint_states", "/Imu_data", "/cmd_vel", "/joy", "/jaguar/status"
+            ])
 
     def _finish_and_save(self):
         print("\n\n✅ Benchmark Protocol Completed! Stopping robot and saving data...")
