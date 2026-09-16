@@ -4,9 +4,10 @@ NXP Jaguar Sim2Real Automated Benchmark & 45D Observation Recorder.
 Executes standard evaluation trajectory:
   1. Stand hold (3.0s)
   2. Transition to WALK, cmd=0 (5.0s)
-  3. Forward cmd_vel ramp 0.0 to 0.5 m/s (2.0s)
-  4. Forward cmd_vel ramp 0.5 to 0.0 m/s (2.0s)
-  5. Return to Stand hold (3.0s)
+  3. Forward cmd_vel ramp 0.0 to 0.4 m/s (2.0s)
+  4. Hold forward cmd_vel at 0.4 m/s (1.0s)
+  5. Forward cmd_vel ramp 0.4 to 0.0 m/s (2.0s)
+  6. Return to Stand hold (3.0s)
 Saves all data to compressed .npz archive and optional rosbag2.
 Supports starting from sitting (auto-standup prep) or already standing!
 """
@@ -54,7 +55,7 @@ class Sim2RealBenchmarkRecorder(Node):
         super().__init__("jaguar_benchmark_recorder")
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
-        self.max_vx = 0.5
+        self.max_vx = 0.4
         self.record_bag = record_bag
         self.bag_proc = None
 
@@ -68,6 +69,7 @@ class Sim2RealBenchmarkRecorder(Node):
         # Publishers
         self.joy_pub = self.create_publisher(Joy, "/joy", 10)
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.benchmark_cmd_pub = self.create_publisher(Twist, "/jaguar/benchmark_cmd_vel", 10)
 
         # Subscriptions
         self.create_subscription(Float32MultiArray, "/jaguar/state_debug", self._debug_cb, 10)
@@ -92,11 +94,12 @@ class Sim2RealBenchmarkRecorder(Node):
         self.t_stand_hold = 3.0
         self.t_walk_idle = 5.0
         self.t_ramp_up = 2.0
+        self.t_hold = 1.0
         self.t_ramp_down = 2.0
         self.t_return_stand = 3.0
         self.total_duration = (
             self.t_stand_hold + self.t_walk_idle +
-            self.t_ramp_up + self.t_ramp_down + self.t_return_stand
+            self.t_ramp_up + self.t_hold + self.t_ramp_down + self.t_return_stand
         )
 
         # Data logs
@@ -116,7 +119,7 @@ class Sim2RealBenchmarkRecorder(Node):
         self.timer = self.create_timer(0.02, self._control_and_record_loop)  # 50 Hz loop
 
         self.get_logger().info(
-            f"[RECORDER] Benchmark Node Started! Protocol: 3s Stand -> 5s Walk(0) -> 2s Accel(0->{self.max_vx}) -> 2s Decel({self.max_vx}->0) -> 3s Stand"
+            f"[RECORDER] Benchmark Node Started! Protocol: 3s Stand -> 5s Walk(0) -> 2s Accel(0->{self.max_vx}) -> 1s Hold({self.max_vx}) -> 2s Decel({self.max_vx}->0) -> 3s Stand"
         )
 
     def _status_cb(self, msg: String):
@@ -176,6 +179,7 @@ class Sim2RealBenchmarkRecorder(Node):
         msg.linear.y = float(vy)
         msg.angular.z = float(wz)
         self.cmd_pub.publish(msg)
+        self.benchmark_cmd_pub.publish(msg)
 
     def _is_robot_standing(self) -> bool:
         # Check either via controller state or joint angles
@@ -196,7 +200,7 @@ class Sim2RealBenchmarkRecorder(Node):
                 return
 
             if self._is_robot_standing():
-                self.get_logger().info("[RECORDER] Robot is ALREADY STANDING! Starting 15s Benchmark Protocol immediately...")
+                self.get_logger().info(f"[RECORDER] Robot is ALREADY STANDING! Starting {self.total_duration:.0f}s Benchmark Protocol immediately...")
                 self._start_benchmark(now)
             else:
                 self.get_logger().info("[RECORDER] Robot is SITTING. Sending STANDUP command and waiting for robot to stand...")
@@ -214,7 +218,7 @@ class Sim2RealBenchmarkRecorder(Node):
 
             # Wait for standup duration (approx 2.5 - 3.0s) and verify standing pose
             if elapsed_prep >= 3.0 and self._is_robot_standing():
-                self.get_logger().info("✅ Robot has successfully stood up! Starting 15s Benchmark Protocol...")
+                self.get_logger().info(f"✅ Robot has successfully stood up! Starting {self.total_duration:.0f}s Benchmark Protocol...")
                 self._start_benchmark(now)
             else:
                 sys.stdout.write(f"\r⏳ [STANDUP PREP: {elapsed_prep:4.1f}s / 3.0s] Waiting for robot to stand up firmly...")
@@ -246,13 +250,18 @@ class Sim2RealBenchmarkRecorder(Node):
             self.current_phase = "WALK_ACCEL"
             cmd_vx = self.max_vx * (phase_t / self.t_ramp_up)
 
-        # 4. 10.0 -> 12.0s: WALK mode decel ramp (max_vx to 0.0)
-        elif elapsed < (self.t_stand_hold + self.t_walk_idle + self.t_ramp_up + self.t_ramp_down):
-            phase_t = elapsed - (self.t_stand_hold + self.t_walk_idle + self.t_ramp_up)
+        # 4. 10.0 -> 11.0s: WALK mode hold at max_vx
+        elif elapsed < (self.t_stand_hold + self.t_walk_idle + self.t_ramp_up + self.t_hold):
+            self.current_phase = "WALK_HOLD"
+            cmd_vx = self.max_vx
+
+        # 5. 11.0 -> 13.0s: WALK mode decel ramp (max_vx to 0.0)
+        elif elapsed < (self.t_stand_hold + self.t_walk_idle + self.t_ramp_up + self.t_hold + self.t_ramp_down):
+            phase_t = elapsed - (self.t_stand_hold + self.t_walk_idle + self.t_ramp_up + self.t_hold)
             self.current_phase = "WALK_DECEL"
             cmd_vx = self.max_vx * (1.0 - phase_t / self.t_ramp_down)
 
-        # 5. 12.0 -> 15.0s: Return to STAND_HOLD
+        # 6. 13.0 -> 16.0s: Return to STAND_HOLD
         elif elapsed <= self.total_duration:
             if self.current_phase != "RETURN_STAND":
                 self.get_logger().info(f"\n[{elapsed:5.2f}s] -> Phase: RETURN_STAND (Switch to Stand Pose)")
@@ -297,7 +306,8 @@ class Sim2RealBenchmarkRecorder(Node):
             bag_path = os.path.join(self.out_dir, f"bag_sim2real_{timestamp_str}")
             self.bag_proc = subprocess.Popen([
                 "ros2", "bag", "record", "-o", bag_path,
-                "/jaguar/state_debug", "/joint_states", "/Imu_data", "/cmd_vel", "/joy", "/jaguar/status"
+                "/jaguar/state_debug", "/joint_states", "/Imu_data", "/cmd_vel",
+                "/jaguar/benchmark_cmd_vel", "/joy", "/jaguar/status"
             ])
 
     def _finish_and_save(self):
@@ -333,7 +343,7 @@ class Sim2RealBenchmarkRecorder(Node):
         rclpy.shutdown()
 
 def main():
-    parser = argparse.ArgumentParser(description="Record 15s Benchmark Trajectory in Sim2Real")
+    parser = argparse.ArgumentParser(description="Record 16s Benchmark Trajectory in Sim2Real")
     default_out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "benchmark_data")
     parser.add_argument("--out-dir", type=str, default=default_out_dir, help="Output directory")
     parser.add_argument("--bag", action="store_true", help="Also record ROS 2 bag")

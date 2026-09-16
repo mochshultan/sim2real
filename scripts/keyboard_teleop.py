@@ -62,7 +62,7 @@ class UnifiedTeleopNode(Node):
         super().__init__("jaguar_unified_teleop")
 
         # Publishers
-        # /cmd_vel is the only velocity command path. /joy carries mode pulses only.
+        # Teleop velocity uses /cmd_vel. /joy carries mode pulses only.
         self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", COMMAND_QOS)
         self.joy_pub = self.create_publisher(Joy, "/joy", 1)
         self.safe_stop_pub = self.create_publisher(Bool, "/jaguar/safe_stop", 10)

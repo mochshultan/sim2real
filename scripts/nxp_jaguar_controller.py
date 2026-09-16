@@ -319,6 +319,7 @@ class NXPJaguarControllerNode(Node):
         self.body_ang_vel = np.zeros(3, dtype=np.float32)
         self.body_lin_vel = np.zeros(3, dtype=np.float32)
         self.cmd_vel = np.zeros(3, dtype=np.float32)
+        self.last_benchmark_cmd_time = float("-inf")
 
         self.state = "STANDBY"   # States: STANDBY (Passive Zero Torque) -> STANDUP -> WALK -> SITDOWN -> SAFE_SHUTDOWN -> DISABLED
         self.imu_received = False
@@ -353,6 +354,7 @@ class NXPJaguarControllerNode(Node):
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(JointState, "/joint_states", self._joint_state_cb, 10)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, COMMAND_QOS)
+        self.create_subscription(Twist, "/jaguar/benchmark_cmd_vel", self._benchmark_cmd_vel_cb, COMMAND_QOS)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
         self.create_subscription(Bool, "/jaguar/safe_stop", self._safe_stop_cb, 10)
         self.create_subscription(Bool, "/jaguar/emergency_stop", self._estop_cb, 10)
@@ -536,14 +538,24 @@ class NXPJaguarControllerNode(Node):
     def _cmd_vel_cb(self, msg: Twist):
         now = self.get_clock().now().nanoseconds / 1e9
         with self.state_lock:
-            cmd_deadzone = 0.10
+            if time.monotonic() - self.last_benchmark_cmd_time <= self.cmd_timeout:
+                return
             vx = float(np.clip(msg.linear.x, -1.5, 1.5))
             vy = float(np.clip(msg.linear.y, -1.5, 1.5))
             wz = float(np.clip(msg.angular.z, -1.2, 1.2))
-            self.cmd_vel[0] = vx if abs(vx) >= cmd_deadzone else 0.0
-            self.cmd_vel[1] = vy if abs(vy) >= cmd_deadzone else 0.0
-            self.cmd_vel[2] = wz if abs(wz) >= cmd_deadzone else 0.0
+            self.cmd_vel[0] = vx
+            self.cmd_vel[1] = vy
+            self.cmd_vel[2] = wz
             self.last_cmd_time = now
+
+    def _benchmark_cmd_vel_cb(self, msg: Twist):
+        now = self.get_clock().now().nanoseconds / 1e9
+        with self.state_lock:
+            self.cmd_vel[0] = float(np.clip(msg.linear.x, -1.5, 1.5))
+            self.cmd_vel[1] = float(np.clip(msg.linear.y, -1.5, 1.5))
+            self.cmd_vel[2] = float(np.clip(msg.angular.z, -1.2, 1.2))
+            self.last_cmd_time = now
+            self.last_benchmark_cmd_time = time.monotonic()
 
     def _joint_state_cb(self, msg: JointState):
         if (len(msg.position) != 12 or len(msg.velocity) != 12 or len(msg.effort) != 12
@@ -709,9 +721,8 @@ class NXPJaguarControllerNode(Node):
                         self.filtered_action[:] = 0.0
                     self.get_logger().info(f"[CONTROLLER] State transition -> SITDOWN ({self.transition_duration:.1f}s smooth S-curve)")
 
-        # Velocity is accepted only through /cmd_vel. Keeping mode pulses and
-        # analog commands on separate topics prevents callback-order overwrites
-        # and avoids applying a second joystick deadzone here.
+        # Velocity comes from /cmd_vel or the benchmark override. Mode and safety
+        # buttons remain on their separate topics regardless of command source.
 
     def _control_loop(self):
         t_start = time.perf_counter()
