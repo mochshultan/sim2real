@@ -769,6 +769,11 @@ class NXPJaguarControllerNode(Node):
             target_vel = np.zeros(12, dtype=np.float32)
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
+            # Publish 45D observation state during STAND_HOLD for continuous logging/benchmarking
+            obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
+            debug_msg = Float32MultiArray()
+            debug_msg.data = obs_45d.tolist()
+            self.debug_pub.publish(debug_msg)
         elif self.state == "SITDOWN":
             elapsed = now - self.transition_start_time
             alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
