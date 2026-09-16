@@ -206,6 +206,14 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("transition_kd_pitch", TRANSITION_KD_PITCH)
         self.declare_parameter("transition_kp_roll", TRANSITION_KP_ROLL)
         self.declare_parameter("transition_kd_roll", TRANSITION_KD_ROLL)
+        self.declare_parameter("use_imu_stabilization", True)
+        self.declare_parameter("imu_kp_pitch", 0.55)
+        self.declare_parameter("imu_kd_pitch", 0.04)
+        self.declare_parameter("imu_kp_roll", 0.30)
+        self.declare_parameter("imu_kd_roll", 0.03)
+        self.declare_parameter("imu_hip_tolerance", 0.15)
+        self.declare_parameter("imu_roll_tolerance", 0.12)
+        self.declare_parameter("imu_tilt_deadband", 0.02)
 
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
         if not policy_param:
@@ -251,6 +259,20 @@ class NXPJaguarControllerNode(Node):
         self.transition_kd_pitch = float(self.get_parameter("transition_kd_pitch").value)
         self.transition_kp_roll = float(self.get_parameter("transition_kp_roll").value)
         self.transition_kd_roll = float(self.get_parameter("transition_kd_roll").value)
+        self.use_imu_stabilization = bool(self.get_parameter("use_imu_stabilization").value)
+        self.imu_kp_pitch = float(self.get_parameter("imu_kp_pitch").value)
+        self.imu_kd_pitch = float(self.get_parameter("imu_kd_pitch").value)
+        self.imu_kp_roll = float(self.get_parameter("imu_kp_roll").value)
+        self.imu_kd_roll = float(self.get_parameter("imu_kd_roll").value)
+        self.imu_hip_tolerance = float(self.get_parameter("imu_hip_tolerance").value)
+        self.imu_roll_tolerance = float(self.get_parameter("imu_roll_tolerance").value)
+        self.imu_tilt_deadband = float(self.get_parameter("imu_tilt_deadband").value)
+        imu_values = (
+            self.imu_kp_pitch, self.imu_kd_pitch, self.imu_kp_roll, self.imu_kd_roll,
+            self.imu_hip_tolerance, self.imu_roll_tolerance, self.imu_tilt_deadband,
+        )
+        if not all(np.isfinite(value) and value >= 0.0 for value in imu_values):
+            raise ValueError("IMU stabilization gains, tolerances, and deadband must be finite and non-negative")
 
         self.rl_kp = [self.rl_kp_roll] * 4 + [self.rl_kp_pitch] * 8
         self.rl_kd = [self.rl_kd_roll] * 4 + [self.rl_kd_pitch] * 8
@@ -346,6 +368,11 @@ class NXPJaguarControllerNode(Node):
         # 50 Hz Control Timer Loop (20 ms dt)
         self.timer = self.create_timer(CONTROL_DT, self._control_loop)
         self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY (Motors Passive, Zero Torque)")
+        self.get_logger().info(
+            f"IMU standing auto-level: {'ON' if self.use_imu_stabilization else 'OFF'} | "
+            f"hip tolerance={self.imu_hip_tolerance:.3f} rad | "
+            f"roll tolerance={self.imu_roll_tolerance:.3f} rad | knees=fixed"
+        )
 
     def _trigger_hard_estop(self, reason: str):
         if self.state == "DISABLED":
@@ -484,6 +511,57 @@ class NXPJaguarControllerNode(Node):
                 self.joint_tau[target] = msg.effort[source]
             self.joints_received = True
             self.last_joints_time = time.monotonic()
+
+    def _compute_imu_stabilization(self, alpha: float, state: str) -> np.ndarray:
+        """Return bounded standing trim in Isaac order; knee trim is always zero."""
+        delta_q = np.zeros(N_JOINTS, dtype=np.float32)
+        if not self.use_imu_stabilization or state not in ("STANDUP", "STAND_HOLD"):
+            return delta_q
+
+        if not self.imu_received or time.monotonic() - self.last_imu_time > 0.25:
+            return delta_q
+
+        if state == "STANDUP":
+            # Introduce leveling only after the legs begin carrying the body.
+            weight = float(np.clip((alpha - 0.15) / 0.35, 0.0, 1.0))
+        else:
+            weight = 1.0
+        if weight <= 0.0:
+            return delta_q
+
+        qx, qy, qz, qw = self.body_quat
+        gx = -2.0 * (qx * qz - qw * qy)
+        gy = -2.0 * (qy * qz + qw * qx)
+        gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
+
+        # Fade correction near the emergency tilt envelope instead of driving
+        # aggressively when the robot is already close to falling.
+        if gz > -0.70:
+            weight *= max(0.0, float(np.clip((-gz - 0.50) / 0.20, 0.0, 1.0)))
+        if weight <= 0.0:
+            return delta_q
+
+        def deadband(value: float) -> float:
+            magnitude = max(0.0, abs(value) - self.imu_tilt_deadband)
+            return math.copysign(magnitude, value) if magnitude else 0.0
+
+        e_pitch = deadband(float(gx))
+        e_roll = deadband(float(-gy))
+        wx = float(self.body_ang_vel[0])
+        wy = float(self.body_ang_vel[1])
+
+        hip_trim = weight * (self.imu_kp_pitch * e_pitch + self.imu_kd_pitch * wy)
+        roll_trim = weight * (self.imu_kp_roll * e_roll + self.imu_kd_roll * wx)
+        hip_trim = float(np.clip(hip_trim, -self.imu_hip_tolerance, self.imu_hip_tolerance))
+        roll_trim = float(np.clip(roll_trim, -self.imu_roll_tolerance, self.imu_roll_tolerance))
+
+        # Isaac order: FR, FL, BR, BL rolls; then hips; then knees.
+        delta_q[0:4] = [roll_trim, -roll_trim, roll_trim, -roll_trim]
+        delta_q[4:8] = -hip_trim
+        # Intentionally never compensate with knees. Their transition/hold
+        # targets remain exactly the nominal trajectory values.
+        delta_q[8:12] = 0.0
+        return delta_q
 
     def _sensors_ready(self, check_limits=True):
         now = time.monotonic()
@@ -651,16 +729,17 @@ class NXPJaguarControllerNode(Node):
             diff = self.transition_target_pos - self.transition_start_pos
             target_pos = self.transition_start_pos + smooth_alpha * diff
             target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
+            target_pos += self._compute_imu_stabilization(alpha, "STANDUP")
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 self.state = "STAND_HOLD"
-                target_pos = DEFAULT_JOINT_POS.copy()
+                target_pos = DEFAULT_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
                 target_vel = np.zeros(12, dtype=np.float32)
-                self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose firmly (Power ON)")
+                self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose (Power ON + IMU Auto-Level)")
         elif self.state == "STAND_HOLD":
-            # Actively hold standing pose with power ON
-            target_pos = DEFAULT_JOINT_POS.copy()
+            # Hold nominal knees while applying bounded hip/collar leveling.
+            target_pos = DEFAULT_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
             target_vel = np.zeros(12, dtype=np.float32)
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]

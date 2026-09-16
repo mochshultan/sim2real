@@ -42,3 +42,13 @@ nxp_jaguar_controller:
     transition_kd_roll: 1.2
     transition_kp_pitch: 28.0
     transition_kd_pitch: 1.2
+    # Standing auto-level is active only during STANDUP/STAND_HOLD.
+    # Pitch correction is bounded at the hips; knees keep their nominal target.
+    use_imu_stabilization: true
+    imu_kp_pitch: 0.55
+    imu_kd_pitch: 0.04
+    imu_kp_roll: 0.30
+    imu_kd_roll: 0.03
+    imu_hip_tolerance: 0.15
+    imu_roll_tolerance: 0.12
+    imu_tilt_deadband: 0.02
