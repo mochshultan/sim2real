@@ -45,10 +45,29 @@ if [ -x "/usr/bin/python3" ]; then
     CMAKE_ARGS="--cmake-args -DPython3_EXECUTABLE=/usr/bin/python3"
 fi
 
+# CMake's file API can leave an empty codemodel JSON after an interrupted
+# configure. Colcon then fails while parsing it, even with --cmake-force-configure,
+# because CMake may reuse the same reply filename instead of overwriting it.
+FORCE_CONFIGURE_ARG=""
+for CODEMODEL_FILE in "$WORKSPACE_DIR"/build/jaguar_control/.cmake/api/v1/reply/codemodel-v2-*.json; do
+    [ -f "$CODEMODEL_FILE" ] || continue
+    if [ ! -s "$CODEMODEL_FILE" ]; then
+        # Keep the backup outside .cmake/api/v1/reply: CMake may purge that
+        # directory while regenerating its file-API responses.
+        CODEMODEL_BACKUP="$WORKSPACE_DIR/build/jaguar_control/$(basename "$CODEMODEL_FILE").corrupt.$(date +%Y%m%d%H%M%S).$$"
+        echo "Warning: empty CMake codemodel; moving it to $CODEMODEL_BACKUP"
+        if ! mv -- "$CODEMODEL_FILE" "$CODEMODEL_BACKUP"; then
+            echo "Error: failed to move empty CMake codemodel."
+            return 1 2>/dev/null || exit 1
+        fi
+        FORCE_CONFIGURE_ARG="--cmake-force-configure"
+    fi
+done
+
 if [ -d "$WORKSPACE_DIR/serial_imu" ]; then
-    colcon build --base-paths . serial_imu --packages-select jaguar_control serial_imu --symlink-install $CMAKE_ARGS || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
+    colcon build --base-paths . serial_imu --packages-select jaguar_control serial_imu --symlink-install $FORCE_CONFIGURE_ARG $CMAKE_ARGS || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
 else
-    colcon build --packages-select jaguar_control --symlink-install $CMAKE_ARGS || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
+    colcon build --packages-select jaguar_control --symlink-install $FORCE_CONFIGURE_ARG $CMAKE_ARGS || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
 fi
 
 echo "[3/3] Sourcing install/setup.bash..."
