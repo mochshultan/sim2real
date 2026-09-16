@@ -78,24 +78,24 @@ public:
     joint_configs_.resize(N_JOINTS);
 
     // BL (can1)
-    joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3245, -0.50,  0.50, 20.0, 17.0, {}};
-    joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1, +1.3483, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0488, -0.25,  2.50, 20.0, 17.0, {}};
+    joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.3245, -0.50,  0.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1, +1.3483, -2.50,  0.20, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0488, -0.25,  2.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
 
     // BR (can0)
-    joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1, +0.3517, -0.50,  0.50, 20.0, 17.0, {}};
-    joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1, +1.3476, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0039, -0.25,  2.50, 20.0, 17.0, {}};
+    joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1, +0.3517, -0.50,  0.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1, +1.3476, -2.50,  0.20, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0039, -0.25,  2.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
 
     // FL (can1)
-    joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.50,  0.50, 20.0, 17.0, {}};
-    joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1, +1.2127, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1, +0.0967, -0.25,  2.50, 20.0, 17.0, {}};
+    joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, -0.3526, -0.50,  0.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[7] = {"FL_hip_joint",    "can1", 2, -1, +1.2127, -2.50,  0.20, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[8] = {"FL_knee_joint",   "can1", 3, -1, +0.0967, -0.25,  2.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
 
     // FR (can0)
-    joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1, +0.1881, -0.50,  0.50, 20.0, 17.0, {}};
-    joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1, +1.1767, -2.50,  0.20, 20.0, 17.0, {}};
-    joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1, +0.2427, -0.25,  2.50, 20.0, 17.0, {}};
+    joint_configs_[9] = {"FR_collar_joint", "can0", 1, -1, +0.1881, -0.50,  0.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[10] ={"FR_hip_joint",    "can0", 2,  1, +1.1767, -2.50,  0.20, 20.0, RS00_TORQUE_LIMIT_NM, {}};
+    joint_configs_[11] ={"FR_knee_joint",   "can0", 3,  1, +0.2427, -0.25,  2.50, 20.0, RS00_TORQUE_LIMIT_NM, {}};
 
     for (size_t i = 0; i < N_JOINTS; ++i) {
       joint_configs_[i].motor_params.direction = joint_configs_[i].direction;
@@ -139,6 +139,7 @@ public:
       // Clear the previous operating state before enabling impedance mode.
       const can_frame sequence[] = {
         buildStopMotorFrame(cfg.can_id),
+        buildSetTorqueLimitFrame(cfg.can_id, cfg.max_effort),
         buildSetRunModeFrame(cfg.can_id, RUN_CONTROL_MODE),
         buildMitControlFrame(cfg.can_id, 0, 0, 0, 0, 0, cfg.motor_params),
         buildEnableMotorFrame(cfg.can_id)};

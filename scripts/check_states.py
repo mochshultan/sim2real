@@ -40,7 +40,7 @@ ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
 # Default Standing Pose synchronized with Isaac Lab NXP Jaguar
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.35, -1.35, -1.35, -1.35,   # Hip Pitches (Fr, Fl, Br, Bl)
+   -1.61, -1.61, -1.55, -1.55,   # Hip Pitches (Fr, Fl, Br, Bl)
     1.40,  1.40,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 

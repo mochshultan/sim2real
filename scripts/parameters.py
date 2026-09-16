@@ -4,6 +4,8 @@ RobStride RS00 Motors mapped across 2 CAN buses (can0 & can1).
 """
 
 N_JOINTS = 12
+RS00_TORQUE_LIMIT_NM = 14.0
+"""RobStride RS00 firmware torque limit [N·m]."""
 
 # CAN Bus Interface assignment: can0 = Sisi Kanan (FR, BR), can1 = Sisi Kiri (FL, BL)
 DEVICE = [
@@ -67,13 +69,13 @@ RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0 (nxp_jaguar.py):
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.35, Knee: +1.40
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.35, Knee: +1.40
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.55, Knee: +1.40
+#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.61, Knee: +1.40
 DEFAULT_ANGLE = [
-     0.0, -1.35,  1.40,  # BL
-     0.0, -1.35,  1.40,  # BR
-     0.0, -1.35,  1.40,  # FL
-     0.0, -1.35,  1.40,  # FR
+     0.0, -1.55,  1.40,  # BL
+     0.0, -1.55,  1.40,  # BR
+     0.0, -1.61,  1.40,  # FL
+     0.0, -1.61,  1.40,  # FR
 ]
 
 import os

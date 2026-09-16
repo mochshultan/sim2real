@@ -28,6 +28,9 @@ struct MotorParams
   int direction = 1;
 };
 
+constexpr double RS00_TORQUE_LIMIT_NM = 14.0;
+constexpr uint32_t PARAM_LIMIT_TORQUE = 0x700B;
+
 // =============================================================================
 // CAN Protocol Command Modes & Run Modes
 // =============================================================================
@@ -196,6 +199,41 @@ inline struct can_frame buildSetRunModeFrame(uint8_t motor_id, RunMode mode, uin
   frame.data[5] = 0x00;
   frame.data[6] = 0x00;
   frame.data[7] = 0x00;
+
+  return frame;
+}
+
+/**
+ * @brief Builds a write frame for the RobStride firmware torque limit.
+ *
+ * The motor applies this limit to its internal MIT impedance controller. The
+ * MIT ``tau_ff`` encoding range remains :math:`[-17, 17]` N m so that CAN
+ * command and feedback scaling remain compatible with the RS00 protocol.
+ */
+inline struct can_frame buildSetTorqueLimitFrame(
+  uint8_t motor_id, double torque_limit_nm = RS00_TORQUE_LIMIT_NM, uint8_t master_id = 0xFE)
+{
+  struct can_frame frame;
+  std::memset(&frame, 0, sizeof(frame));
+
+  frame.can_id = ((static_cast<uint32_t>(CMD_SINGLE_PARAM_WRITE) & 0x1F) << 24) |
+                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
+                 (static_cast<uint32_t>(motor_id) & 0xFF) |
+                 CAN_EFF_FLAG;
+  frame.can_dlc = 8;
+
+  frame.data[0] = static_cast<uint8_t>(PARAM_LIMIT_TORQUE & 0xFF);
+  frame.data[1] = static_cast<uint8_t>((PARAM_LIMIT_TORQUE >> 8) & 0xFF);
+  frame.data[2] = static_cast<uint8_t>((PARAM_LIMIT_TORQUE >> 16) & 0xFF);
+  frame.data[3] = static_cast<uint8_t>((PARAM_LIMIT_TORQUE >> 24) & 0xFF);
+
+  const float bounded_limit = static_cast<float>(std::clamp(torque_limit_nm, 0.0, RS00_TORQUE_LIMIT_NM));
+  uint32_t encoded_limit = 0;
+  static_assert(sizeof(encoded_limit) == sizeof(bounded_limit));
+  std::memcpy(&encoded_limit, &bounded_limit, sizeof(encoded_limit));
+  for (size_t byte_index = 0; byte_index < sizeof(encoded_limit); ++byte_index) {
+    frame.data[4 + byte_index] = static_cast<uint8_t>((encoded_limit >> (8 * byte_index)) & 0xFF);
+  }
 
   return frame;
 }
