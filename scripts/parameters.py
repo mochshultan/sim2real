@@ -91,8 +91,8 @@ _coxa_kp = 28.0
 _coxa_kd = 0.7
 _pitch_kp = 28.0
 _pitch_kd = 0.7
-_knee_kp = 24.0
-_knee_kd = 0.8
+_knee_kp = 28.0
+_knee_kd = 0.7
 _can_hz = 200
 
 if os.path.isfile(_CONFIG_FILE):

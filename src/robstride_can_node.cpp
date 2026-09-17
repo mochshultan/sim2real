@@ -36,8 +36,8 @@ public:
     default_kd_(0.7),
     default_coxa_kp_(28.0),
     default_coxa_kd_(0.7),
-    default_knee_kp_(24.0),
-    default_knee_kd_(0.8)
+    default_knee_kp_(28.0),
+    default_knee_kd_(0.7)
   {
     RCLCPP_INFO(this->get_logger(), "=================================================");
     RCLCPP_INFO(this->get_logger(), " Starting RobStride RS00 Hard Real-Time CAN Node ");
@@ -49,8 +49,8 @@ public:
     this->declare_parameter<double>("default_kd", 0.7);
     this->declare_parameter<double>("default_coxa_kp", 28.0);
     this->declare_parameter<double>("default_coxa_kd", 0.7);
-    this->declare_parameter<double>("default_knee_kp", 24.0);
-    this->declare_parameter<double>("default_knee_kd", 0.8);
+    this->declare_parameter<double>("default_knee_kp", 28.0);
+    this->declare_parameter<double>("default_knee_kd", 0.7);
     this->declare_parameter<int>("rt_priority", 80);
     this->declare_parameter<bool>("startup_clear_faults", false);
 

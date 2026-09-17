@@ -18,8 +18,8 @@ robstride_can_hardware:
     default_coxa_kd: 0.7
     default_kp: 28.0
     default_kd: 0.7
-    default_knee_kp: 24.0
-    default_knee_kd: 0.8
+    default_knee_kp: 28.0
+    default_knee_kd: 0.7
 
 jaguar_can_hardware:
   ros__parameters:
@@ -28,8 +28,8 @@ jaguar_can_hardware:
     default_coxa_kd: 0.7
     default_kp: 28.0
     default_kd: 0.7
-    default_knee_kp: 24.0
-    default_knee_kd: 0.8
+    default_knee_kp: 28.0
+    default_knee_kd: 0.7
 
 nxp_jaguar_controller:
   ros__parameters:
@@ -45,13 +45,13 @@ nxp_jaguar_controller:
     rl_kd_roll: 0.7
     rl_kp_pitch: 28.0
     rl_kd_pitch: 0.7
-    rl_kp_knee: 24.0
-    rl_kd_knee: 0.8
+    rl_kp_knee: 28.0
+    rl_kd_knee: 0.7
     transition_kp_roll: 28.0
     transition_kd_roll: 1.2
     transition_kp_pitch: 28.0
     transition_kd_pitch: 1.2
-    transition_kp_knee: 24.0
+    transition_kp_knee: 28.0
     transition_kd_knee: 1.2
     # Standing auto-level is active only during STANDUP/STAND_HOLD.
     # Pitch correction is bounded at the hips; knees keep their nominal target.
