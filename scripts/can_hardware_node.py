@@ -210,7 +210,7 @@ class CanHardwareDriverNode(Node):
         for i in indices:
             motor = self.motors[i]
             motor.set_run_mode("CONTROL_MODE")
-            motor.write_single_param("limit_torque", P.RS00_TORQUE_LIMIT_NM)
+            motor.write_single_param("limit_torque", P.RS00_CONTROL_TORQUE_LIMIT_NM)
             motor.send_control_command(0, 0, 0, 0, 0)
             can_id, pos, vel, tau, tem = motor.enable_motor()
             self.get_logger().info(f"[{bus_name}] Motor #{P.CAN_ID[i]} feedback: {pos!r}, temperature: {tem!r}")

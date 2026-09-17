@@ -29,6 +29,8 @@ struct MotorParams
 };
 
 constexpr double RS00_TORQUE_LIMIT_NM = 14.0;
+// Match the Isaac Lab Tibia training actuator limit during normal operation.
+constexpr double RS00_CONTROL_TORQUE_LIMIT_NM = 13.5;
 constexpr uint32_t PARAM_LIMIT_TORQUE = 0x700B;
 
 // =============================================================================

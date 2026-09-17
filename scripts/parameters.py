@@ -7,6 +7,9 @@ N_JOINTS = 12
 RS00_TORQUE_LIMIT_NM = 14.0
 """RobStride RS00 firmware torque limit [N·m]."""
 
+RS00_CONTROL_TORQUE_LIMIT_NM = 13.5
+"""Normal-control torque ceiling matching the Isaac Lab Tibia task [N·m]."""
+
 # CAN Bus Interface assignment: can0 = Sisi Kanan (FR, BR), can1 = Sisi Kiri (FL, BL)
 DEVICE = [
     "can1", "can1", "can1",  # BL (Back-Left)  -> can1

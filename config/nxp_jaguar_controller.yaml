@@ -1,6 +1,8 @@
 # NXP Jaguar RL Controller Configuration
 nxp_jaguar_controller:
   ros__parameters:
+    # Emergency feedback watchdog; normal MIT torque is clamped in hardware
+    # manager/firmware at 13.5 Nm to match Isaac Lab Tibia training.
     torque_limit: 14.0
     shutdown_duration: 3.0
     shutdown_settle_delay: 0.5
