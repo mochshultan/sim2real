@@ -92,18 +92,22 @@ RL_KP_ROLL = float(P.KP_GAIN[0])
 RL_KD_ROLL = float(P.KD_GAIN[0])
 RL_KP_PITCH = float(P.KP_GAIN[1])
 RL_KD_PITCH = float(P.KD_GAIN[1])
+RL_KP_KNEE = float(P.KP_GAIN[2])
+RL_KD_KNEE = float(P.KD_GAIN[2])
 
 TRANSITION_KP_ROLL = float(P.KP_GAIN[0])
 TRANSITION_KD_ROLL = float(P.KD_GAIN[0])
 TRANSITION_KP_PITCH = float(P.KP_GAIN[1])
 TRANSITION_KD_PITCH = float(P.KD_GAIN[1])
+TRANSITION_KP_KNEE = float(P.KP_GAIN[2])
+TRANSITION_KD_KNEE = float(P.KD_GAIN[2])
 
 # Isaac order: [0..3 Rolls, 4..7 Hips, 8..11 Knees]
-DEFAULT_TRANSITION_KP = [TRANSITION_KP_ROLL] * 4 + [TRANSITION_KP_PITCH] * 8
-DEFAULT_TRANSITION_KD = [TRANSITION_KD_ROLL] * 4 + [TRANSITION_KD_PITCH] * 8
+DEFAULT_TRANSITION_KP = [TRANSITION_KP_ROLL] * 4 + [TRANSITION_KP_PITCH] * 4 + [TRANSITION_KP_KNEE] * 4
+DEFAULT_TRANSITION_KD = [TRANSITION_KD_ROLL] * 4 + [TRANSITION_KD_PITCH] * 4 + [TRANSITION_KD_KNEE] * 4
 
-DEFAULT_RL_KP = [RL_KP_ROLL] * 4 + [RL_KP_PITCH] * 8
-DEFAULT_RL_KD = [RL_KD_ROLL] * 4 + [RL_KD_PITCH] * 8
+DEFAULT_RL_KP = [RL_KP_ROLL] * 4 + [RL_KP_PITCH] * 4 + [RL_KP_KNEE] * 4
+DEFAULT_RL_KD = [RL_KD_ROLL] * 4 + [RL_KD_PITCH] * 4 + [RL_KD_KNEE] * 4
 
 MAX_HOMING_VEL = 0.45    # rad/s (ultra-smooth continuous rate limit for startup homing)
 
@@ -205,10 +209,14 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("rl_kd_pitch", RL_KD_PITCH)
         self.declare_parameter("rl_kp_roll", RL_KP_ROLL)
         self.declare_parameter("rl_kd_roll", RL_KD_ROLL)
+        self.declare_parameter("rl_kp_knee", RL_KP_KNEE)
+        self.declare_parameter("rl_kd_knee", RL_KD_KNEE)
         self.declare_parameter("transition_kp_pitch", TRANSITION_KP_PITCH)
         self.declare_parameter("transition_kd_pitch", TRANSITION_KD_PITCH)
         self.declare_parameter("transition_kp_roll", TRANSITION_KP_ROLL)
         self.declare_parameter("transition_kd_roll", TRANSITION_KD_ROLL)
+        self.declare_parameter("transition_kp_knee", TRANSITION_KP_KNEE)
+        self.declare_parameter("transition_kd_knee", TRANSITION_KD_KNEE)
         self.declare_parameter("use_imu_stabilization", True)
         self.declare_parameter("imu_kp_pitch", 0.55)
         self.declare_parameter("imu_kd_pitch", 0.04)
@@ -261,10 +269,14 @@ class NXPJaguarControllerNode(Node):
         self.rl_kd_pitch = float(self.get_parameter("rl_kd_pitch").value)
         self.rl_kp_roll = float(self.get_parameter("rl_kp_roll").value)
         self.rl_kd_roll = float(self.get_parameter("rl_kd_roll").value)
+        self.rl_kp_knee = float(self.get_parameter("rl_kp_knee").value)
+        self.rl_kd_knee = float(self.get_parameter("rl_kd_knee").value)
         self.transition_kp_pitch = float(self.get_parameter("transition_kp_pitch").value)
         self.transition_kd_pitch = float(self.get_parameter("transition_kd_pitch").value)
         self.transition_kp_roll = float(self.get_parameter("transition_kp_roll").value)
         self.transition_kd_roll = float(self.get_parameter("transition_kd_roll").value)
+        self.transition_kp_knee = float(self.get_parameter("transition_kp_knee").value)
+        self.transition_kd_knee = float(self.get_parameter("transition_kd_knee").value)
         self.use_imu_stabilization = bool(self.get_parameter("use_imu_stabilization").value)
         self.imu_kp_pitch = float(self.get_parameter("imu_kp_pitch").value)
         self.imu_kd_pitch = float(self.get_parameter("imu_kd_pitch").value)
@@ -280,10 +292,10 @@ class NXPJaguarControllerNode(Node):
         if not all(np.isfinite(value) and value >= 0.0 for value in imu_values):
             raise ValueError("IMU stabilization gains, tolerances, and deadband must be finite and non-negative")
 
-        self.rl_kp = [self.rl_kp_roll] * 4 + [self.rl_kp_pitch] * 8
-        self.rl_kd = [self.rl_kd_roll] * 4 + [self.rl_kd_pitch] * 8
-        self.transition_kp = [self.transition_kp_roll] * 4 + [self.transition_kp_pitch] * 8
-        self.transition_kd = [self.transition_kd_roll] * 4 + [self.transition_kd_pitch] * 8
+        self.rl_kp = [self.rl_kp_roll] * 4 + [self.rl_kp_pitch] * 4 + [self.rl_kp_knee] * 4
+        self.rl_kd = [self.rl_kd_roll] * 4 + [self.rl_kd_pitch] * 4 + [self.rl_kd_knee] * 4
+        self.transition_kp = [self.transition_kp_roll] * 4 + [self.transition_kp_pitch] * 4 + [self.transition_kp_knee] * 4
+        self.transition_kd = [self.transition_kd_roll] * 4 + [self.transition_kd_pitch] * 4 + [self.transition_kd_knee] * 4
 
         self.filtered_action = np.zeros(12, dtype=np.float32)
 
@@ -707,7 +719,7 @@ class NXPJaguarControllerNode(Node):
                     self.obs_builder.reset_history(init_obs)
                 ema_info = f"alpha={self.action_ema_alpha:.2f}" if self.action_ema_alpha > 0.0 else "DISABLED"
                 self.get_logger().info(
-                    f"[CONTROLLER] State transition -> WALK (Baseline PPO | Ramp: {self.walk_ramp_duration:.1f}s | Action EMA: {ema_info} | Init gz: {gz:+.2f} | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Leg[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}])"
+                    f"[CONTROLLER] State transition -> WALK (Baseline PPO | Ramp: {self.walk_ramp_duration:.1f}s | Action EMA: {ema_info} | Init gz: {gz:+.2f} | Gains: Coxa[Kp={self.rl_kp_roll}, Kd={self.rl_kd_roll}], Hip[Kp={self.rl_kp_pitch}, Kd={self.rl_kd_pitch}], Knee[Kp={self.rl_kp_knee}, Kd={self.rl_kd_knee}])"
                 )
             # Button 2 (Square / X / Key '1'): Smooth Sit Down (Duduk perlahan)
             elif pressed(2):

@@ -32,10 +32,12 @@ public:
     running_(true),
     hw_manager_(),
     loop_hz_(200),
-    default_kp_(25.0),
-    default_kd_(1.5),
-    default_coxa_kp_(20.0),
-    default_coxa_kd_(1.5)
+    default_kp_(28.0),
+    default_kd_(0.7),
+    default_coxa_kp_(28.0),
+    default_coxa_kd_(0.7),
+    default_knee_kp_(24.0),
+    default_knee_kd_(0.8)
   {
     RCLCPP_INFO(this->get_logger(), "=================================================");
     RCLCPP_INFO(this->get_logger(), " Starting RobStride RS00 Hard Real-Time CAN Node ");
@@ -43,10 +45,12 @@ public:
 
     // Declare ROS parameters
     this->declare_parameter<int>("rate_hz", 200);
-    this->declare_parameter<double>("default_kp", 25.0);
-    this->declare_parameter<double>("default_kd", 1.5);
-    this->declare_parameter<double>("default_coxa_kp", 20.0);
-    this->declare_parameter<double>("default_coxa_kd", 1.5);
+    this->declare_parameter<double>("default_kp", 28.0);
+    this->declare_parameter<double>("default_kd", 0.7);
+    this->declare_parameter<double>("default_coxa_kp", 28.0);
+    this->declare_parameter<double>("default_coxa_kd", 0.7);
+    this->declare_parameter<double>("default_knee_kp", 24.0);
+    this->declare_parameter<double>("default_knee_kd", 0.8);
     this->declare_parameter<int>("rt_priority", 80);
     this->declare_parameter<bool>("startup_clear_faults", false);
 
@@ -55,6 +59,8 @@ public:
     default_kd_ = this->get_parameter("default_kd").as_double();
     default_coxa_kp_ = this->get_parameter("default_coxa_kp").as_double();
     default_coxa_kd_ = this->get_parameter("default_coxa_kd").as_double();
+    default_knee_kp_ = this->get_parameter("default_knee_kp").as_double();
+    default_knee_kd_ = this->get_parameter("default_knee_kd").as_double();
     rt_priority_ = this->get_parameter("rt_priority").as_int();
     if (loop_hz_ < 1 || loop_hz_ > 1000 || rt_priority_ < 1 || rt_priority_ > 99) {
       throw std::invalid_argument("rate_hz must be 1..1000 and rt_priority 1..99");
@@ -202,8 +208,9 @@ private:
           } else {
             cmd.effort = (msg->effort.size() > i) ? msg->effort[i] : 0.0;
             bool is_coxa = (idx % 3 == 0);
-            cmd.kp = is_coxa ? default_coxa_kp_ : default_kp_;
-            cmd.kd = is_coxa ? default_coxa_kd_ : default_kd_;
+            bool is_knee = (idx % 3 == 2);
+            cmd.kp = is_coxa ? default_coxa_kp_ : (is_knee ? default_knee_kp_ : default_kp_);
+            cmd.kd = is_coxa ? default_coxa_kd_ : (is_knee ? default_knee_kd_ : default_kd_);
           }
           commands[idx] = cmd;
         }
@@ -220,8 +227,9 @@ private:
         } else {
           cmd.effort = (msg->effort.size() == N_JOINTS) ? msg->effort[i] : 0.0;
           bool is_coxa = (i % 3 == 0);
-          cmd.kp = is_coxa ? default_coxa_kp_ : default_kp_;
-          cmd.kd = is_coxa ? default_coxa_kd_ : default_kd_;
+          bool is_knee = (i % 3 == 2);
+          cmd.kp = is_coxa ? default_coxa_kp_ : (is_knee ? default_knee_kp_ : default_kp_);
+          cmd.kd = is_coxa ? default_coxa_kd_ : (is_knee ? default_knee_kd_ : default_kd_);
         }
         commands[i] = cmd;
       }
@@ -255,8 +263,9 @@ private:
         cmd.velocity = msg->data[12 + i];
         cmd.effort   = msg->data[24 + i];
         bool is_coxa = (i % 3 == 0);
-        cmd.kp       = is_coxa ? default_coxa_kp_ : default_kp_;
-        cmd.kd       = is_coxa ? default_coxa_kd_ : default_kd_;
+        bool is_knee = (i % 3 == 2);
+        cmd.kp       = is_coxa ? default_coxa_kp_ : (is_knee ? default_knee_kp_ : default_kp_);
+        cmd.kd       = is_coxa ? default_coxa_kd_ : (is_knee ? default_knee_kd_ : default_kd_);
         commands[i] = cmd;
       }
     }
@@ -367,6 +376,8 @@ private:
   double default_kd_;
   double default_coxa_kp_;
   double default_coxa_kd_;
+  double default_knee_kp_;
+  double default_knee_kd_;
   int rt_priority_;
 
   std::unordered_map<std::string, size_t> name_to_index_;

@@ -71,12 +71,16 @@ class CanHardwareDriverNode(Node):
         self.declare_parameter("default_coxa_kd", float(P.KD_GAIN[0]))
         self.declare_parameter("default_kp", float(P.KP_GAIN[1]))
         self.declare_parameter("default_kd", float(P.KD_GAIN[1]))
+        self.declare_parameter("default_knee_kp", float(P.KP_GAIN[2]))
+        self.declare_parameter("default_knee_kd", float(P.KD_GAIN[2]))
 
         self.rate_hz = self.get_parameter("rate_hz").as_int()
         self.default_coxa_kp = float(self.get_parameter("default_coxa_kp").value)
         self.default_coxa_kd = float(self.get_parameter("default_coxa_kd").value)
         self.default_kp = float(self.get_parameter("default_kp").value)
         self.default_kd = float(self.get_parameter("default_kd").value)
+        self.default_knee_kp = float(self.get_parameter("default_knee_kp").value)
+        self.default_knee_kd = float(self.get_parameter("default_knee_kd").value)
 
         self.state = RobotHardwareState()
         self.cmd = RobotHardwareCommand()
@@ -132,8 +136,9 @@ class CanHardwareDriverNode(Node):
                             self.cmd.tau[ros_idx] = msg.effort[24 + idx] if len(msg.effort) >= 36 else 0.0
                         else:
                             is_coxa = (ros_idx % 3 == 0)
-                            self.cmd.kp[ros_idx] = self.default_coxa_kp if is_coxa else self.default_kp
-                            self.cmd.kd[ros_idx] = self.default_coxa_kd if is_coxa else self.default_kd
+                            is_knee = (ros_idx % 3 == 2)
+                            self.cmd.kp[ros_idx] = self.default_coxa_kp if is_coxa else (self.default_knee_kp if is_knee else self.default_kp)
+                            self.cmd.kd[ros_idx] = self.default_coxa_kd if is_coxa else (self.default_knee_kd if is_knee else self.default_kd)
                             if len(msg.effort) > idx:
                                 self.cmd.tau[ros_idx] = msg.effort[idx]
             elif len(msg.position) == 12:
@@ -149,8 +154,9 @@ class CanHardwareDriverNode(Node):
                 else:
                     for i in range(12):
                         is_coxa = (i % 3 == 0)
-                        self.cmd.kp[i] = self.default_coxa_kp if is_coxa else self.default_kp
-                        self.cmd.kd[i] = self.default_coxa_kd if is_coxa else self.default_kd
+                        is_knee = (i % 3 == 2)
+                        self.cmd.kp[i] = self.default_coxa_kp if is_coxa else (self.default_knee_kp if is_knee else self.default_kp)
+                        self.cmd.kd[i] = self.default_coxa_kd if is_coxa else (self.default_knee_kd if is_knee else self.default_kd)
                         if len(msg.effort) > i:
                             self.cmd.tau[i] = msg.effort[i]
             self.cmd.enabled = any(x != 0 for x in self.cmd.kp + self.cmd.kd + self.cmd.tau)

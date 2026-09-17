@@ -91,6 +91,8 @@ _coxa_kp = 28.0
 _coxa_kd = 0.7
 _pitch_kp = 28.0
 _pitch_kd = 0.7
+_knee_kp = 24.0
+_knee_kd = 0.8
 _can_hz = 200
 
 if os.path.isfile(_CONFIG_FILE):
@@ -103,22 +105,24 @@ if os.path.isfile(_CONFIG_FILE):
             _coxa_kd = float(_hw.get("default_coxa_kd", _coxa_kd))
             _pitch_kp = float(_hw.get("default_kp", _pitch_kp))
             _pitch_kd = float(_hw.get("default_kd", _pitch_kd))
+            _knee_kp = float(_hw.get("default_knee_kp", _knee_kp))
+            _knee_kd = float(_hw.get("default_knee_kd", _knee_kd))
             _can_hz = int(_hw.get("rate_hz", _can_hz))
     except Exception:
         pass
 
 # PD Control Gains for RS00 Motors (ROS Order: BL, BR, FL, FR)
 KP_GAIN = [
-    _coxa_kp, _pitch_kp, _pitch_kp,  # BL: collar, hip, knee
-    _coxa_kp, _pitch_kp, _pitch_kp,  # BR: collar, hip, knee
-    _coxa_kp, _pitch_kp, _pitch_kp,  # FL: collar, hip, knee
-    _coxa_kp, _pitch_kp, _pitch_kp,  # FR: collar, hip, knee
+    _coxa_kp, _pitch_kp, _knee_kp,  # BL: collar, hip, knee
+    _coxa_kp, _pitch_kp, _knee_kp,  # BR: collar, hip, knee
+    _coxa_kp, _pitch_kp, _knee_kp,  # FL: collar, hip, knee
+    _coxa_kp, _pitch_kp, _knee_kp,  # FR: collar, hip, knee
 ]
 KD_GAIN = [
-    _coxa_kd, _pitch_kd, _pitch_kd,  # BL: collar, hip, knee
-    _coxa_kd, _pitch_kd, _pitch_kd,  # BR: collar, hip, knee
-    _coxa_kd, _pitch_kd, _pitch_kd,  # FL: collar, hip, knee
-    _coxa_kd, _pitch_kd, _pitch_kd,  # FR: collar, hip, knee
+    _coxa_kd, _pitch_kd, _knee_kd,  # BL: collar, hip, knee
+    _coxa_kd, _pitch_kd, _knee_kd,  # BR: collar, hip, knee
+    _coxa_kd, _pitch_kd, _knee_kd,  # FL: collar, hip, knee
+    _coxa_kd, _pitch_kd, _knee_kd,  # FR: collar, hip, knee
 ]
 
 # Isaac Lab RL Policy Control Parameters
