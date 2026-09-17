@@ -160,6 +160,11 @@ class CanHardwareDriverNode(Node):
                         if len(msg.effort) > i:
                             self.cmd.tau[i] = msg.effort[i]
             self.cmd.enabled = any(x != 0 for x in self.cmd.kp + self.cmd.kd + self.cmd.tau)
+            self.cmd.tau = [
+                float(np.clip(tau, -P.RS00_CONTROL_TORQUE_LIMIT_NM,
+                              P.RS00_CONTROL_TORQUE_LIMIT_NM))
+                for tau in self.cmd.tau
+            ]
             self.cmd.last_update = time.monotonic()
 
     def _estop_cb(self, msg):

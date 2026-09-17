@@ -9,12 +9,13 @@ import numpy as np
 
 source = ast.parse((Path(__file__).parents[1] / 'scripts/nxp_jaguar_controller.py').read_text())
 cls = next(n for n in source.body if isinstance(n, ast.ClassDef) and n.name == 'NXPJaguarControllerNode')
-methods = {'_trigger_safe_shutdown', '_persistent_fault', '_hardware_safe_park_cb',
+methods = {'_trigger_safe_shutdown', '_persistent_fault', '_update_overtorque_safety', '_hardware_safe_park_cb',
            '_request_safe_park', '_sensors_ready', '_joy_cb',
            '_hardware_status_cb', '_reset_controller_cb'}
 cls.bases = []
 cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in methods]
 namespace = dict(np=np, time=time, Bool=Mock, Joy=Mock, String=Mock,
+                 ISAAC_JOINT_NAMES=[f'joint_{i}' for i in range(12)],
                  ISAAC_LIMITS_LOWER=np.full(12, -0.5), ISAAC_LIMITS_UPPER=np.full(12, 0.5),
                  FEEDBACK_LIMITS_LOWER=np.full(12, -0.7), FEEDBACK_LIMITS_UPPER=np.full(12, 0.7),
                  SIT_JOINT_POS=np.zeros(12), JaguarObservationBuilder=Mock,
@@ -53,6 +54,30 @@ class SafetyTests(unittest.TestCase):
             self.assertFalse(self.node._persistent_fault('tracking', False))
             self.assertFalse(self.node._persistent_fault('tracking', True))
             self.assertTrue(self.node._persistent_fault('tracking', True))
+
+    def test_overtorque_parks_only_after_five_samples_above_15_nm(self):
+        self.node.overtorque_threshold = 15.0
+        self.node.torque_overload_cycles = 5
+        self.node.overtorque_counter = 0
+        tau = np.zeros(12)
+        tau[4] = 15.01
+
+        for cycle in range(4):
+            self.node._update_overtorque_safety(float(cycle), tau)
+        self.node._request_safe_park.assert_not_called()
+
+        self.node._update_overtorque_safety(4.0, tau)
+        self.node._request_safe_park.assert_called_once()
+
+    def test_torque_at_or_below_15_nm_does_not_park(self):
+        self.node.overtorque_threshold = 15.0
+        self.node.torque_overload_cycles = 5
+        self.node.overtorque_counter = 4
+
+        self.node._update_overtorque_safety(1.0, np.full(12, 15.0))
+
+        self.assertEqual(self.node.overtorque_counter, 3)
+        self.node._request_safe_park.assert_not_called()
 
     def test_queued_driver_requests_do_not_restart_park(self):
         self.node.state = 'SAFE_PARK'

@@ -192,7 +192,7 @@ class NXPJaguarControllerNode(Node):
 
         # Declare parameters
         self.declare_parameter("policy_path", "")
-        self.declare_parameter("torque_limit", 14.0)
+        self.declare_parameter("overtorque_threshold", 15.0)
         self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
         self.declare_parameter("safe_park_duration", 2.0)
@@ -245,16 +245,17 @@ class NXPJaguarControllerNode(Node):
         # avoid allowing Torch to consume every control-core thread.
         torch.set_num_threads(max(1, int(os.environ.get("JAGUAR_TORCH_THREADS", "1"))))
 
-        self.torque_limit = float(self.get_parameter("torque_limit").value)
+        self.overtorque_threshold = float(self.get_parameter("overtorque_threshold").value)
         self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
         self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
         self.safe_park_duration = float(self.get_parameter("safe_park_duration").value)
         self.safe_park_kp = float(self.get_parameter("safe_park_kp").value)
         self.safe_park_kd = float(self.get_parameter("safe_park_kd").value)
         self.safe_park_double_press_window = float(self.get_parameter("safe_park_double_press_window").value)
-        if (self.safe_park_duration <= 0 or self.safe_park_kp < 0 or self.safe_park_kd < 0 or
+        if (not P.RS00_CONTROL_TORQUE_LIMIT_NM < self.overtorque_threshold <= 17.0 or
+                self.safe_park_duration <= 0 or self.safe_park_kp < 0 or self.safe_park_kd < 0 or
                 self.safe_park_double_press_window <= 0):
-            raise ValueError("Invalid safe-park safety parameters")
+            raise ValueError("Invalid torque or safe-park safety parameters")
         self.cmd_timeout = float(self.get_parameter("cmd_timeout").value)
         self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
         self.walk_ramp_duration = float(self.get_parameter("walk_ramp_duration").value)
@@ -461,6 +462,22 @@ class NXPJaguarControllerNode(Node):
         now = time.monotonic()
         since = self.soft_fault_times.setdefault(key, now)
         return now - since >= 0.1
+
+    def _update_overtorque_safety(self, now: float, tau):
+        """Request a controlled park after a sustained 15 Nm feedback overload."""
+        max_tau = float(np.max(np.abs(tau)))
+        if max_tau > self.overtorque_threshold and self.state not in ["STANDBY", "DISABLED"]:
+            self.overtorque_counter += 1
+            if self.overtorque_counter >= self.torque_overload_cycles:
+                joint_idx = int(np.argmax(np.abs(tau)))
+                joint_name = ISAAC_JOINT_NAMES[joint_idx]
+                self._trigger_safe_shutdown(
+                    now,
+                    f"Over-torque on {joint_name} "
+                    f"({max_tau:.2f} Nm > {self.overtorque_threshold:.2f} Nm)",
+                )
+        else:
+            self.overtorque_counter = max(0, self.overtorque_counter - 1)
 
     def _hardware_safe_park_cb(self, msg: Bool):
         if msg.data and self.state not in ["SAFE_PARK", "DISABLED"]:
@@ -779,18 +796,9 @@ class NXPJaguarControllerNode(Node):
             lin_v = self.body_lin_vel.copy()
             cmd = self.cmd_vel.copy()
 
-        # Failsafe 1: Over-Torque Protection (Continuous overload > threshold for >100ms in active states)
-        max_tau = float(np.max(np.abs(tau)))
-        if max_tau > self.torque_limit and self.state not in ["STANDBY", "DISABLED"]:
-            self.overtorque_counter += 1
-            if self.overtorque_counter >= self.torque_overload_cycles:
-                joint_idx = int(np.argmax(np.abs(tau)))
-                joint_name = ISAAC_JOINT_NAMES[joint_idx]
-                self._trigger_safe_shutdown(
-                    now, f"Over-torque on {joint_name} ({max_tau:.2f} Nm > {self.torque_limit:.2f} Nm)"
-                )
-        else:
-            self.overtorque_counter = max(0, self.overtorque_counter - 1)
+        # Failsafe 1: sustained feedback >15 Nm requests SAFE_PARK. A repeated
+        # fault while parking escalates through _trigger_safe_shutdown to E-stop.
+        self._update_overtorque_safety(now, tau)
 
         # Failsafe 2: Tilt Safety Protection (Emergency sit if tilt > 60 deg, gz > -0.5 in active states)
         gz_body = -(1.0 - 2.0 * (quat[0]**2 + quat[1]**2))

@@ -34,6 +34,10 @@ int main()
 {
   const auto now = Clock::now();
   const auto ms = [](int n) { return std::chrono::milliseconds(n); };
+  RobStrideHardwareManager limits;
+  for (const auto & cfg : limits.getJointConfigs()) {
+    assert(cfg.max_effort == RS00_CONTROL_TORQUE_LIMIT_NM);
+  }
   // The reported 0.854 rad tracking error is below the unified 1.57 threshold.
   RobStrideHardwareManager normal;
   command(normal, 1.93256);
