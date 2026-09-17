@@ -464,7 +464,7 @@ class NXPJaguarControllerNode(Node):
         return now - since >= 0.1
 
     def _update_overtorque_safety(self, now: float, tau):
-        """Request a controlled park after a sustained 15 Nm feedback overload."""
+        """Handle sustained torque overloads and return the peak feedback torque."""
         max_tau = float(np.max(np.abs(tau)))
         if max_tau > self.overtorque_threshold and self.state not in ["STANDBY", "DISABLED"]:
             self.overtorque_counter += 1
@@ -478,6 +478,7 @@ class NXPJaguarControllerNode(Node):
                 )
         else:
             self.overtorque_counter = max(0, self.overtorque_counter - 1)
+        return max_tau
 
     def _hardware_safe_park_cb(self, msg: Bool):
         if msg.data and self.state not in ["SAFE_PARK", "DISABLED"]:
@@ -798,7 +799,7 @@ class NXPJaguarControllerNode(Node):
 
         # Failsafe 1: sustained feedback >15 Nm requests SAFE_PARK. A repeated
         # fault while parking escalates through _trigger_safe_shutdown to E-stop.
-        self._update_overtorque_safety(now, tau)
+        max_tau = self._update_overtorque_safety(now, tau)
 
         # Failsafe 2: Tilt Safety Protection (Emergency sit if tilt > 60 deg, gz > -0.5 in active states)
         gz_body = -(1.0 - 2.0 * (quat[0]**2 + quat[1]**2))

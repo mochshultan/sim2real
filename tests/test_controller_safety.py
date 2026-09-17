@@ -63,7 +63,8 @@ class SafetyTests(unittest.TestCase):
         tau[4] = 15.01
 
         for cycle in range(4):
-            self.node._update_overtorque_safety(float(cycle), tau)
+            max_tau = self.node._update_overtorque_safety(float(cycle), tau)
+        self.assertAlmostEqual(max_tau, 15.01)
         self.node._request_safe_park.assert_not_called()
 
         self.node._update_overtorque_safety(4.0, tau)
@@ -74,8 +75,9 @@ class SafetyTests(unittest.TestCase):
         self.node.torque_overload_cycles = 5
         self.node.overtorque_counter = 4
 
-        self.node._update_overtorque_safety(1.0, np.full(12, 15.0))
+        max_tau = self.node._update_overtorque_safety(1.0, np.full(12, 15.0))
 
+        self.assertEqual(max_tau, 15.0)
         self.assertEqual(self.node.overtorque_counter, 3)
         self.node._request_safe_park.assert_not_called()
 
