@@ -45,10 +45,10 @@ MOTOR_DIR = [
 # Zero-calibration angular offsets
 # Calibrated True Sitting Zero offsets (so that sitting position = 0.0 rad):
 MOTOR_OFFSET_ANGLE = [
-    +0.3245, -1.3483, -0.1288,  # BL (can1: Collar, Hip, Knee)
-    -0.3017, -1.3476, -0.1339,  # BR (can0: Collar, Hip, Knee)
-    +0.3426, -1.2127, -0.0367,  # FL (can1: Collar, Hip, Knee)
-    -0.1981, -1.1767, -0.1427,  # FR (can0: Collar, Hip, Knee)
+    +0.3245, -1.2983, -0.1288,  # BL (can1: Collar, Hip, Knee)
+    -0.3017, -1.2976, -0.1339,  # BR (can0: Collar, Hip, Knee)
+    +0.3426, -1.2027, -0.1167,  # FL (can1: Collar, Hip, Knee)
+    -0.1981, -1.1667, -0.2227,  # FR (can0: Collar, Hip, Knee)
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
