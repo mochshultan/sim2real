@@ -19,7 +19,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 
 
 class KeyboardCmdVel(Node):
@@ -28,6 +28,7 @@ class KeyboardCmdVel(Node):
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self.joy_pub = self.create_publisher(Joy, "/joy", 10)
         self.safe_pub = self.create_publisher(Bool, "/jaguar/safe_stop", 10)
+        self.status_pub = self.create_publisher(String, "/jaguar/keyboard_teleop_status", 10)
         self.timer = self.create_timer(0.02, self._publish)
         self.lock = threading.Lock()
         self.current = np.zeros(3, dtype=np.float32)
@@ -137,6 +138,15 @@ class KeyboardCmdVel(Node):
             msg = Twist()
             msg.linear.x, msg.linear.y, msg.angular.z = map(float, self.current)
             self.cmd_pub.publish(msg)
+            status = String()
+            source = "LOCKED_JOYSTICK" if self.joystick_present() else "KEYBOARD"
+            watchdog = "ACTIVE" if self.motion_key is not None else "IDLE"
+            status.data = (
+                f"alive=1 source={source} watchdog={watchdog} "
+                f"cmd={self.current[0]:+.3f},{self.current[1]:+.3f},{self.current[2]:+.3f} "
+                f"target={self.target_linear:.2f},{self.target_yaw:.2f}"
+            )
+            self.status_pub.publish(status)
 
     def run_keyboard(self) -> None:
         if not sys.stdin.isatty():
@@ -160,6 +170,14 @@ class KeyboardCmdVel(Node):
         finally:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_termios)
 
+    def shutdown(self) -> None:
+        """Publish a short zero-command tail before stopping the node."""
+        zero = Twist()
+        for _ in range(5):
+            self.cmd_pub.publish(zero)
+            rclpy.spin_once(self, timeout_sec=0.0)
+            time.sleep(0.02)
+
 
 def main(args=None) -> None:
     rclpy.init(args=args)
@@ -175,6 +193,7 @@ def main(args=None) -> None:
         node.running = False
         with node.lock:
             node.desired[:] = 0.0
+        node.shutdown()
         node.destroy_node()
         rclpy.shutdown()
 
