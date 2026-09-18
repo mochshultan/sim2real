@@ -16,6 +16,21 @@ Control nodes, teleoperation tools, calibration utilities, diagnostics, and brin
 | Script | Type | Description |
 | :--- | :---: | :--- |
 | [`keyboard_teleop.py`](./keyboard_teleop.py) | ROS 2 Node | Normalizes keyboard, direct Bluetooth/USB gamepad, and ROS 2 `/joy_raw` input. Publishes velocity on `/cmd_vel` and mode pulses on `/joy`. |
+| [`keyboard_cmd_vel.py`](./keyboard_cmd_vel.py) | ROS 2 Node | Separate terminal keyboard controller with smooth target-speed ramps, key watchdog, and Xbox-device lockout. |
+
+### Safe keyboard terminal controller
+
+Run this in a second terminal after the main sim2real launch:
+
+```bash
+ros2 run jaguar_control keyboard_cmd_vel.py
+```
+
+Hold `W/A/S/D` for planar motion and `Q/E` for yaw. The default target is
+`0.30 m/s` and `0.30 rad/s`; `P` increases and `O` decreases both targets.
+`SPACE` requests safe park. If keyboard repeat stops for 0.30 s, the command
+ramps to zero. The node refuses keyboard input while a local `/dev/input/js*`
+joystick is connected.
 | [`gamepad_reader.py`](./gamepad_reader.py) | Tool / Module | Non-blocking Linux gamepad reader for `/dev/input/js*`. Maps Bluetooth Xbox (15 buttons) and USB xpad (11 buttons). |
 | [`remote_xbox_forwarder.py`](./remote_xbox_forwarder.py) | Standalone | UDP forwarder for Xbox controllers connected to an operator laptop. |
 
