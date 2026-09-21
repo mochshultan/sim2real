@@ -1,6 +1,22 @@
 # NXP Jaguar Quadruped: Sim-to-Real Deployment (Branch: `cpp`)
 
-Reinforcement learning control deployment from Isaac Lab (DreamWaQ) to RobStride RS00 actuators via ROS 2.
+Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobStride RS00 actuators via ROS 2.
+
+### Current policy
+
+The default deployment artifact is `models/policy.pt`. It is the estimator-only
+TorchScript export from the Isaac Lab task
+`Isaac-Velocity-Rough-NXP-Jaguar-Baseline-Tibia-AdaBoot-IdealPD-v0`, checkpoint
+iteration 2999/3000. The source run is
+`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-18_10-09-17`.
+
+The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
+the flattened 5-step history (`225 -> 128 -> 64 -> 3`), then the actor consumes
+the current 45-D observation plus the 3-D estimated velocity (`48 -> 512 -> 256
+-> 128 -> 12`). Observation normalization is embedded in the export. The
+training snapshots are YAML (`params/env.yaml` and `params/agent.yaml`); TOML
+files in IsaacLab are package configuration, not this experiment's actuator
+configuration.
 
 ## Overview
 
@@ -24,22 +40,22 @@ The `cpp` branch executes low-level actuator communication through a native Linu
 
 ```
 [ HIGH-LEVEL: RL Policy ]
-      │  Model: TorchScript JIT (`policy.pt`) trained in Isaac Lab 3.0 (DreamWaQ)
+      │  Model: AdaBoot-Ideal TorchScript JIT (`policy.pt`) from Isaac Lab
       │  Rate: 50 Hz (dt = 0.02 s) | Input: 5x45 Observation History | Output: 12-D Target Δq
       ▼
 [ MID-LEVEL: ROS 2 Controller Node (`scripts/nxp_jaguar_controller.py`) ]
-      │  • Subscriptions: IMU (`/Imu_data`), Joy/Teleop (`/joy`, `/cmd_vel`), Joint States (`/robot_joint_states`)
+      │  • Subscriptions: IMU (`/imu/data`, `/Imu_data`), Joy/Teleop (`/joy`, `/cmd_vel`), Joint States (`/joint_states`)
       │  • Finite State Machine: STANDBY ──(Btn A)──> STANDUP ──(Btn B)──> WALK ──(Btn X)──> E-STOP
       │  • Remapping: Isaac Order (Roll->Hip->Knee) ⇄ ROS Hardware Order (BL->BR->FL->FR)
       │  • Target Position: q_des = q_nominal + 0.25 * action
-      │  • Publication: `/joint_command` (std_msgs/Float64MultiArray)
+      │  • Publication: `/joint_commands` (sensor_msgs/JointState; position + velocity + Kp/Kd)
       ▼
 [ LOW-LEVEL: Real-Time C++ CAN Node (`src/robstride_can_node.cpp`) ]
       │  • Dual SocketCAN Threads (`can0` and `can1`) via `robstride_can_bus.hpp`
       │  • Real-Time Scheduler: Linux `SCHED_FIFO` (Priority 80)
       │  • Protocol: RobStride RS00 bit-packed frames (`robstride_protocol.hpp`)
       │  • Deterministic Loop Rate: 200 Hz (dt = 0.005 s)
-      │  • Feedback Publication: `/robot_joint_states` (sensor_msgs/JointState)
+      │  • Feedback Publication: `/joint_states` (sensor_msgs/JointState)
       ▼
 [ HARDWARE: 12x RobStride RS00 Actuators and Hiwonder 9-DOF IMU ]
 ```
@@ -122,9 +138,23 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 - **Low-Level Hardware Rate**: 200 Hz ($\Delta t = 0.005\text{ s}$)
 - **Real-Time Scheduling**: Linux `SCHED_FIFO`, Priority 80
 - **Action Scaling**: 0.25 ($q_{\text{des}} = q_0 + 0.25 \times a_{\text{policy}}$)
-- **Joint Stiffness ($K_p$)**: 25.0 N m/rad
-- **Joint Damping ($K_d$)**: 1.5 N m s/rad
-- **Actuator Torque Limit**: 17.0 N m
+- **RobStride actuator model**: 12x RS00 QDD motors using MIT impedance control
+
+| Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
+| :--- | :--- | :---: | :--- | :---: |
+| Roll/collar | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.7 |
+| Hip pitch | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.7 |
+| Knee | `RemotizedPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s; 1:1 knee lookup | 28.0 / 0.7 |
+
+Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
+(Kp `25.2–30.8`, Kd `0.63–0.77`). Motor strength is also randomized by
+`0.9–1.1`; the randomized effort is capped at `13.5 Nm`. The action system
+delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
+
+Deployment safety limits are different from the simulator's nominal limit:
+normal control is clamped to `13.5 Nm`, the RS00 firmware limit is `14 Nm`, and
+the controller watchdog reacts to sustained feedback above `15 Nm`. Stand-up
+transition gains use Kp `28.0` and Kd `1.2`; standby is zero torque (Kp/Kd `0/0`).
 
 ## 7. Teleoperation Interface
 
