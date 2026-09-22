@@ -4,6 +4,8 @@
 The node publishes ``/cmd_vel`` and mode pulses on ``/joy``. Keyboard input is
 disabled whenever a local Linux joystick device is present. Movement commands
 are ramped and a missing key-repeat heartbeat ramps the command back to zero.
+Linear and angular inputs are kept independently, so combinations such as
+``W + Q`` produce forward motion while turning left.
 """
 
 import os
@@ -25,7 +27,7 @@ from std_msgs.msg import Bool, String
 class KeyboardCmdVel(Node):
     def __init__(self) -> None:
         super().__init__("jaguar_keyboard_cmd_vel")
-        self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.cmd_pub = self.create_publisher(Twist, "/cmd_vel/keyboard", 10)
         self.joy_pub = self.create_publisher(Joy, "/joy", 10)
         self.safe_pub = self.create_publisher(Bool, "/jaguar/safe_stop", 10)
         self.status_pub = self.create_publisher(String, "/jaguar/keyboard_teleop_status", 10)
@@ -61,7 +63,8 @@ class KeyboardCmdVel(Node):
             if key in ("w", "s", "a", "d", "q", "e"):
                 self.motion_key = key
                 self.last_motion = now
-                self.desired[:] = 0.0
+                # Update only the axis controlled by this key.  Keeping the
+                # other axes allows hybrid commands such as W+Q or A+E.
                 if key == "w": self.desired[0] = self.target_linear
                 if key == "s": self.desired[0] = -self.target_linear
                 if key == "a": self.desired[1] = self.target_linear
@@ -95,7 +98,14 @@ class KeyboardCmdVel(Node):
             target_yaw = self.target_yaw
             last_key = self.last_key
             last_event = self.last_event
-            motion_key = self.motion_key or "-"
+            active_axes = []
+            if abs(float(desired[0])) > 1e-6:
+                active_axes.append("linear.x")
+            if abs(float(desired[1])) > 1e-6:
+                active_axes.append("linear.y")
+            if abs(float(desired[2])) > 1e-6:
+                active_axes.append("angular.z")
+            motion_key = "+".join(active_axes) if active_axes else "-"
         joystick = self.joystick_present()
         watchdog = "ACTIVE" if motion_key != "-" else "IDLE"
         deadlock = "KEY HEARTBEAT OK" if motion_key == "-" else (
@@ -118,6 +128,7 @@ class KeyboardCmdVel(Node):
             "  1  STANDBY       2  STANDUP        3  WALK",
             "  W  forward       S  backward       A  strafe left",
             "  D  strafe right  Q  turn left      E  turn right",
+            "  Combine keys for hybrid motion, e.g. W+Q = forward-left",
             "  O  slower        P  faster         SPACE  SAFE PARK",
             "  Ctrl-C  exit",
             "",

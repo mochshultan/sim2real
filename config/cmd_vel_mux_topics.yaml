@@ -1,0 +1,11 @@
+twist_mux:
+  ros__parameters:
+    topics:
+      xbox:
+        topic: /cmd_vel/xbox
+        timeout: 0.30
+        priority: 100
+      keyboard:
+        topic: /cmd_vel/keyboard
+        timeout: 0.30
+        priority: 10

@@ -35,7 +35,7 @@ def generate_launch_description():
     with_teleop_arg = DeclareLaunchArgument(
         "with_teleop",
         default_value="true",
-        description="Launch unified keyboard/Xbox teleoperation hub",
+        description="Launch Xbox teleoperation source; keyboard is selected by cmd_vel mux when Xbox is absent",
     )
     with_hardware_arg = DeclareLaunchArgument(
         "with_hardware",
@@ -94,7 +94,20 @@ def generate_launch_description():
         executable="keyboard_teleop.py",
         name="jaguar_unified_teleop",
         output="screen",
+        parameters=[{"keyboard_enabled": False}],
+        remappings=[("/cmd_vel", "/cmd_vel/xbox")],
         condition=IfCondition(with_teleop),
+    )
+
+    # Official twist_mux: Xbox is preferred while its command heartbeat is
+    # fresh; keyboard_cmd_vel is selected automatically after the Xbox timeout.
+    cmd_vel_mux_node = Node(
+        package="twist_mux",
+        executable="twist_mux",
+        name="jaguar_cmd_vel_mux",
+        output="screen",
+        parameters=[os.path.join(pkg_dir, "config", "cmd_vel_mux_topics.yaml")],
+        remappings=[("/cmd_vel_out", "/cmd_vel")],
     )
 
     # 3A. RobStride C++ Hard Real-Time CAN Node (Default, Deterministic 200 Hz)
@@ -147,6 +160,7 @@ def generate_launch_description():
         imu_node,
         joy_node,
         teleop_node,
+        cmd_vel_mux_node,
         cpp_hardware_node,
         py_hardware_node,
         controller_node,

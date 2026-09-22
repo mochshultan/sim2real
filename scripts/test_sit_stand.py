@@ -68,6 +68,7 @@ JOINT_LIMITS_UPPER = np.array([
 
 MAX_ALLOWED_ERROR_RAD = 0.80  # Max allowable tracking error before Emergency Stop (rad)
 MAX_ALLOWED_TORQUE_NM = 14.0  # Max allowable joint torque before Emergency Stop (Nm)
+TRANSITION_KD = 1.2  # Damping used only while standing up or moving to sit position
 
 
 # ==============================================================================
@@ -458,7 +459,7 @@ class SitStandController:
                 if motor is not None:
                     motor.fault_reason = reason
 
-    def _poll_motor(self, i, kp_val, kd_val):
+    def _poll_motor(self, i, kp_val, kd_val, kd_coxa_val):
         # A mode request cannot interleave between the decision and this send.
         with self.lock:
             motor = self.motors[i]
@@ -470,7 +471,7 @@ class SitStandController:
             result = motor.send_control_command(
                 float(self.cmd_pos[i]), 0,
                 self.kp_coxa if i % 3 == 0 else kp_val,
-                self.kd_coxa if i % 3 == 0 else kd_val, 0)
+                kd_coxa_val if i % 3 == 0 else kd_val, 0)
             if not motor.motion_ready():
                 self._trip_fault(motor.fault_reason or "Motor feedback lost")
             return result
@@ -488,6 +489,10 @@ class SitStandController:
                 target_p = self.target_pos.copy()
                 kp_val = self.kp
                 kd_val = self.kd
+                kd_coxa_val = self.kd_coxa
+                if current_state == "TRANSITIONING":
+                    kd_val = TRANSITION_KD
+                    kd_coxa_val = TRANSITION_KD
                 dur = self.duration
 
             if not is_passive:
@@ -576,7 +581,8 @@ class SitStandController:
                 motor = self.motors[i]
                 if motor is not None:
                     try:
-                        can_id, pos, vel, tau, tem = self._poll_motor(i, kp_val, kd_val)
+                        can_id, pos, vel, tau, tem = self._poll_motor(
+                            i, kp_val, kd_val, kd_coxa_val)
 
                         # Accept valid position/velocity/torque telemetry even if temperature is missing.
                         if pos is not None and vel is not None and tau is not None:

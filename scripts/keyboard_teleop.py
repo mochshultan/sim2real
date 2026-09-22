@@ -50,7 +50,7 @@ MAX_WZ = 1.2
 PUBLISH_PERIOD = 0.02
 UI_REFRESH_PERIOD = 0.25
 COMMAND_QOS = QoSProfile(
-    reliability=ReliabilityPolicy.BEST_EFFORT,
+    reliability=ReliabilityPolicy.RELIABLE,
     durability=DurabilityPolicy.VOLATILE,
     history=HistoryPolicy.KEEP_LAST,
     depth=1,
@@ -60,6 +60,8 @@ COMMAND_QOS = QoSProfile(
 class UnifiedTeleopNode(Node):
     def __init__(self):
         super().__init__("jaguar_unified_teleop")
+        self.declare_parameter("keyboard_enabled", True)
+        self.keyboard_enabled = bool(self.get_parameter("keyboard_enabled").value)
 
         # Publishers
         # Teleop velocity uses /cmd_vel. /joy carries mode pulses only.
@@ -84,6 +86,7 @@ class UnifiedTeleopNode(Node):
         self.vy = 0.0
         self.wz = 0.0
         self.input_source = "keyboard"
+        self.xbox_active = False
         self.last_remote_input = 0.0
         self.previous_ros_buttons = {"remote": [], "raw": []}
         self.current_state = "STANDBY"
@@ -157,6 +160,7 @@ class UnifiedTeleopNode(Node):
                 rx = msg.axes[3] if len(msg.axes) > 3 else (msg.axes[2] if len(msg.axes) > 2 else 0.0)
 
                 self.input_source = source
+                self.xbox_active = True
                 self.last_remote_input = time.monotonic()
                 self.vx = round(float(np.clip(ly * MAX_VX, MIN_VX, MAX_VX)), 2) if np.isfinite(ly) and abs(ly) >= DEADZONE else 0.0
                 self.vy = round(float(np.clip(-lx * MAX_VY, -MAX_VY, MAX_VY)), 2) if np.isfinite(lx) and abs(lx) >= DEADZONE else 0.0
@@ -183,8 +187,10 @@ class UnifiedTeleopNode(Node):
         with self.lock:
             if state.connected:
                 self.input_source = "gamepad"
+                self.xbox_active = True
                 self.vx, self.vy, self.wz = state.vx, state.vy, state.wz
             elif self.input_source == "gamepad":
+                self.xbox_active = False
                 self.vx = self.vy = self.wz = 0.0
 
             # 2. Button Edge Triggers (0 -> 1)
@@ -242,6 +248,10 @@ class UnifiedTeleopNode(Node):
     def _publish_loop(self):
         with self.lock:
             if self.input_source in ("remote", "raw") and time.monotonic() - self.last_remote_input > 0.25:
+                self.xbox_active = False
+                self.vx = self.vy = self.wz = 0.0
+            if self.input_source == "gamepad" and not self.gamepad_reader.is_connected():
+                self.xbox_active = False
                 self.vx = self.vy = self.wz = 0.0
             vx, vy, wz = self.vx, self.vy, self.wz
             btn0 = 1 if self.btn_standup_pulse else 0
@@ -256,7 +266,12 @@ class UnifiedTeleopNode(Node):
         twist.linear.x = float(vx)
         twist.linear.y = float(vy)
         twist.angular.z = float(wz)
-        self.cmd_vel_pub.publish(twist)
+        # Do not publish a heartbeat when no Xbox/ROS-Joy source is active.
+        # This lets cmd_vel_mux fall back to keyboard_cmd_vel automatically.
+        with self.lock:
+            xbox_active = self.xbox_active
+        if xbox_active:
+            self.cmd_vel_pub.publish(twist)
 
         joy = Joy()
         joy.header.stamp = self.get_clock().now().to_msg()
@@ -425,9 +440,12 @@ def main(args=None):
     rclpy.init(args=args)
     node = UnifiedTeleopNode()
 
-    # Start keyboard listener in background thread
-    listener_thread = threading.Thread(target=run_keyboard_listener, args=(node,), daemon=True)
-    listener_thread.start()
+    # Xbox remains available in the launch process; the dedicated
+    # keyboard_cmd_vel node is used for keyboard input through the mux.
+    listener_thread = None
+    if node.keyboard_enabled:
+        listener_thread = threading.Thread(target=run_keyboard_listener, args=(node,), daemon=True)
+        listener_thread.start()
 
     try:
         rclpy.spin(node)
