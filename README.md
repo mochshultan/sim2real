@@ -4,7 +4,10 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 
 ### Current policy
 
-The default deployment artifact is `models/policy.pt`. It is the estimator-only
+The default deployment artifact is the newest archived `models/policy_*.pt`
+(selected automatically by file modification time; `policy_path` can override
+it). If no archived policy exists, sim2real falls back to `models/policy.pt`.
+The selected artifact is the estimator-only
 TorchScript export from the Isaac Lab task
 `Isaac-Velocity-Rough-NXP-Jaguar-Baseline-Tibia-AdaBoot-IdealPD-v0`, checkpoint
 iteration 7499. The source run is

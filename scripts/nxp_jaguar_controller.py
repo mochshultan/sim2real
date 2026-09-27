@@ -5,6 +5,7 @@ Deploys Isaac Lab 3.0 TorchScript Policy (DreamWaQ) to RobStride RS00 Hardware.
 """
 
 import os
+import glob
 import math
 import time
 import threading
@@ -228,13 +229,26 @@ class NXPJaguarControllerNode(Node):
 
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
         if not policy_param:
+            models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
+            versioned_policies = [
+                path for path in glob.glob(os.path.join(models_dir, "policy_*.pt"))
+                if os.path.isfile(path) and not path.endswith("_raw.pt")
+            ]
             candidates = [
-                os.path.abspath(os.path.join(os.path.dirname(__file__), "../models/policy.pt")),
+                max(versioned_policies, key=lambda path: (os.path.getmtime(path), path))
+                if versioned_policies else os.path.join(models_dir, "policy.pt"),
             ]
             try:
                 from ament_index_python.packages import get_package_share_directory
-                candidates.append(os.path.join(
-                    get_package_share_directory("jaguar_control"), "models", "policy.pt"))
+                installed_models_dir = os.path.join(
+                    get_package_share_directory("jaguar_control"), "models")
+                installed_policies = [
+                    path for path in glob.glob(os.path.join(installed_models_dir, "policy_*.pt"))
+                    if os.path.isfile(path) and not path.endswith("_raw.pt")
+                ]
+                candidates.append(
+                    max(installed_policies, key=lambda path: (os.path.getmtime(path), path))
+                    if installed_policies else os.path.join(installed_models_dir, "policy.pt"))
             except Exception:
                 pass
             policy_param = next((path for path in candidates if os.path.isfile(path)), candidates[0])

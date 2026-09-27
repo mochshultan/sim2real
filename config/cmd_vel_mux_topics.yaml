@@ -1,4 +1,6 @@
-twist_mux:
+# The launch file names the node `jaguar_cmd_vel_mux`.  ROS 2 only applies
+# parameters when the YAML root matches the node name (or is a wildcard).
+jaguar_cmd_vel_mux:
   ros__parameters:
     topics:
       xbox:

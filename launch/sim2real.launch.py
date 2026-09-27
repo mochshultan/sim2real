@@ -1,4 +1,5 @@
 import os
+import glob
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -6,9 +7,22 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
+
+def _latest_versioned_policy(models_dir):
+    """Return the newest archived TorchScript policy, or the default policy."""
+    default_policy = os.path.join(models_dir, "policy.pt")
+    candidates = [
+        path for path in glob.glob(os.path.join(models_dir, "policy_*.pt"))
+        if os.path.isfile(path) and not path.endswith("_raw.pt")
+    ]
+    if not candidates:
+        return default_policy
+    return max(candidates, key=lambda path: (os.path.getmtime(path), path))
+
+
 def generate_launch_description():
     pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    default_policy = os.path.join(pkg_dir, "models", "policy.pt")
+    default_policy = _latest_versioned_policy(os.path.join(pkg_dir, "models"))
     default_config = os.path.join(pkg_dir, "config", "sim2real.yaml")
 
     # Launch arguments
@@ -20,7 +34,7 @@ def generate_launch_description():
     policy_path_arg = DeclareLaunchArgument(
         "policy_path",
         default_value=default_policy,
-        description="Path to TorchScript policy.pt",
+        description="Path to TorchScript policy; defaults to the newest archived policy_*.pt",
     )
     with_imu_arg = DeclareLaunchArgument(
         "with_imu",
@@ -99,15 +113,14 @@ def generate_launch_description():
         condition=IfCondition(with_teleop),
     )
 
-    # Official twist_mux: Xbox is preferred while its command heartbeat is
-    # fresh; keyboard_cmd_vel is selected automatically after the Xbox timeout.
+    # Local mux: Xbox is preferred while its command heartbeat is fresh;
+    # keyboard_cmd_vel is selected automatically after the Xbox timeout.
+    # This avoids a runtime dependency on the system twist_mux shared library.
     cmd_vel_mux_node = Node(
-        package="twist_mux",
-        executable="twist_mux",
+        package="jaguar_control",
+        executable="jaguar_cmd_vel_mux.py",
         name="jaguar_cmd_vel_mux",
         output="screen",
-        parameters=[os.path.join(pkg_dir, "config", "cmd_vel_mux_topics.yaml")],
-        remappings=[("/cmd_vel_out", "/cmd_vel")],
     )
 
     # 3A. RobStride C++ Hard Real-Time CAN Node (Default, Deterministic 200 Hz)
