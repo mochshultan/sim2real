@@ -7,9 +7,15 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 The default deployment artifact is `models/policy.pt`. It is the estimator-only
 TorchScript export from the Isaac Lab task
 `Isaac-Velocity-Rough-NXP-Jaguar-Baseline-Tibia-AdaBoot-IdealPD-v0`, checkpoint
-iteration 3500 (the latest exported checkpoint in this run; configured for
-10,000 iterations). The source run is
-`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-24_14-59-59`.
+iteration 7499. The source run is
+`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-24_19-28-29`.
+
+The source checkpoint is archived as `models/model_adaboot_ideal_tibia_7499_20260924.pt`;
+the matching named TorchScript export is `models/policy_adaboot_ideal_tibia_7499_20260924.pt`.
+The checkpoint SHA-256 is `cac9fc2af123e27d0f3a80924c157941576391b25139aca4a49b989657533147`,
+and the TorchScript SHA-256 is
+`4188c8b98d10476106cd6f00cfac89d9f0ff88512676cb62bc615e8ea68316e4`.
+The export's actor parameters and observation-normalization buffers match the checkpoint exactly.
 
 The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
 the flattened 5-step history (`225 -> 128 -> 64 -> 3`), then the actor consumes
