@@ -10,14 +10,14 @@ it). If no archived policy exists, sim2real falls back to `models/policy.pt`.
 The selected artifact is the estimator-only
 TorchScript export from the Isaac Lab task
 `Isaac-Velocity-Rough-NXP-Jaguar-Baseline-Tibia-AdaBoot-IdealPD-v0`, checkpoint
-iteration 7499. The source run is
-`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-24_19-28-29`.
+iteration 2100. The source run is
+`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-27_18-43-32_new-gait-reward`.
 
-The source checkpoint is archived as `models/model_adaboot_ideal_tibia_7499_20260924.pt`;
-the matching named TorchScript export is `models/policy_adaboot_ideal_tibia_7499_20260924.pt`.
-The checkpoint SHA-256 is `cac9fc2af123e27d0f3a80924c157941576391b25139aca4a49b989657533147`,
+The source checkpoint is archived as `models/model_adaboot_ideal_tibia_2100_20260927.pt`;
+the matching named TorchScript export is `models/policy_adaboot_ideal_tibia_2100_20260927.pt`.
+The checkpoint SHA-256 is `41e441611800ea28c8768a5b937ef54f69ccaf599814f6c1420717ca148217de`,
 and the TorchScript SHA-256 is
-`4188c8b98d10476106cd6f00cfac89d9f0ff88512676cb62bc615e8ea68316e4`.
+`bff74a07669b5f7792a86e9d896281dc22f042d93ef25238277f99632cc360bc`.
 The export's actor parameters and observation-normalization buffers match the checkpoint exactly.
 
 The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
