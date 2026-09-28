@@ -10,14 +10,14 @@ it). If no archived policy exists, sim2real falls back to `models/policy.pt`.
 The selected artifact is the estimator-only
 TorchScript export from the Isaac Lab task
 `Isaac-Velocity-Rough-NXP-Jaguar-Baseline-Tibia-AdaBoot-IdealPD-v0`, checkpoint
-iteration 3000. The source run is
-`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-27_18-43-32_new-gait-reward`.
+iteration 4999. The source run is
+`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-28_00-24-04_scheduled-airtime-unconditional`.
 
-The source checkpoint is archived as `models/model_adaboot_ideal_tibia_3000_20260927.pt`;
-the matching named TorchScript export is `models/policy_adaboot_ideal_tibia_3000_20260927.pt`.
-The checkpoint SHA-256 is `874c188f288d2e5403dd0f449a48e48a15c7b3d163dedd48f38732187698b3e2`,
+The source checkpoint is archived as `models/model_adaboot_ideal_tibia_4999_20260928.pt`;
+the matching named TorchScript export is `models/policy_adaboot_ideal_tibia_4999_20260928.pt`.
+The checkpoint SHA-256 is `89f6d19968341dbabe71c271dca9c21a51d62f16b99aea5d768ae3d1c882e944`,
 and the TorchScript SHA-256 is
-`0012ecaa1e9b5c03acf02ab03c37a74b4b1d66081d8e1c722dfb11ddf90d3b53`.
+`6b93756ae22f412b24d4334a77615a6c20e9c2f5946ea1629d3e4405401eb9a7`.
 The export's actor parameters and observation-normalization buffers match the checkpoint exactly.
 
 The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
@@ -152,9 +152,9 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
 | Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
 | :--- | :--- | :---: | :--- | :---: |
-| Roll/collar | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.7 |
-| Hip pitch | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.7 |
-| Knee | `RemotizedPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s; 1:1 knee lookup | 28.0 / 0.7 |
+| Roll/collar | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.8 |
+| Hip pitch | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.8 |
+| Knee | `RemotizedPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s; 1:1 knee lookup | 28.0 / 0.8 |
 
 Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
 (Kp `25.2–30.8`, Kd `0.63–0.77`). Motor strength is also randomized by
