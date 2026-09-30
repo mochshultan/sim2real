@@ -32,12 +32,12 @@ public:
     running_(true),
     hw_manager_(),
     loop_hz_(200),
-    default_kp_(28.0),
-    default_kd_(0.7),
-    default_coxa_kp_(28.0),
-    default_coxa_kd_(0.7),
-    default_knee_kp_(28.0),
-    default_knee_kd_(0.7)
+    default_kp_(40.0),
+    default_kd_(0.8),
+    default_coxa_kp_(40.0),
+    default_coxa_kd_(0.8),
+    default_knee_kp_(40.0),
+    default_knee_kd_(0.8)
   {
     RCLCPP_INFO(this->get_logger(), "=================================================");
     RCLCPP_INFO(this->get_logger(), " Starting RobStride RS00 Hard Real-Time CAN Node ");
@@ -45,12 +45,12 @@ public:
 
     // Declare ROS parameters
     this->declare_parameter<int>("rate_hz", 200);
-    this->declare_parameter<double>("default_kp", 28.0);
-    this->declare_parameter<double>("default_kd", 0.7);
-    this->declare_parameter<double>("default_coxa_kp", 28.0);
-    this->declare_parameter<double>("default_coxa_kd", 0.7);
-    this->declare_parameter<double>("default_knee_kp", 28.0);
-    this->declare_parameter<double>("default_knee_kd", 0.7);
+    this->declare_parameter<double>("default_kp", 40.0);
+    this->declare_parameter<double>("default_kd", 0.8);
+    this->declare_parameter<double>("default_coxa_kp", 40.0);
+    this->declare_parameter<double>("default_coxa_kd", 0.8);
+    this->declare_parameter<double>("default_knee_kp", 40.0);
+    this->declare_parameter<double>("default_knee_kd", 0.8);
     this->declare_parameter<int>("rt_priority", 80);
     this->declare_parameter<bool>("startup_clear_faults", false);
 

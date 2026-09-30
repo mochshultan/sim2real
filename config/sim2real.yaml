@@ -14,21 +14,21 @@ robstride_can_hardware:
   ros__parameters:
     rate_hz: 200
     rt_priority: 80
-    default_coxa_kp: 28.0
+    default_coxa_kp: 40.0
     default_coxa_kd: 0.8
-    default_kp: 28.0
+    default_kp: 40.0
     default_kd: 0.8
-    default_knee_kp: 28.0
+    default_knee_kp: 40.0
     default_knee_kd: 0.8
 
 jaguar_can_hardware:
   ros__parameters:
     rate_hz: 200
-    default_coxa_kp: 28.0
+    default_coxa_kp: 40.0
     default_coxa_kd: 0.8
-    default_kp: 28.0
+    default_kp: 40.0
     default_kd: 0.8
-    default_knee_kp: 28.0
+    default_knee_kp: 40.0
     default_knee_kd: 0.8
 
 nxp_jaguar_controller:
@@ -37,22 +37,26 @@ nxp_jaguar_controller:
     overtorque_threshold: 15.0
     shutdown_duration: 3.0
     shutdown_settle_delay: 0.5
+    safe_park_duration: 2.0
+    safe_park_kp: 14.0
+    safe_park_kd: 0.5
+    safe_park_double_press_window: 1.0
     cmd_timeout: 0.25
     action_ema_alpha: 0.0  # Disabled per user request (no EMA filter, direct policy actions)
     walk_ramp_duration: 0.8  # Soft-start cosine S-curve duration (s) when transitioning from STAND_HOLD to WALK
     imu_upside_down: true   # Set true if IMU is mounted rotated 180 deg around X on chassis
-    rl_kp_roll: 28.0
+    rl_kp_roll: 40.0
     rl_kd_roll: 0.8
-    rl_kp_pitch: 28.0
+    rl_kp_pitch: 40.0
     rl_kd_pitch: 0.8
-    rl_kp_knee: 28.0
+    rl_kp_knee: 40.0
     rl_kd_knee: 0.8
-    transition_kp_roll: 28.0
-    transition_kd_roll: 1.2
-    transition_kp_pitch: 28.0
-    transition_kd_pitch: 1.2
-    transition_kp_knee: 28.0
-    transition_kd_knee: 1.2
+    transition_kp_roll: 40.0
+    transition_kd_roll: 0.8
+    transition_kp_pitch: 40.0
+    transition_kd_pitch: 0.8
+    transition_kp_knee: 40.0
+    transition_kd_knee: 0.8
     # Standing auto-level is active only during STANDUP/STAND_HOLD.
     # Pitch correction is bounded at the hips; knees keep their nominal target.
     use_imu_stabilization: true

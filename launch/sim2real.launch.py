@@ -1,5 +1,4 @@
 import os
-import glob
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -7,22 +6,9 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
-
-def _latest_versioned_policy(models_dir):
-    """Return the newest archived TorchScript policy, or the default policy."""
-    default_policy = os.path.join(models_dir, "policy.pt")
-    candidates = [
-        path for path in glob.glob(os.path.join(models_dir, "policy_*.pt"))
-        if os.path.isfile(path) and not path.endswith("_raw.pt")
-    ]
-    if not candidates:
-        return default_policy
-    return max(candidates, key=lambda path: (os.path.getmtime(path), path))
-
-
 def generate_launch_description():
     pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    default_policy = _latest_versioned_policy(os.path.join(pkg_dir, "models"))
+    default_policy = os.path.join(pkg_dir, "models", "policy.pt")
     default_config = os.path.join(pkg_dir, "config", "sim2real.yaml")
 
     # Launch arguments
@@ -34,7 +20,7 @@ def generate_launch_description():
     policy_path_arg = DeclareLaunchArgument(
         "policy_path",
         default_value=default_policy,
-        description="Path to TorchScript policy; defaults to the newest archived policy_*.pt",
+        description="Path to TorchScript policy; defaults to models/policy.pt",
     )
     with_imu_arg = DeclareLaunchArgument(
         "with_imu",

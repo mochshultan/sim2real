@@ -68,7 +68,7 @@ JOINT_LIMITS_UPPER = np.array([
 
 MAX_ALLOWED_ERROR_RAD = 0.80  # Max allowable tracking error before Emergency Stop (rad)
 MAX_ALLOWED_TORQUE_NM = 14.0  # Max allowable joint torque before Emergency Stop (Nm)
-TRANSITION_KD = 1.2  # Damping used only while standing up or moving to sit position
+TRANSITION_KD = 0.8  # Match the trained Kd while standing up or moving to sit position
 
 
 # ==============================================================================

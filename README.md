@@ -4,21 +4,21 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 
 ### Current policy
 
-The default deployment artifact is the newest archived `models/policy_*.pt`
-(selected automatically by file modification time; `policy_path` can override
-it). If no archived policy exists, sim2real falls back to `models/policy.pt`.
-The selected artifact is the estimator-only
-TorchScript export from the Isaac Lab task
-`Isaac-Velocity-Rough-NXP-Jaguar-Baseline-Tibia-AdaBoot-IdealPD-v0`, checkpoint
-iteration 4999. The source run is
-`/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal/2026-09-28_00-24-04_scheduled-airtime-unconditional`.
+The default deployment artifact is deterministically fixed at
+`models/policy.pt`; `policy_path` can override it explicitly. It is the
+estimator-only TorchScript export for checkpoint iteration 9200 from the Isaac
+Lab run
+`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-09-29_23-33-06_l2c2-kp40-kd08-10k`.
 
-The source checkpoint is archived as `models/model_adaboot_ideal_tibia_4999_20260928.pt`;
-the matching named TorchScript export is `models/policy_adaboot_ideal_tibia_4999_20260928.pt`.
-The checkpoint SHA-256 is `89f6d19968341dbabe71c271dca9c21a51d62f16b99aea5d768ae3d1c882e944`,
-and the TorchScript SHA-256 is
-`6b93756ae22f412b24d4334a77615a6c20e9c2f5946ea1629d3e4405401eb9a7`.
-The export's actor parameters and observation-normalization buffers match the checkpoint exactly.
+The source checkpoint is archived as
+`models/model_adaboot_ideal_l2c2_9200_20260929.pt`; the matching named
+TorchScript export is
+`models/policy_adaboot_ideal_l2c2_9200_20260929.pt`. The checkpoint SHA-256 is
+`8cc7183114802f04726d99faedb39c19928d2f96e1de275bab5b8d2cc98a9331`, and
+the TorchScript SHA-256 is
+`0e810ef485df26b1886f2477c65d568905c741deeaf864b63403ef411414ae79`.
+Reconstructing the exported policy from the checkpoint produced an exact
+numerical match on randomized `(16, 5, 45)` input (`max_abs_diff = 0.0`).
 
 The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
 the flattened 5-step history (`225 -> 128 -> 64 -> 3`), then the actor consumes
@@ -152,19 +152,21 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
 | Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
 | :--- | :--- | :---: | :--- | :---: |
-| Roll/collar | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.8 |
-| Hip pitch | `IdealPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s | 28.0 / 0.8 |
-| Knee | `RemotizedPDActuator` | 28.0 / 0.7 | 14 Nm, 20 rad/s; 1:1 knee lookup | 28.0 / 0.8 |
+| Roll/collar | `IdealPDActuator` | 40.0 / 0.8 | 14 Nm, 20 rad/s | 40.0 / 0.8 |
+| Hip pitch | `IdealPDActuator` | 40.0 / 0.8 | 14 Nm, 20 rad/s | 40.0 / 0.8 |
+| Knee | `RemotizedPDActuator` | 40.0 / 0.8 | 14 Nm, 20 rad/s; 1:1 knee lookup | 40.0 / 0.8 |
 
 Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
-(Kp `25.2–30.8`, Kd `0.63–0.77`). Motor strength is also randomized by
+(Kp `36.0–44.0`, Kd `0.72–0.88`). Motor strength is also randomized by
 `0.9–1.1`; the randomized effort is capped at `13.5 Nm`. The action system
 delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
 
 Deployment safety limits are different from the simulator's nominal limit:
 normal control is clamped to `13.5 Nm`, the RS00 firmware limit is `14 Nm`, and
 the controller watchdog reacts to sustained feedback above `15 Nm`. Stand-up
-transition gains use Kp `28.0` and Kd `1.2`; standby is zero torque (Kp/Kd `0/0`).
+normal walk and sit/stand transition gains use Kp `40.0` and Kd `0.8`.
+Emergency safe-park remains Kp `14.0` and Kd `0.5`; standby remains zero torque
+(Kp/Kd `0/0`).
 
 ## 7. Teleoperation Interface
 

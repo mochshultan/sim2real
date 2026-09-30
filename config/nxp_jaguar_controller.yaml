@@ -13,15 +13,15 @@ nxp_jaguar_controller:
     safe_park_double_press_window: 1.0
     cmd_timeout: 0.25
     action_ema_alpha: 0.0  # 0.0 = disabled (previously 0.55)
-    rl_kp_roll: 28.0
-    rl_kd_roll: 0.7
-    rl_kp_pitch: 28.0
-    rl_kd_pitch: 0.7
-    rl_kp_knee: 28.0
-    rl_kd_knee: 0.7
-    transition_kp_roll: 28.0
-    transition_kd_roll: 1.2
-    transition_kp_pitch: 28.0
-    transition_kd_pitch: 1.2
-    transition_kp_knee: 28.0
-    transition_kd_knee: 1.2
+    rl_kp_roll: 40.0
+    rl_kd_roll: 0.8
+    rl_kp_pitch: 40.0
+    rl_kd_pitch: 0.8
+    rl_kp_knee: 40.0
+    rl_kd_knee: 0.8
+    transition_kp_roll: 40.0
+    transition_kd_roll: 0.8
+    transition_kp_pitch: 40.0
+    transition_kd_pitch: 0.8
+    transition_kp_knee: 40.0
+    transition_kd_knee: 0.8
