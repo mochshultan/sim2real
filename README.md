@@ -6,17 +6,17 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 
 The default deployment artifact is deterministically fixed at
 `models/policy.pt`; `policy_path` can override it explicitly. It is the
-estimator-only TorchScript export for checkpoint iteration 9999 from the Isaac
+estimator-only TorchScript export for checkpoint iteration 9800 from the Isaac
 Lab run
 `nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-01_00-00-07_l2c2-kp40-kd10-10k`.
 
 The source checkpoint is archived as
-`models/model_adaboot_ideal_l2c2_9999_20261001.pt`; the matching named
+`models/model_adaboot_ideal_l2c2_9800_20261001.pt`; the matching named
 TorchScript export is
-`models/policy_adaboot_ideal_l2c2_9999_20261001.pt`. The checkpoint SHA-256 is
-`a4a555fc55e500938369a0a0d180847d4364f2c08f2338cd1a11e710324f7a6d`, and
+`models/policy_adaboot_ideal_l2c2_9800_20261001.pt`. The checkpoint SHA-256 is
+`0b52b8ccf86532eb6c46d89025fa631581617ee72669fed56b31d97816eb1b73`, and
 the TorchScript SHA-256 is
-`6dc1e6e41ae576cc4ffacb8917268fb4f5c5f43aa169fbcd6db350be48e920fe`.
+`27d7c7f75131694011d5e449d912b3de8179dfbc4341f4dc62616064ce1bcc9c`.
 Reconstructing the exported policy from the checkpoint produced an exact
 numerical match on randomized `(16, 5, 45)` input (`max_abs_diff = 0.0`).
 
