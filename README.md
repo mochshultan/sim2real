@@ -6,17 +6,17 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 
 The default deployment artifact is deterministically fixed at
 `models/policy.pt`; `policy_path` can override it explicitly. It is the
-estimator-only TorchScript export for checkpoint iteration 9200 from the Isaac
+estimator-only TorchScript export for checkpoint iteration 9999 from the Isaac
 Lab run
-`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-09-29_23-33-06_l2c2-kp40-kd08-10k`.
+`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-01_00-00-07_l2c2-kp40-kd10-10k`.
 
 The source checkpoint is archived as
-`models/model_adaboot_ideal_l2c2_9200_20260929.pt`; the matching named
+`models/model_adaboot_ideal_l2c2_9999_20261001.pt`; the matching named
 TorchScript export is
-`models/policy_adaboot_ideal_l2c2_9200_20260929.pt`. The checkpoint SHA-256 is
-`8cc7183114802f04726d99faedb39c19928d2f96e1de275bab5b8d2cc98a9331`, and
+`models/policy_adaboot_ideal_l2c2_9999_20261001.pt`. The checkpoint SHA-256 is
+`a4a555fc55e500938369a0a0d180847d4364f2c08f2338cd1a11e710324f7a6d`, and
 the TorchScript SHA-256 is
-`0e810ef485df26b1886f2477c65d568905c741deeaf864b63403ef411414ae79`.
+`6dc1e6e41ae576cc4ffacb8917268fb4f5c5f43aa169fbcd6db350be48e920fe`.
 Reconstructing the exported policy from the checkpoint produced an exact
 numerical match on randomized `(16, 5, 45)` input (`max_abs_diff = 0.0`).
 
@@ -152,19 +152,20 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
 | Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
 | :--- | :--- | :---: | :--- | :---: |
-| Roll/collar | `IdealPDActuator` | 40.0 / 0.8 | 14 Nm, 20 rad/s | 40.0 / 0.8 |
-| Hip pitch | `IdealPDActuator` | 40.0 / 0.8 | 14 Nm, 20 rad/s | 40.0 / 0.8 |
-| Knee | `RemotizedPDActuator` | 40.0 / 0.8 | 14 Nm, 20 rad/s; 1:1 knee lookup | 40.0 / 0.8 |
+| Roll/collar | `IdealPDActuator` | 40.0 / 1.0 | 14 Nm, 20 rad/s | 40.0 / 1.0 |
+| Hip pitch | `IdealPDActuator` | 40.0 / 1.0 | 14 Nm, 20 rad/s | 40.0 / 1.0 |
+| Knee | `RemotizedPDActuator` | 40.0 / 1.0 | 14 Nm, 20 rad/s; 1:1 knee lookup | 40.0 / 1.0 |
 
 Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
-(Kp `36.0–44.0`, Kd `0.72–0.88`). Motor strength is also randomized by
+(Kp `36.0–44.0`, Kd `0.9–1.1`). Motor strength is also randomized by
 `0.9–1.1`; the randomized effort is capped at `13.5 Nm`. The action system
 delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
 
 Deployment safety limits are different from the simulator's nominal limit:
 normal control is clamped to `13.5 Nm`, the RS00 firmware limit is `14 Nm`, and
-the controller watchdog reacts to sustained feedback above `15 Nm`. Stand-up
-normal walk and sit/stand transition gains use Kp `40.0` and Kd `0.8`.
+the controller watchdog reacts to sustained feedback above `15 Nm`. Normal walk
+and sit/stand transition gains use Kp `40.0` and Kd `1.0`, matching the trained
+nominal actuator gains.
 Emergency safe-park remains Kp `14.0` and Kd `0.5`; standby remains zero torque
 (Kp/Kd `0/0`).
 

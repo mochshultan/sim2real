@@ -8,8 +8,8 @@ import yaml
 
 
 ROOT = Path(__file__).parents[1]
-POLICY_SHA256 = "0e810ef485df26b1886f2477c65d568905c741deeaf864b63403ef411414ae79"
-CHECKPOINT_SHA256 = "8cc7183114802f04726d99faedb39c19928d2f96e1de275bab5b8d2cc98a9331"
+POLICY_SHA256 = "6dc1e6e41ae576cc4ffacb8917268fb4f5c5f43aa169fbcd6db350be48e920fe"
+CHECKPOINT_SHA256 = "a4a555fc55e500938369a0a0d180847d4364f2c08f2338cd1a11e710324f7a6d"
 
 
 def _sha256(path: Path) -> str:
@@ -21,10 +21,10 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_and_archived_policy_are_model_9200_export(self):
+    def test_default_and_archived_policy_are_model_9999_export(self):
         default_policy = ROOT / "models/policy.pt"
-        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_9200_20260929.pt"
-        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_9200_20260929.pt"
+        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_9999_20261001.pt"
+        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_9999_20261001.pt"
 
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
         self.assertEqual(_sha256(archived_policy), POLICY_SHA256)
@@ -46,16 +46,29 @@ class DeploymentContractTests(unittest.TestCase):
         for mode in ("rl", "transition"):
             for joint in ("roll", "pitch", "knee"):
                 self.assertEqual(controller[f"{mode}_kp_{joint}"], 40.0)
-                self.assertEqual(controller[f"{mode}_kd_{joint}"], 0.8)
+                self.assertEqual(controller[f"{mode}_kd_{joint}"], 1.0)
 
         for node in hardware_nodes:
             hardware = config[node]["ros__parameters"]
             for prefix in ("default_coxa", "default", "default_knee"):
                 self.assertEqual(hardware[f"{prefix}_kp"], 40.0)
-                self.assertEqual(hardware[f"{prefix}_kd"], 0.8)
+                self.assertEqual(hardware[f"{prefix}_kd"], 1.0)
 
         self.assertEqual(controller["safe_park_kp"], 14.0)
         self.assertEqual(controller["safe_park_kd"], 0.5)
+
+        for config_name in ("nxp_jaguar_controller.yaml", "robstride_can.yaml"):
+            config = yaml.safe_load((ROOT / "config" / config_name).read_text())
+            for node in config.values():
+                parameters = node.get("ros__parameters", {})
+                for name, value in parameters.items():
+                    if name.endswith("_kd") and name.startswith(("rl_", "transition_", "default")):
+                        self.assertEqual(value, 1.0, f"{config_name}: {name}")
+
+        sim2sim = yaml.safe_load((ROOT / "config/sim2sim_mujoco.yaml").read_text())["sim2sim_mujoco"]
+        self.assertEqual(sim2sim["walk_gains"]["coxa_kd"], 1.0)
+        self.assertEqual(sim2sim["walk_gains"]["pitch_kd"], 1.0)
+        self.assertEqual(sim2sim["standup_gains"]["kd"], 1.0)
 
 
 if __name__ == "__main__":

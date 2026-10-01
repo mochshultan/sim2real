@@ -88,11 +88,11 @@ import yaml
 _CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "sim2real.yaml"))
 
 _coxa_kp = 40.0
-_coxa_kd = 0.8
+_coxa_kd = 1.0
 _pitch_kp = 40.0
-_pitch_kd = 0.8
+_pitch_kd = 1.0
 _knee_kp = 40.0
-_knee_kd = 0.8
+_knee_kd = 1.0
 _can_hz = 200
 
 if os.path.isfile(_CONFIG_FILE):
