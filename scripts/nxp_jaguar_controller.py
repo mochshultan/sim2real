@@ -55,8 +55,8 @@ RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range
 # Default Standing Pose synchronized with Isaac Lab NXP Jaguar (nxp_jaguar.py)
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.61, -1.61, -1.55, -1.55,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.40,  1.40,  1.40,  1.40,   # Knees (Fr, Fl, Br, Bl)
+   -1.51, -1.51, -1.49, -1.49,   # Hip Pitches (Fr, Fl, Br, Bl)
+    1.22,  1.22,  1.20,  1.20,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 # Hard Physical Limits in Isaac Lab Joint Order: 4 Rolls (Fr, Fl, Br, Bl), 4 Hips, 4 Knees

@@ -6,17 +6,17 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 
 The default deployment artifact is deterministically fixed at
 `models/policy.pt`; `policy_path` can override it explicitly. It is the
-estimator-only TorchScript export for checkpoint iteration 9800 from the Isaac
+estimator-only TorchScript export for checkpoint iteration 9999 from the Isaac
 Lab run
-`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-01_00-00-07_l2c2-kp40-kd10-10k`.
+`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-04_18-50-17_stand021-kp40kd25-airtime`.
 
 The source checkpoint is archived as
-`models/model_adaboot_ideal_l2c2_9800_20261001.pt`; the matching named
+`models/model_adaboot_ideal_l2c2_9999_20261004.pt`; the matching named
 TorchScript export is
-`models/policy_adaboot_ideal_l2c2_9800_20261001.pt`. The checkpoint SHA-256 is
-`0b52b8ccf86532eb6c46d89025fa631581617ee72669fed56b31d97816eb1b73`, and
+`models/policy_adaboot_ideal_l2c2_9999_20261004.pt`. The checkpoint SHA-256 is
+`d086be1e849f65dde83f5bfe8a5a9d4ac2b538e1821e875a046a188bada799e1`, and
 the TorchScript SHA-256 is
-`27d7c7f75131694011d5e449d912b3de8179dfbc4341f4dc62616064ce1bcc9c`.
+`0bccb398f5e8f7bb61e5d6fe57ade6bc9877f0a3bbbdef3dd2915181983e496d`.
 Reconstructing the exported policy from the checkpoint produced an exact
 numerical match on randomized `(16, 5, 45)` input (`max_abs_diff = 0.0`).
 
@@ -133,14 +133,14 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 | **1** | `Fl_roll_joint` | $0.0\text{ rad}$ | **6** | `FL_collar_joint` | **1** | `can1` | Front Left |
 | **2** | `Br_roll_joint` | $0.0\text{ rad}$ | **3** | `BR_collar_joint` | **4** | `can0` | Rear Right |
 | **3** | `Bl_roll_joint` | $0.0\text{ rad}$ | **0** | `BL_collar_joint` | **4** | `can1` | Rear Left |
-| **4** | `Fr_hip_pitch_joint` | $-1.50\text{ rad}$ | **10** | `FR_hip_joint` | **2** | `can0` | Front Right |
-| **5** | `Fl_hip_pitch_joint` | $-1.50\text{ rad}$ | **7** | `FL_hip_joint` | **2** | `can1` | Front Left |
-| **6** | `Br_hip_pitch_joint` | $-1.40\text{ rad}$ | **4** | `BR_hip_joint` | **5** | `can0` | Rear Right |
-| **7** | `Bl_hip_pitch_joint` | $-1.40\text{ rad}$ | **1** | `BL_hip_joint` | **5** | `can1` | Rear Left |
-| **8** | `Fr_knee_joint` | $+1.40\text{ rad}$ | **11** | `FR_knee_joint` | **3** | `can0` | Front Right |
-| **9** | `Fl_knee_joint` | $+1.40\text{ rad}$ | **8** | `FL_knee_joint` | **3** | `can1` | Front Left |
-| **10** | `Br_knee_joint` | $+1.36\text{ rad}$ | **5** | `BR_knee_joint` | **6** | `can0` | Rear Right |
-| **11** | `Bl_knee_joint` | $+1.36\text{ rad}$ | **2** | `BL_knee_joint` | **6** | `can1` | Rear Left |
+| **4** | `Fr_hip_pitch_joint` | $-1.51\text{ rad}$ | **10** | `FR_hip_joint` | **2** | `can0` | Front Right |
+| **5** | `Fl_hip_pitch_joint` | $-1.51\text{ rad}$ | **7** | `FL_hip_joint` | **2** | `can1` | Front Left |
+| **6** | `Br_hip_pitch_joint` | $-1.49\text{ rad}$ | **4** | `BR_hip_joint` | **5** | `can0` | Rear Right |
+| **7** | `Bl_hip_pitch_joint` | $-1.49\text{ rad}$ | **1** | `BL_hip_joint` | **5** | `can1` | Rear Left |
+| **8** | `Fr_knee_joint` | $+1.22\text{ rad}$ | **11** | `FR_knee_joint` | **3** | `can0` | Front Right |
+| **9** | `Fl_knee_joint` | $+1.22\text{ rad}$ | **8** | `FL_knee_joint` | **3** | `can1` | Front Left |
+| **10** | `Br_knee_joint` | $+1.20\text{ rad}$ | **5** | `BR_knee_joint` | **6** | `can0` | Rear Right |
+| **11** | `Bl_knee_joint` | $+1.20\text{ rad}$ | **2** | `BL_knee_joint` | **6** | `can1` | Rear Left |
 
 ## 6. Actuator Parameters and PD Impedance Gains
 
@@ -152,19 +152,19 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
 | Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
 | :--- | :--- | :---: | :--- | :---: |
-| Roll/collar | `IdealPDActuator` | 40.0 / 1.0 | 14 Nm, 20 rad/s | 40.0 / 1.0 |
-| Hip pitch | `IdealPDActuator` | 40.0 / 1.0 | 14 Nm, 20 rad/s | 40.0 / 1.0 |
-| Knee | `RemotizedPDActuator` | 40.0 / 1.0 | 14 Nm, 20 rad/s; 1:1 knee lookup | 40.0 / 1.0 |
+| Roll/collar | `IdealPDActuator` | 40.0 / 2.5 | 14 Nm, 20 rad/s | 40.0 / 2.5 |
+| Hip pitch | `IdealPDActuator` | 40.0 / 2.5 | 14 Nm, 20 rad/s | 40.0 / 2.5 |
+| Knee | `RemotizedPDActuator` | 40.0 / 2.5 | 14 Nm, 20 rad/s; 1:1 knee lookup | 40.0 / 2.5 |
 
 Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
-(Kp `36.0–44.0`, Kd `0.9–1.1`). Motor strength is also randomized by
+(Kp `36.0–44.0`, Kd `2.25–2.75`). Motor strength is also randomized by
 `0.9–1.1`; the randomized effort is capped at `13.5 Nm`. The action system
 delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
 
 Deployment safety limits are different from the simulator's nominal limit:
 normal control is clamped to `13.5 Nm`, the RS00 firmware limit is `14 Nm`, and
 the controller watchdog reacts to sustained feedback above `15 Nm`. Normal walk
-and sit/stand transition gains use Kp `40.0` and Kd `1.0`, matching the trained
+and sit/stand transition gains use Kp `40.0` and Kd `2.5`, matching the trained
 nominal actuator gains.
 Emergency safe-park remains Kp `14.0` and Kd `0.5`; standby remains zero torque
 (Kp/Kd `0/0`).
@@ -350,10 +350,10 @@ This formulation enforces physical foot clearance during the swing phase.
 ### 2. Base Height Ground Clearance
 When the chassis collapses to the floor ($\approx 10\text{ cm}$), the entire shank rests horizontally. Contact sensors trigger across the shank surface, creating a false stance height estimation ($\approx 23\text{ cm}$).
 
-The reward `base_height_l2_safe` calculates true vertical clearance between the base origin and the ground plane ($Z_{\text{root}} - Z_{\text{ground}}$), anchoring stance height at **0.24 m**.
+The reward `base_height_l2_safe` calculates true vertical clearance between the base origin and the ground plane ($Z_{\text{root}} - Z_{\text{ground}}$), anchoring stance height at **0.21 m**.
 
 ### 3. Stand-Still Joint Deviation Penalty
-When planar velocity commands drop below threshold ($\|\mathbf{v}_{\text{cmd}}\| < 0.1\text{ m/s}$), the `stand_still` reward penalizes joint deviations from nominal stance $q_0$ (`Hips = -1.55 rad`, `Knees = 1.35 rad`, `Rolls = 0.0 rad`). This prevents standing drift and limit-cycle oscillations while stationary.
+When planar velocity commands drop below threshold ($\|\mathbf{v}_{\text{cmd}}\| < 0.1\text{ m/s}$), the `stand_still` reward penalizes joint deviations from nominal stance $q_0$ (front hip/knee `-1.51/1.22 rad`, rear hip/knee `-1.49/1.20 rad`, rolls `0.0 rad`). This prevents standing drift and limit-cycle oscillations while stationary.
 
 ### 4. Unitree A1-Style Analytical Spherical Foot Contact Modeling
 Previously, NXP Jaguar modeled foot ground interaction using the convex-hull approximation of the entire tibia CAD mesh (`physics:approximation = "convexHull"`). In high-frequency physics engines (PhysX), polygonal mesh contacts suffer from:

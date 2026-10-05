@@ -2,7 +2,7 @@
 """
 🐾 NXP Jaguar: Standalone Sit & Stand Transition Tester (CAN Direct)
 Interactive Terminal Control & Bluetooth/USB Xbox Gamepad interface for testing smooth,
-non-aggressive Sit (0.0 rad) and Stand (Front Hip -1.55, Front Knee +1.45, Rear Hip -1.55, Rear Knee +1.55) transitions.
+non-aggressive Sit (0.0 rad) and Stand transitions aligned with the trained nominal pose.
 
 Supports:
 - Direct Linux Bluetooth & USB Xbox Gamepad (/dev/input/js*)
@@ -41,12 +41,12 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose (Kaki belakang: Hip -1.55 rad, Knee +1.55 rad; Kaki depan: Hip -1.55 rad, Knee +1.45 rad)
+# Standing pose matching the training snapshot for the 0.21 m stance.
 STAND_POSE = np.array([
-    0.0, -1.55,  1.55,  # BL: collar, hip, knee
-    0.0, -1.55,  1.55,  # BR: collar, hip, knee
-    0.0, -1.55,  1.45,  # FL: collar, hip, knee
-    0.0, -1.55,  1.45,  # FR: collar, hip, knee
+    0.0, -1.49,  1.20,  # BL: collar, hip, knee
+    0.0, -1.49,  1.20,  # BR: collar, hip, knee
+    0.0, -1.51,  1.22,  # FL: collar, hip, knee
+    0.0, -1.51,  1.22,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 # ==============================================================================
@@ -68,7 +68,7 @@ JOINT_LIMITS_UPPER = np.array([
 
 MAX_ALLOWED_ERROR_RAD = 0.80  # Max allowable tracking error before Emergency Stop (rad)
 MAX_ALLOWED_TORQUE_NM = 14.0  # Max allowable joint torque before Emergency Stop (Nm)
-TRANSITION_KD = 1.0  # Match the trained Kd while standing up or moving to sit position
+TRANSITION_KD = 2.5  # Match the trained Kd while standing up or moving to sit position
 
 
 # ==============================================================================

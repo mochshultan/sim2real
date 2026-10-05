@@ -72,13 +72,13 @@ RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
 # Matches Isaac Lab q0 (nxp_jaguar.py):
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.55, Knee: +1.40
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.61, Knee: +1.40
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.49, Knee: +1.20
+#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.51, Knee: +1.22
 DEFAULT_ANGLE = [
-     0.0, -1.55,  1.40,  # BL
-     0.0, -1.55,  1.40,  # BR
-     0.0, -1.61,  1.40,  # FL
-     0.0, -1.61,  1.40,  # FR
+     0.0, -1.49,  1.20,  # BL
+     0.0, -1.49,  1.20,  # BR
+     0.0, -1.51,  1.22,  # FL
+     0.0, -1.51,  1.22,  # FR
 ]
 
 import os
@@ -88,11 +88,11 @@ import yaml
 _CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "sim2real.yaml"))
 
 _coxa_kp = 40.0
-_coxa_kd = 1.0
+_coxa_kd = 2.5
 _pitch_kp = 40.0
-_pitch_kd = 1.0
+_pitch_kd = 2.5
 _knee_kp = 40.0
-_knee_kd = 1.0
+_knee_kd = 2.5
 _can_hz = 200
 
 if os.path.isfile(_CONFIG_FILE):

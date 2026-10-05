@@ -46,8 +46,8 @@ ROS_NAME_TO_ISAAC_IDX = {
 
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,
-   -1.61, -1.61, -1.55, -1.55,
-    1.40,  1.40,  1.40,  1.40,
+   -1.51, -1.51, -1.49, -1.49,
+    1.22,  1.22,  1.20,  1.20,
 ], dtype=np.float32)
 
 class Sim2RealBenchmarkRecorder(Node):

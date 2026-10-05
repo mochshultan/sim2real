@@ -14,14 +14,14 @@ nxp_jaguar_controller:
     cmd_timeout: 0.25
     action_ema_alpha: 0.0  # 0.0 = disabled (previously 0.55)
     rl_kp_roll: 40.0
-    rl_kd_roll: 1.0
+    rl_kd_roll: 2.5
     rl_kp_pitch: 40.0
-    rl_kd_pitch: 1.0
+    rl_kd_pitch: 2.5
     rl_kp_knee: 40.0
-    rl_kd_knee: 1.0
+    rl_kd_knee: 2.5
     transition_kp_roll: 40.0
-    transition_kd_roll: 1.0
+    transition_kd_roll: 2.5
     transition_kp_pitch: 40.0
-    transition_kd_pitch: 1.0
+    transition_kd_pitch: 2.5
     transition_kp_knee: 40.0
-    transition_kd_knee: 1.0
+    transition_kd_knee: 2.5
