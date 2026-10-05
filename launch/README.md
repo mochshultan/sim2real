@@ -13,7 +13,7 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 
 - `policy_path` (default: `models/policy.pt`): Path to TorchScript policy model.
 - `with_imu` (default: `true`): Launch serial IMU node.
-- `with_teleop` (default: `true`): Launch the Xbox input source and priority velocity mux. Xbox has priority; keyboard is selected automatically when its Xbox command heartbeat disappears. Start `keyboard_cmd_vel.py` in a separate TTY for keyboard fallback.
+- `with_teleop` (default: `true`): Launch the Xbox input source. Xbox has priority while its heartbeat is active.
 - `with_joy` (default: `false`): Launch optional ROS 2 `joy_node`, remapped to `/joy_raw` for the teleop hub.
 - `with_hardware` (default: `true`): Launch CAN hardware driver.
 - `use_cpp_hardware` (default: `true`): Use C++ node (`robstride_can_node`). Set to `false` for Python driver.
@@ -32,13 +32,21 @@ Typical startup:
 
 ```bash
 ros2 launch jaguar_control sim2real.launch.py
-# In a second terminal, for keyboard fallback:
+```
+
+The mux keeps Xbox selected while the controller source is alive. The launch
+file intentionally does not start keyboard control, so controller and hardware
+logs remain readable. To enable keyboard commands, start the keyboard node in a
+separate terminal:
+
+```bash
 ros2 run jaguar_control keyboard_cmd_vel.py
 ```
 
-The mux keeps Xbox selected while the controller source is alive. If Xbox is
-unplugged or stops publishing, the mux switches to `/cmd_vel/keyboard` after a
-short timeout.
+The node reads key-down/key-up events from `/dev/input/event*`, so combinations
+such as `W+D` and `W+Q` work while the keys are held. The ROS user must have read
+permission for those devices (normally through membership in the system `input`
+group).
 
 ### Recovering a C++ CAN driver fault
 

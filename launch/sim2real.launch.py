@@ -35,7 +35,7 @@ def generate_launch_description():
     with_teleop_arg = DeclareLaunchArgument(
         "with_teleop",
         default_value="true",
-        description="Launch Xbox teleoperation source; keyboard is selected by cmd_vel mux when Xbox is absent",
+        description="Launch Xbox teleoperation source",
     )
     with_hardware_arg = DeclareLaunchArgument(
         "with_hardware",
@@ -99,9 +99,10 @@ def generate_launch_description():
         condition=IfCondition(with_teleop),
     )
 
-    # Local mux: Xbox is preferred while its command heartbeat is fresh;
-    # keyboard_cmd_vel is selected automatically after the Xbox timeout.
-    # This avoids a runtime dependency on the system twist_mux shared library.
+    # Local mux: Xbox is preferred while its command heartbeat is fresh. A
+    # keyboard source is accepted only when keyboard_cmd_vel.py is started
+    # manually in a separate terminal; it is intentionally not auto-launched
+    # so this terminal remains dedicated to important controller/hardware logs.
     cmd_vel_mux_node = Node(
         package="jaguar_control",
         executable="jaguar_cmd_vel_mux.py",

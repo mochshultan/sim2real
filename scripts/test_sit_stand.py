@@ -232,7 +232,7 @@ class SitStandController:
 
             # D-Pad Up: Increase Kp (+0.5)
             if "dpad_up" in edges:
-                self.kp = round(min(50.0, self.kp + 0.5), 1)
+                self.kp = round(min(200.0, self.kp + 0.5), 1)
                 self.status_msg = f"🎮 [Xbox D-Pad Up] Gain Kp dinaikkan (+0.5): {self.kp:.1f}"
 
             # D-Pad Down: Decrease Kp (-0.5)
@@ -242,7 +242,7 @@ class SitStandController:
 
             # D-Pad Right: Increase Kd (+0.1)
             if "dpad_right" in edges:
-                self.kd = round(min(10.0, self.kd + 0.1), 2)
+                self.kd = round(min(20.0, self.kd + 0.1), 2)
                 self.status_msg = f"🎮 [Xbox D-Pad Right] Gain Kd dinaikkan (+0.1): {self.kd:.2f}"
 
             # D-Pad Left: Decrease Kd (-0.1)
@@ -344,7 +344,7 @@ class SitStandController:
                 self.status_msg = f"Durasi transisi diubah menjadi: {self.duration:.1f} detik."
         elif c == 'K':
             with self.lock:
-                self.kp = round(min(50.0, self.kp + 0.5), 1)
+                self.kp = round(min(200.0, self.kp + 0.5), 1)
                 self.status_msg = f"Gain Kp dinaikkan (+0.5): {self.kp:.1f}"
         elif c == 'J':
             with self.lock:
@@ -352,7 +352,7 @@ class SitStandController:
                 self.status_msg = f"Gain Kp diturunkan (-0.5): {self.kp:.1f}"
         elif c == 'L':
             with self.lock:
-                self.kd = round(min(10.0, self.kd + 0.1), 2)
+                self.kd = round(min(20.0, self.kd + 0.1), 2)
                 self.status_msg = f"Gain Kd dinaikkan (+0.1): {self.kd:.2f}"
         elif c == 'H':
             with self.lock:
