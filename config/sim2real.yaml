@@ -20,6 +20,7 @@ robstride_can_hardware:
     default_kd: 2.5
     default_knee_kp: 40.0
     default_knee_kd: 2.5
+    control_torque_limit_nm: 13.5
 
 jaguar_can_hardware:
   ros__parameters:

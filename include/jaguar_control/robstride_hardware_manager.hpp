@@ -124,6 +124,18 @@ public:
     return true;
   }
 
+  bool setControlTorqueLimit(double limit_nm)
+  {
+    if (!std::isfinite(limit_nm) || limit_nm <= 0.0 ||
+        limit_nm > RS00_CONTROL_TORQUE_LIMIT_NM) {
+      return false;
+    }
+    for (auto & cfg : joint_configs_) {
+      cfg.max_effort = limit_nm;
+    }
+    return true;
+  }
+
   bool enableAndConfigureMotors(bool clear_faults_on_startup = false)
   {
     if (!bus_can0_ || !bus_can1_ || !bus_can0_->isOpen() || !bus_can1_->isOpen()) {

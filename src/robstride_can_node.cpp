@@ -1,6 +1,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/bool.hpp>
@@ -53,6 +54,7 @@ public:
     this->declare_parameter<double>("default_knee_kd", 2.5);
     this->declare_parameter<int>("rt_priority", 80);
     this->declare_parameter<bool>("startup_clear_faults", false);
+    this->declare_parameter<double>("control_torque_limit_nm", RS00_CONTROL_TORQUE_LIMIT_NM);
 
     loop_hz_ = this->get_parameter("rate_hz").as_int();
     default_kp_ = this->get_parameter("default_kp").as_double();
@@ -62,8 +64,12 @@ public:
     default_knee_kp_ = this->get_parameter("default_knee_kp").as_double();
     default_knee_kd_ = this->get_parameter("default_knee_kd").as_double();
     rt_priority_ = this->get_parameter("rt_priority").as_int();
+    control_torque_limit_nm_ = this->get_parameter("control_torque_limit_nm").as_double();
     if (loop_hz_ < 1 || loop_hz_ > 1000 || rt_priority_ < 1 || rt_priority_ > 99) {
       throw std::invalid_argument("rate_hz must be 1..1000 and rt_priority 1..99");
+    }
+    if (!hw_manager_.setControlTorqueLimit(control_torque_limit_nm_)) {
+      throw std::invalid_argument("control_torque_limit_nm must be in (0, 13.5] Nm");
     }
 
     buildNameMapping();
@@ -72,6 +78,8 @@ public:
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
     diag_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/jaguar/motor_diagnostics", 10);
     status_pub_ = this->create_publisher<std_msgs::msg::String>("/jaguar/hardware_status", 10);
+    torque_limit_pub_ = this->create_publisher<std_msgs::msg::Float32>(
+      "/jaguar/control_torque_limit_nm", 10);
 
     // Subscribers
     joint_cmd_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
@@ -366,6 +374,9 @@ private:
       status_msg.data = "ACTIVE_MIT_CONTROL";
     }
     status_pub_->publish(status_msg);
+    std_msgs::msg::Float32 torque_limit_msg;
+    torque_limit_msg.data = static_cast<float>(control_torque_limit_nm_);
+    torque_limit_pub_->publish(torque_limit_msg);
   }
 
   std::atomic<bool> running_;
@@ -378,6 +389,7 @@ private:
   double default_coxa_kd_;
   double default_knee_kp_;
   double default_knee_kd_;
+  double control_torque_limit_nm_;
   int rt_priority_;
 
   std::unordered_map<std::string, size_t> name_to_index_;
@@ -385,6 +397,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr diag_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr torque_limit_pub_;
 
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_cmd_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr mit_cmd_sub_;

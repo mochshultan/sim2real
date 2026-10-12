@@ -86,6 +86,7 @@ install(PROGRAMS
   scripts/set_robostride_zero.py
   scripts/calibrate_sit_zero.py
   scripts/calibrate_stand_pose.py
+  scripts/pace/run_jaguar_chirp.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
