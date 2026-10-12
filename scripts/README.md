@@ -64,7 +64,14 @@ connected.
 | [`plot_torques.sh`](./plot_torques.sh) | Opens `rqt_plot` with 12 RobStride motor channels. |
 | [`stop_all.sh`](./stop_all.sh) | Stops robot processes, ROS 2 daemons, and CAN interfaces. |
 
-## 5. Sensor Transforms and Math
+## 5. PACE System Identification Data
+
+| Script | Type | Description |
+| :--- | :---: | :--- |
+| [`pace/record_jaguar_joint_data.sh`](./pace/record_jaguar_joint_data.sh) | Passive ROS bag recorder | Records joint state/command and hardware context; publishes no commands. |
+| [`pace/convert_rosbag_to_pace.py`](./pace/convert_rosbag_to_pace.py) | Offline converter | Reorders named joints, aligns/resamples a bag, and writes PACE tensors; never controls hardware. |
+
+## 6. Sensor Transforms and Math
 
 | Script | Description |
 | :--- | :--- |
