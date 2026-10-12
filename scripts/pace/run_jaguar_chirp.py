@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import dataclass
+import json
 import math
 from pathlib import Path
 import sys
@@ -60,6 +62,21 @@ CHIRP_KP = 40.0
 CHIRP_KD = 2.5
 
 
+@dataclass(frozen=True)
+class ChirpProfile:
+    """A bounded excitation profile for a recorded system-identification run."""
+
+    name: str
+    start_frequency_hz: float
+    end_frequency_hz: float
+
+
+PROFILES = {
+    "fit": ChirpProfile("fit", START_FREQUENCY_HZ, END_FREQUENCY_HZ),
+    "validation": ChirpProfile("validation", END_FREQUENCY_HZ, START_FREQUENCY_HZ),
+}
+
+
 def chirp_envelope(t: float, duration: float, ramp: float = 2.0) -> float:
     """Smoothly fade chirp amplitude in and out."""
     if t <= 0.0 or t >= duration:
@@ -71,12 +88,21 @@ def chirp_envelope(t: float, duration: float, ramp: float = 2.0) -> float:
     return 1.0
 
 
-def chirp_target(t: float, joint_index: int, baseline: float, amplitude: float) -> float:
+def chirp_target(
+    t: float,
+    joint_index: int,
+    baseline: float,
+    amplitude: float,
+    profile: ChirpProfile,
+) -> float:
     """Linear frequency sweep with a distinct fixed phase per joint."""
     phase_offset = 2.0 * math.pi * joint_index / len(ACTIVE_JOINT_INDICES)
     phase = 2.0 * math.pi * (
-        START_FREQUENCY_HZ * t
-        + (END_FREQUENCY_HZ - START_FREQUENCY_HZ) * t * t / (2.0 * DURATION_S)
+        profile.start_frequency_hz * t
+        + (profile.end_frequency_hz - profile.start_frequency_hz)
+        * t
+        * t
+        / (2.0 * DURATION_S)
     ) + phase_offset
     return baseline + amplitude * chirp_envelope(t, DURATION_S) * math.sin(phase)
 
@@ -91,20 +117,35 @@ def _arguments() -> argparse.Namespace:
         "--amplitude", type=float, default=AMPLITUDE_RAD,
         help=f"Peak excursion in radians (default {AMPLITUDE_RAD}; hard cap {MAX_AMPLITUDE_RAD}).",
     )
+    parser.add_argument(
+        "--profile", choices=tuple(PROFILES), default="fit",
+        help="Use an ascending fit chirp or descending held-out validation chirp.",
+    )
+    parser.add_argument(
+        "--label", default=None,
+        help="Short dataset label included in the CSV and metadata filenames.",
+    )
     args = parser.parse_args()
     if not math.isfinite(args.amplitude) or not 0.0 < args.amplitude <= MAX_AMPLITUDE_RAD:
         parser.error(f"--amplitude must be in (0, {MAX_AMPLITUDE_RAD}] rad")
+    if args.label is not None and not all(c.isalnum() or c in "._-" for c in args.label):
+        parser.error("--label may contain only letters, numbers, dot, underscore, and hyphen")
     return args
 
 
-def _print_plan(amplitude: float) -> None:
+def _print_plan(amplitude: float, profile: ChirpProfile, label: str | None = None) -> None:
     print("NXP Jaguar PACE chirp plan")
     print("  approach: all 12 joints move to the configured nominal standing pose")
     print("  chirp: FR collar, hip, and knee; other 9 joints hold the standing pose")
     print(f"  stand transition: {STAND_TRANSITION_DURATION_S:.1f} s")
     print(f"  excursion: +/-{amplitude:.3f} rad")
-    print(f"  frequency: {START_FREQUENCY_HZ:.2f} -> {END_FREQUENCY_HZ:.2f} Hz")
+    print(
+        f"  profile: {profile.name}; frequency: "
+        f"{profile.start_frequency_hz:.2f} -> {profile.end_frequency_hz:.2f} Hz"
+    )
     print(f"  duration: {DURATION_S:.1f} s; command rate: {COMMAND_RATE_HZ:.0f} Hz")
+    if label:
+        print(f"  dataset label: {label}")
     print(f"  required firmware torque limit: {DRIVER_TORQUE_LIMIT_NM:.1f} Nm")
     print(f"  active-joint MIT gains: Kp={CHIRP_KP:.1f}, Kd={CHIRP_KD:.1f}")
     print(f"  chirp target-speed guard: {CHIRP_COMMAND_VELOCITY_LIMIT_RAD_S:.2f} rad/s")
@@ -354,7 +395,7 @@ class JaguarChirp:
         self.node.destroy_node()
 
 
-def run_physical(amplitude: float) -> int:
+def run_physical(amplitude: float, profile: ChirpProfile, label: str | None) -> int:
     try:
         import rclpy
     except ImportError as error:
@@ -365,7 +406,7 @@ def run_physical(amplitude: float) -> int:
     try:
         chirp.check_no_competitors()
         baseline = chirp.validate_preflight()
-        _print_plan(amplitude)
+        _print_plan(amplitude, profile, label)
         print("\nMeasured baseline (hardware order BL, BR, FL, FR):")
         for name, value in zip(JOINTS, baseline):
             print(f"  {name}: {value:+.4f} rad")
@@ -382,9 +423,15 @@ def run_physical(amplitude: float) -> int:
 
         output_dir = Path(__file__).resolve().parents[2] / "data" / "pace"
         output_dir.mkdir(parents=True, exist_ok=True)
-        stamp = time.strftime("%Y%m%d_%H%M%S")
-        csv_path = output_dir / f"jaguar_chirp_commands_{stamp}.csv"
-        fields = ["phase", "time_s", *[f"target_{name}_rad" for name in JOINTS]]
+        stamp = f"{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns() % 1_000_000_000:09d}"
+        run_label = label or profile.name
+        stem = f"jaguar_chirp_{run_label}_{stamp}"
+        csv_path = output_dir / f"{stem}_commands.csv"
+        metadata_path = output_dir / f"{stem}_metadata.json"
+        fields = [
+            "phase", "time_s", "unix_time_ns", "monotonic_time_ns",
+            *[f"target_{name}_rad" for name in JOINTS],
+        ]
         period = 1.0 / COMMAND_RATE_HZ
         prior_targets = baseline
         print(f"\nRunning stand transition, then FR chirp. Command trajectory: {csv_path}")
@@ -419,10 +466,16 @@ def run_physical(amplitude: float) -> int:
                     guarded_indices=ALL_JOINT_INDICES,
                     position_guarded_indices=(),
                 )
-                writer.writerow({"phase": "stand_transition", "time_s": f"{elapsed:.6f}", **{
-                    f"target_{name}_rad": f"{value:.8f}"
-                    for name, value in zip(JOINTS, targets)
-                }})
+                row = {
+                    "phase": "stand_transition",
+                    "time_s": f"{elapsed:.6f}",
+                    "unix_time_ns": time.time_ns(),
+                    "monotonic_time_ns": time.monotonic_ns(),
+                }
+                row.update(
+                    {f"target_{name}_rad": f"{value:.8f}" for name, value in zip(JOINTS, targets)}
+                )
+                writer.writerow(row)
                 stream.flush()
                 prior_targets = targets
                 sleep_time = period - (time.monotonic() - loop_started)
@@ -434,7 +487,8 @@ def run_physical(amplitude: float) -> int:
                 chirp.publish_command(stand_targets, [0.0] * 12, hold_all_joints=True)
                 chirp.spin(0.02)
                 chirp.check_feedback(stand_targets, guarded_indices=ALL_JOINT_INDICES)
-            print("\nNominal standing pose reached and held. Start rosbag now.")
+            print("\nNominal standing pose reached and held. Start rosbag now:")
+            print(f"  bash scripts/pace/record_jaguar_joint_data.sh pace_{run_label}")
             print("FR chirp will start automatically in 5 seconds; Ctrl+C cancels.")
             settle_deadline = time.monotonic() + 5.0
             while time.monotonic() < settle_deadline:
@@ -444,6 +498,7 @@ def run_physical(amplitude: float) -> int:
                 time.sleep(0.01)
 
             chirp_started = time.monotonic()
+            chirp_start_unix_ns = time.time_ns()
             prior_targets = stand_targets
             print(f"\nRunning FR chirp. Command trajectory saved to {csv_path}")
             while True:
@@ -454,7 +509,7 @@ def run_physical(amplitude: float) -> int:
                 targets = list(stand_targets)
                 for phase_index, joint_index in enumerate(ACTIVE_JOINT_INDICES):
                     targets[joint_index] = chirp_target(
-                        elapsed, phase_index, stand_targets[joint_index], amplitude
+                        elapsed, phase_index, stand_targets[joint_index], amplitude, profile
                     )
                 velocities = [(targets[i] - prior_targets[i]) / period for i in range(12)]
                 if max(abs(v) for v in velocities) > CHIRP_COMMAND_VELOCITY_LIMIT_RAD_S:
@@ -465,21 +520,54 @@ def run_physical(amplitude: float) -> int:
                 chirp.publish_command(targets, velocities, hold_all_joints=True)
                 chirp.spin(0.001)
                 chirp.check_feedback(targets, guarded_indices=ALL_JOINT_INDICES)
-                writer.writerow({"phase": "fr_chirp", "time_s": f"{elapsed:.6f}", **{
-                    f"target_{name}_rad": f"{value:.8f}"
-                    for name, value in zip(JOINTS, targets)
-                }})
+                row = {
+                    "phase": "fr_chirp",
+                    "time_s": f"{elapsed:.6f}",
+                    "unix_time_ns": time.time_ns(),
+                    "monotonic_time_ns": time.monotonic_ns(),
+                }
+                row.update(
+                    {f"target_{name}_rad": f"{value:.8f}" for name, value in zip(JOINTS, targets)}
+                )
+                writer.writerow(row)
                 stream.flush()
                 prior_targets = targets
                 sleep_time = period - (time.monotonic() - loop_started)
                 if sleep_time > 0.0:
                     time.sleep(sleep_time)
 
+            chirp_end_unix_ns = time.time_ns()
+
         # Keep all joints in the standing pose until the driver watchdog stops.
         for _ in range(3):
             chirp.publish_command(list(NOMINAL_STAND_POSITION), [0.0] * 12, hold_all_joints=True)
             chirp.spin(0.02)
-        print(f"Chirp complete. Robot remains at nominal stand until driver watchdog stop. CSV: {csv_path}")
+        metadata = {
+            "schema_version": 1,
+            "label": run_label,
+            "profile": profile.name,
+            "chirp_start_unix_ns": chirp_start_unix_ns,
+            "chirp_end_unix_ns": chirp_end_unix_ns,
+            "active_joint_names": [JOINTS[index] for index in ACTIVE_JOINT_INDICES],
+            "held_joint_names": [
+                name for i, name in enumerate(JOINTS) if i not in ACTIVE_JOINT_INDICES
+            ],
+            "amplitude_rad": amplitude,
+            "start_frequency_hz": profile.start_frequency_hz,
+            "end_frequency_hz": profile.end_frequency_hz,
+            "chirp_duration_s": DURATION_S,
+            "command_rate_hz": COMMAND_RATE_HZ,
+            "kp": CHIRP_KP,
+            "kd": CHIRP_KD,
+            "driver_torque_limit_nm": DRIVER_TORQUE_LIMIT_NM,
+            "joint_order": list(JOINTS),
+            "command_csv": csv_path.name,
+        }
+        metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        print(
+            "Chirp complete. Robot remains at nominal stand until driver watchdog stop. "
+            f"CSV: {csv_path}; metadata: {metadata_path}"
+        )
         chirp.active_motion_started = False
         return 0
     except KeyboardInterrupt:
@@ -507,14 +595,15 @@ def run_physical(amplitude: float) -> int:
 
 def main() -> int:
     args = _arguments()
-    _print_plan(args.amplitude)
+    profile = PROFILES[args.profile]
+    _print_plan(args.amplitude, profile, args.label)
     if not args.arm:
         print("\nPreview only. Physical commands require --arm and a five-second auto-start countdown.")
         return 0
     if not sys.stdin.isatty():
         print("[ABORT] Physical chirp requires an interactive terminal.", file=sys.stderr)
         return 2
-    return run_physical(args.amplitude)
+    return run_physical(args.amplitude, profile, args.label)
 
 
 if __name__ == "__main__":

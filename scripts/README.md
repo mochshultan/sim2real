@@ -70,7 +70,9 @@ connected.
 | :--- | :---: | :--- |
 | [`pace/record_jaguar_joint_data.sh`](./pace/record_jaguar_joint_data.sh) | Passive ROS bag recorder | Records joint state/command and hardware context; publishes no commands. |
 | [`pace/convert_rosbag_to_pace.py`](./pace/convert_rosbag_to_pace.py) | Offline converter | Reorders named joints, aligns/resamples a bag, and writes PACE tensors; never controls hardware. |
-| [`pace/run_jaguar_chirp.py`](./pace/run_jaguar_chirp.py) | Guarded active test | Opt-in FR three-joint chirp, default +/-0.03 rad, for a fully suspended robot. Requires a 3 Nm driver torque cap and starts after a five-second countdown. |
+| [`pace/create_pace_default_candidate.py`](./pace/create_pace_default_candidate.py) | Offline utility | Creates the nominal Jaguar actuator candidate for the same-data validation comparison. |
+| [`pace/analyze_pace_replay.py`](./pace/analyze_pace_replay.py) | Offline analysis | Reports per-joint position and velocity RMSE from a saved PACE replay. |
+| [`pace/run_jaguar_chirp.py`](./pace/run_jaguar_chirp.py) | Guarded active test | Opt-in FR three-joint chirp with separate ascending fit and descending validation profiles, timestamped command CSV, and JSON metadata. Both are limited to +/-0.03 rad on a fully suspended robot with a 3 Nm driver torque cap. |
 
 ## 6. Sensor Transforms and Math
 

@@ -9,6 +9,8 @@ sensor message definitions, NumPy, and PyTorch installed.
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 from pathlib import Path
 
 import numpy as np
@@ -138,6 +140,8 @@ def align_trajectory(
     sample_rate_hz: float,
     max_state_gap_s: float,
     max_command_age_s: float,
+    window_start_unix_s: float | None = None,
+    window_end_unix_s: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Resample measured position and zero-order-held targets onto a fixed grid."""
     state_times, state_positions = _sort_unique_samples(state_times, state_positions)
@@ -145,9 +149,14 @@ def align_trajectory(
     dt = 1.0 / sample_rate_hz
     start = max(state_times[0], command_times[0])
     end = min(state_times[-1], command_times[-1] + max_command_age_s)
+    if window_start_unix_s is not None:
+        start = max(start, window_start_unix_s)
+    if window_end_unix_s is not None:
+        end = min(end, window_end_unix_s)
     if end <= start:
         raise ValueError("State and command timestamps do not overlap")
-    grid = np.arange(start, end + 0.25 * dt, dt, dtype=np.float64)
+    sample_count = int(np.floor((end - start) / dt + 1.0e-9)) + 1
+    grid = start + np.arange(sample_count, dtype=np.float64) * dt
 
     state_right = np.searchsorted(state_times, grid, side="left")
     state_left = np.clip(state_right - 1, 0, len(state_times) - 1)
@@ -185,7 +194,37 @@ def align_trajectory(
     targets = command_positions[command_index]
     if not np.isfinite(measured).all() or not np.isfinite(targets).all():
         raise ValueError("Aligned trajectory contains NaN or infinite values")
-    return (grid - grid[0]).astype(np.float32), measured.astype(np.float32), targets.astype(np.float32)
+    return (
+        (grid - grid[0]).astype(np.float32),
+        measured.astype(np.float32),
+        targets.astype(np.float32),
+    )
+
+
+def read_chirp_window(command_csv: Path) -> tuple[float, float, dict]:
+    """Read the active chirp time window from its command log and metadata."""
+    chirp_timestamps_ns = []
+    with command_csv.open(newline="", encoding="utf-8") as stream:
+        for row in csv.DictReader(stream):
+            if row.get("phase") == "fr_chirp":
+                try:
+                    chirp_timestamps_ns.append(int(row["unix_time_ns"]))
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError(
+                        "Command CSV lacks valid unix_time_ns chirp timestamps"
+                    ) from error
+    if len(chirp_timestamps_ns) < 2:
+        raise ValueError("Command CSV must contain at least two timestamped fr_chirp rows")
+    if any(right <= left for left, right in zip(chirp_timestamps_ns, chirp_timestamps_ns[1:])):
+        raise ValueError("Chirp CSV timestamps are not strictly increasing")
+
+    metadata_path = command_csv.with_name(
+        command_csv.name.replace("_commands.csv", "_metadata.json")
+    )
+    metadata = {}
+    if metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    return chirp_timestamps_ns[0] * 1.0e-9, chirp_timestamps_ns[-1] * 1.0e-9, metadata
 
 
 def main() -> None:
@@ -197,6 +236,13 @@ def main() -> None:
     parser.add_argument("--sample-rate", type=float, default=200.0, help="Resampled frequency [Hz]")
     parser.add_argument("--max-state-gap", type=float, default=0.02, help="Maximum interpolation gap [s]")
     parser.add_argument("--max-command-age", type=float, default=0.10, help="Maximum held-command age [s]")
+    parser.add_argument(
+        "--command-csv", type=Path, default=None,
+        help=(
+            "Chirp command CSV; when supplied, crop and align to its timestamped "
+            "active-chirp interval."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.bag.exists():
@@ -207,6 +253,14 @@ def main() -> None:
     state_times, state_positions, command_times, command_positions = _load_bag_messages(
         args.bag.resolve(), args.states_topic, args.commands_topic
     )
+    window_start_unix_s = None
+    window_end_unix_s = None
+    chirp_metadata = {}
+    if args.command_csv is not None:
+        if not args.command_csv.is_file():
+            parser.error(f"Command CSV does not exist: {args.command_csv}")
+        window_start_unix_s, window_end_unix_s, chirp_metadata = read_chirp_window(args.command_csv)
+
     time_data, dof_pos, desired_dof_pos = align_trajectory(
         state_times,
         state_positions,
@@ -215,6 +269,8 @@ def main() -> None:
         args.sample_rate,
         args.max_state_gap,
         args.max_command_age,
+        window_start_unix_s,
+        window_end_unix_s,
     )
 
     output_path = args.output.expanduser().resolve()
@@ -230,11 +286,21 @@ def main() -> None:
                 "states_topic": args.states_topic,
                 "commands_topic": args.commands_topic,
                 "source_bag": str(args.bag.resolve()),
+                "source_command_csv": str(args.command_csv.resolve()) if args.command_csv else None,
+                "chirp_metadata": chirp_metadata,
+                "selected_window_unix_s": [window_start_unix_s, window_end_unix_s]
+                if args.command_csv
+                else None,
             },
         },
         output_path,
     )
     print(f"Saved {len(time_data)} aligned samples ({time_data[-1]:.2f} s) to {output_path}")
+    if args.command_csv is not None:
+        print(
+            "Cropped to active FR chirp window from command CSV "
+            f"({chirp_metadata.get('profile', 'profile unknown')})."
+        )
     print(f"PACE tensors: time={time_data.shape}, dof_pos={dof_pos.shape}, des_dof_pos={desired_dof_pos.shape}")
 
 

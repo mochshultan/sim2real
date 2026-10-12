@@ -57,7 +57,11 @@ joints; the other nine actively hold
 the standing pose. Keep the robot fully suspended. Torque, velocity,
 tracking-error, temperature, feedback-freshness, and joint-limit stops remain
 active. The command trajectory, including the transition, is saved as CSV
-under `data/pace/`.
+under `data/pace/`, with wall-clock timestamps and a JSON run manifest. Use
+`--profile fit` for an ascending 0.1-0.8 Hz sweep and
+`--profile validation` for a descending 0.8-0.1 Hz sweep. Both profiles use
+the same excursion, gains, duration, command rate, and safety guards; validation
+data must be kept separate from fitting data.
 
 Startup velocity must be below 0.10 rad/s for all joints. Before motion, every
 joint must also be no more than 0.20 rad outside the CAN driver's configured
@@ -87,7 +91,7 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ```
 
-Start the chirp process first. It checks for competing publishers without
+For the fitting recording, start the chirp process first. It checks for competing publishers without
 sending commands, then opens a zero-gain passive heartbeat and waits for the
 hardware driver. Wait until it prints “Passive zero-gain heartbeat starts
 now”. The robot remains passive until the automatic five-second countdown
@@ -97,7 +101,7 @@ after preflight:
 cd /home/erc/sim2real
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 run jaguar_control run_jaguar_chirp.py --arm
+ros2 run jaguar_control run_jaguar_chirp.py --arm --profile fit --label fit_01
 ```
 
 Then, in another terminal start only the C++ CAN driver, with no controller or
@@ -118,8 +122,15 @@ reached and held. Start rosbag now.” Start rosbag in a third terminal then;
 the FR chirp begins automatically after a five-second hold:
 
 ```bash
-bash scripts/pace/record_jaguar_joint_data.sh jaguar_chirp
+bash scripts/pace/record_jaguar_joint_data.sh pace_fit_01
 ```
+
+The chirp terminal prints the exact bag-recorder command after the stand pose
+is reached. Run that command immediately in the recorder terminal. Repeat the
+same procedure for held-out data, using `--profile validation --label val_01`
+and the printed matching bag label. Do not fit the validation recording. Keep
+each rosbag, command CSV, and JSON manifest together; the converter uses the
+CSV's wall-clock chirp timestamps to exclude the transition and hold periods.
 
 Do not run `sim2real.launch.py` or start the Jaguar controller during this
 test: the chirp checks for competing publishers and will stop if one appears.
@@ -188,3 +199,5 @@ Inspect recorded rates and timestamp jitter before choosing a replay timestep.
 For the separate PC workflow, including transfer of the suspended-robot data,
 simulation replay requirements, and PACE fitting prerequisites, see
 [`pace_pc_training_notes.md`](./pace_pc_training_notes.md).
+For the split fit/held-out validation procedure, see
+[`pace_calibration_validation.md`](./pace_calibration_validation.md).
