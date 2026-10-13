@@ -104,6 +104,39 @@ step is 5 ms; therefore a fractional candidate delay is not a measured
 sub-step latency. Confirm command/feedback timing from timestamps and interpret
 the replay's effective integer delay.
 
+## 4. Run the checked workflow
+
+The first robot recording is a fitting run only. Collect a separate
+`--profile validation` run before running this workflow. On the simulation PC,
+source ROS 2 Jazzy in the shell, then run:
+
+```bash
+cd /home/shultan/IsaacLab
+./isaaclab.sh -p /home/shultan/jaguar_sim2real/scripts/pace/run_jaguar_pace_calibration.py \
+  --fit-bag /home/shultan/jaguar_sim2real/data/pace/<fit-bag> \
+  --fit-csv /home/shultan/jaguar_sim2real/data/pace/<fit-commands.csv> \
+  --validation-bag /home/shultan/jaguar_sim2real/data/pace/<validation-bag> \
+  --validation-csv /home/shultan/jaguar_sim2real/data/pace/<validation-commands.csv> \
+  --output-dir /home/shultan/pace-sim2real/logs/pace/nxp_jaguar/checked_run_01
+```
+
+The output directory must not already exist. The runner converts each bag using
+the matching timestamped command CSV, verifies that one dataset is the
+ascending `fit` profile and the other is the descending `validation` profile,
+fits only the three excited FR joints, then replays both the nominal and fitted
+candidate on the held-out data. It writes `calibration_report.json` and
+`calibration_report.md`, the aligned datasets, candidates, and replay metrics.
+The report compares held-out position and velocity RMSE and flags fitted
+parameters within 2% of the PACE search bounds. A lower fitting objective alone
+does not pass validation.
+
+The current pilot excites only FR collar, hip, and knee. Therefore even a
+successful held-out comparison supports a provisional FR actuator fit only;
+it does not establish repeatability, identify the other nine actuators, or
+validate walking and ground-contact dynamics. Repeat the fit/held-out procedure
+with independent recordings before using the parameters outside simulation.
+The script never updates the robot controller's actuator parameters.
+
 Only the FR joints receive active excitation in these profiles. Do not report
 the remaining nine actuators as calibrated. A full 12-motor identification
 requires separately exciting and validating those joints under the same

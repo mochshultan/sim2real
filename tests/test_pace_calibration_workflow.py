@@ -17,6 +17,7 @@ import convert_rosbag_to_pace as converter  # noqa: E402
 import analyze_pace_replay as replay_analysis  # noqa: E402
 import create_pace_default_candidate as baseline_candidate  # noqa: E402
 import run_jaguar_chirp as chirp  # noqa: E402
+import run_jaguar_pace_calibration as calibration_workflow  # noqa: E402
 import torch  # noqa: E402
 
 
@@ -100,3 +101,32 @@ def test_default_candidate_matches_current_pace_nominal_parameters() -> None:
     assert torch.all(candidate["static_dynamic_friction"] == 0.0)
     assert torch.all(candidate["encoder_bias_rad"] == 0.0)
     assert candidate["delay_steps"] == 0.0
+
+
+def test_calibration_comparison_requires_both_held_out_metrics_to_improve() -> None:
+    nominal = {"mean_position_rmse_rad": 0.02, "mean_velocity_rmse_rad_s": 0.4}
+    better = {"mean_position_rmse_rad": 0.01, "mean_velocity_rmse_rad_s": 0.2}
+    worse_velocity = {"mean_position_rmse_rad": 0.01, "mean_velocity_rmse_rad_s": 0.5}
+
+    assert calibration_workflow.compare_metrics(nominal, better)["improved_both_metrics"]
+    assert not calibration_workflow.compare_metrics(nominal, worse_velocity)["improved_both_metrics"]
+
+
+def test_candidate_bounds_flag_values_at_search_boundary(tmp_path: Path) -> None:
+    candidate_path = tmp_path / "candidate.pt"
+    torch.save(
+        {
+            "joint_order": calibration_workflow.JOINT_ORDER,
+            "armature": torch.tensor([0.01, 0.02, 0.03]),
+            "viscous_friction": torch.tensor([0.0, 1.0, 2.0]),
+            "static_dynamic_friction": torch.tensor([0.1, 0.2, 0.3]),
+            "encoder_bias_rad": torch.tensor([0.0, 0.01, -0.01]),
+            "delay_steps": 0.0,
+        },
+        candidate_path,
+    )
+
+    bounds = calibration_workflow._candidate_bounds(candidate_path)
+
+    assert bounds["viscous_friction"]["near_bound"] == ["Fr_roll_joint"]
+    assert bounds["delay_steps"]["near_bound"] == ["shared"]

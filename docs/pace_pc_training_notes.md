@@ -42,30 +42,29 @@ scp erc@<robot-host>:/home/erc/sim2real/data/pace/jaguar_chirp_commands_20261012
   <pc-user>@<pc-host>:~/jaguar_pace_data/
 ```
 
-Replace the host and account placeholders with the actual machine names. Keep
-the original bag as an archival copy. The robot data directory is ignored by
-Git; these binary recordings are transferred separately rather than added to
-the source commit.
+The raw robot recording and CSV are included in the latest pull under
+`data/pace/`; keep these files unchanged as the archival copy.
 
 ## Convert the rosbag
 
-The converter needs ROS 2 bag Python support, NumPy, and PyTorch. On the PC,
-source its ROS 2 environment, enter a checkout of this repository, and run:
+The converter needs ROS 2 bag Python support, NumPy, and PyTorch. On this PC,
+source ROS 2 Jazzy and use the Isaac Lab Python environment:
 
 ```bash
-source /opt/ros/humble/setup.bash
-cd ~/sim2real
-python3 scripts/pace/convert_rosbag_to_pace.py \
-  ~/jaguar_pace_data/jaguar_chirp_20261012_145729 \
-  --output ~/jaguar_pace_data/nxp_jaguar_chirp_full.pt
+source /opt/ros/jazzy/setup.bash
+cd /home/shultan/IsaacLab
+./isaaclab.sh -p /home/shultan/jaguar_sim2real/scripts/pace/convert_rosbag_to_pace.py \
+  /home/shultan/jaguar_sim2real/data/pace/jaguar_chirp_20261012_145729 \
+  --output /home/shultan/pace-sim2real/data/nxp_jaguar/jaguar_chirp_full.pt
 ```
 
 The converter maps joints by name and writes PACE tensors in leg-by-leg order:
 FR, FL, BR, BL; roll, hip, knee for each leg. It resamples to 200 Hz. Its
 output includes the whole bag overlap, so trim it to the chirp interval before
-fitting. Fit only the three excited FR joints, or mask the other nine joints
-from the fitting loss. Unexcited joints cannot identify their actuator
-parameters.
+fitting. In this recording, the converted bag-relative FR chirp interval is
+26.0–46.0 s. The command CSV restarts its `time_s` clock for each phase; do not
+use its chirp time directly as a converted-bag timestamp. Unexcited joints
+cannot identify actuator parameters.
 
 Copy the trimmed tensor to the PACE checkout at
 `data/nxp_jaguar/chirp_data.pt`, matching the path configured for the custom
@@ -73,45 +72,62 @@ Jaguar task. Preserve its `time`, `dof_pos`, and `des_dof_pos` arrays and
 joint order. Do not silently reorder columns or interpret commanded gains as
 measured torque.
 
-## Prepare matching simulation data
+## Prepare and run the simulation pipeline
 
-The upstream PACE example is for ANYmal D. Do not run its default
-`scripts/pace/data_collection.py` unchanged for Jaguar: its task, joint
-offsets, ordering, and excitation settings do not match this robot.
+The PC checkout now includes a Jaguar-specific PACE task and simulator-side FR
+chirp generator. Do not use the ANYmal-specific
+`scripts/pace/data_collection.py` for Jaguar. Generate separate simulation
+data with:
 
-Before fitting, the PC checkout needs a Jaguar-specific Isaac Lab/PACE task and
-a simulation replay that uses the same experiment:
+```bash
+cd /home/shultan/IsaacLab
+./isaaclab.sh -p /home/shultan/pace-sim2real/scripts/pace/data_collection_nxp_jaguar.py \
+  --viz none --duration 20 \
+  --output /home/shultan/pace-sim2real/data/nxp_jaguar/sim_chirp_data.pt
+```
 
-1. Load the Jaguar model with the calibrated joint offsets and matching joint
-   limits. Use the same nominal pose as the real run.
-2. Replay the exact FR command trajectory from the retained CSV. Keep the other
-   nine joints holding the nominal pose. Use the same joint order, radians,
-   50 Hz command updates, 0.1 to 0.8 Hz chirp, and +/-0.03 rad excursion.
-3. Use the same actuator command path and Kp=40, Kd=2.5 in simulation and on
-   the robot. Match the initial joint positions to the measured bag values at
-   the beginning of the chirp.
-4. Record simulated measured joint position and desired joint position, then
-   export them with the same `time`, `dof_pos`, and `des_dof_pos` schema and
-   joint order as the real tensor.
-5. Compare the three FR measured and desired trajectories before fitting.
-   Check units, sign, offsets, chirp phase, sample rate, and time alignment.
+This runs the fixed-base suspended Jaguar task, holds the nine non-FR joints
+at the nominal pose, applies the `+/-0.03 rad`, `0.1–0.8 Hz`, 20 s FR chirp at
+50 Hz command updates, and records at the 200 Hz physics rate. It also writes
+a command CSV and JSON metadata. The dataset is simulation output, not robot
+measurement.
 
-The simulation replay should represent the same suspended test: do not add
-ground contacts or use a walking policy for this fixed-pose identification
-trial. The stand-transition CSV rows are not part of the chirp fit interval.
+The retained robot rosbag and command CSV are now included in the pulled
+checkout under `data/pace/`. The converted data contain about 46.1 s of
+measurements. The stand transition and nominal hold precede the chirp; fit
+only the FR chirp interval specified above.
 
-## PACE environment and fitting status
+## PACE fit
 
-Install the Isaac Lab and Isaac Sim versions required by the PACE checkout on
-the PC, then install PACE into that environment. Verify that the Jaguar task
-imports and runs a short replay before launching an optimizer. The workspace
-that collected this run contains the guarded ROS chirp and rosbag converter;
-it does not contain a ready-to-run Jaguar-specific Isaac Lab PACE task or
-simulator replay command. Add and validate that task on the PC first.
+The Jaguar task is registered and its configuration imports in the Isaac Lab
+environment. Fit only the three excited FR joints for this experiment; the
+other nine joints are held and cannot be identified from this dataset:
 
-Once the Jaguar task and its fitting configuration are in place, run the
-checkout's `scripts/pace/fit.py` from the Isaac Lab environment. Confirm that
-the fit is restricted to FR collar, hip, and knee and that the optimizer's
-parameter bounds describe Jaguar RS00 actuators. The ANYmal-D fitting bounds
-and actuator configuration are not validated for Jaguar.
+```bash
+cd /home/shultan/IsaacLab
+./isaaclab.sh -p /home/shultan/pace-sim2real/scripts/pace/fit.py --viz none \
+  --task Isaac-Pace-NXP-Jaguar-v0 --num_envs 32 \
+  --data /home/shultan/pace-sim2real/data/nxp_jaguar/jaguar_chirp_full.pt \
+  --start_time_s 26.0 --end_time_s 46.0
+```
+
+The task defaults to identifying the three excited FR joints. Its remaining
+nine joints use a fixed PD hold and are not optimized. Use the transferred
+measured dataset for identification. Use `sim_chirp_data.pt` only to check
+the software pipeline; it is synthetic and cannot identify the real motors.
+The ANYmal-D bounds are not Jaguar settings.
+
+## Run recorded on this PC
+
+On 2026-10-12, the pulled rosbag was converted to 9,215 aligned samples over
+46.07 s and fitted over 26.0–46.0 s with 32 parallel environments and the
+PACE limit of 200 CMA-ES iterations. The best in-sample objective was
+`8.8364e-5 rad^2` at iteration 191 (per-joint RMSE `0.00543 rad`). The run
+finished at iteration 200, but the final-generation score was higher and the
+population spread remained large. The best candidate's FR collar and knee
+encoder biases were near the configured `+0.1 rad` bound. Treat these values
+as provisional fit output only; inspect the bound sensitivity and validate a
+simulated replay before using them as identified Jaguar motor parameters.
+Artifacts are in
+`/home/shultan/pace-sim2real/logs/pace/nxp_jaguar/26_10_12_16-21-58/`.
 
