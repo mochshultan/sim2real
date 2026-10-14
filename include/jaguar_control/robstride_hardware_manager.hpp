@@ -105,6 +105,17 @@ public:
     states_.resize(N_JOINTS);
   }
 
+  void setMotorParams(const MotorParams & params)
+  {
+    if (initialized_ || bus_can0_ || bus_can1_) {
+      throw std::logic_error("Motor parameters must be configured before opening CAN buses");
+    }
+    for (auto & cfg : joint_configs_) {
+      cfg.motor_params = params;
+      cfg.motor_params.direction = cfg.direction;
+    }
+  }
+
   bool initializeBuses()
   {
     bus_can0_ = std::make_unique<RobStrideCanBus>("can0");
@@ -172,7 +183,7 @@ public:
       // Configure impedance mode while the motor is stopped.
       const can_frame sequence[] = {
         buildStopMotorFrame(cfg.can_id),
-        buildSetTorqueLimitFrame(cfg.can_id, cfg.max_effort),
+        buildSetTorqueLimitFrame(cfg.can_id, std::min(cfg.max_effort, cfg.motor_params.firmware_torque_limit)),
         buildSetRunModeFrame(cfg.can_id, RUN_CONTROL_MODE),
         buildMitControlFrame(cfg.can_id, 0, 0, 0, 0, 0, cfg.motor_params),
         buildEnableMotorFrame(cfg.can_id)};

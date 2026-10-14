@@ -1,4 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include "jaguar_control/cybergear_motor_config.hpp"
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <std_msgs/msg/float32.hpp>
@@ -43,6 +45,14 @@ public:
     RCLCPP_INFO(this->get_logger(), "=================================================");
     RCLCPP_INFO(this->get_logger(), " Starting RobStride RS00 Hard Real-Time CAN Node ");
     RCLCPP_INFO(this->get_logger(), "=================================================");
+
+    const auto motor_config = ament_index_cpp::get_package_share_directory("jaguar_control") +
+      "/config/cybergear_motor_params.yaml";
+    this->declare_parameter<std::string>("motor_params_file", motor_config);
+    const auto motor_params = loadCybergearRS00(this->get_parameter("motor_params_file").as_string());
+    hw_manager_.setMotorParams(motor_params);
+    RCLCPP_INFO(this->get_logger(), "CyberGear RS00 encoding: torque [%g, %g] Nm; firmware ceiling %g Nm",
+      motor_params.t_min, motor_params.t_max, motor_params.firmware_torque_limit);
 
     // Declare ROS parameters
     this->declare_parameter<int>("rate_hz", 200);

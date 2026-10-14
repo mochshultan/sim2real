@@ -9,6 +9,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(yaml-cpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -37,6 +39,7 @@ target_include_directories(robstride_can_node PUBLIC
 
 ament_target_dependencies(robstride_can_node
   rclcpp
+  ament_index_cpp
   std_msgs
   std_srvs
   sensor_msgs
@@ -57,6 +60,7 @@ endif()
 
 target_link_libraries(robstride_can_node
   Threads::Threads
+  yaml-cpp::yaml-cpp
 )
 
 # Install C++ Executable

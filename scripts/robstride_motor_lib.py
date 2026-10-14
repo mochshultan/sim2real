@@ -27,8 +27,8 @@ RobStride00_PARAMS = {
     "KP_MAX": 500.0,
     "KD_MIN": 0.0,
     "KD_MAX": 5.0,
-    "T_MIN": -17.0,
-    "T_MAX": 17.0,
+    "T_MIN": -14.0,
+    "T_MAX": 14.0,
     "AXIS_DIRECTION": 1,
 }
 

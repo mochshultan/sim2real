@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <string>
 #include <linux/can.h>
+#include "cybergear_driver_core/cybergear_packet.hpp"
 
 namespace robstride
 {
@@ -23,8 +24,10 @@ struct MotorParams
   double kp_max = 500.0;
   double kd_min =  0.0;
   double kd_max =  5.0;
-  double t_min = -17.0;        // -17.0 Nm
-  double t_max =  17.0;        // +17.0 Nm
+  double t_min = -14.0;        // -14.0 Nm
+  double t_max =  14.0;        // +14.0 Nm
+  double firmware_torque_limit = 14.0;
+  double temperature_scale = 0.1;
   int direction = 1;
 };
 
@@ -32,6 +35,36 @@ constexpr double RS00_TORQUE_LIMIT_NM = 14.0;
 // Match the Isaac Lab Tibia training actuator limit during normal operation.
 constexpr double RS00_CONTROL_TORQUE_LIMIT_NM = 13.5;
 constexpr uint32_t PARAM_LIMIT_TORQUE = 0x700B;
+
+// Adapt the copied CyberGear packet implementation to the existing Jaguar API.
+inline cybergear_driver_core::CybergearPacket makeCybergearPacket(
+  uint8_t motor_id, const MotorParams & params, uint8_t master_id = 0xFE)
+{
+  cybergear_driver_core::CybergearPacketParam packet_params;
+  packet_params.device_id = motor_id;
+  packet_params.primary_id = master_id;
+  packet_params.min_position = params.p_min;
+  packet_params.max_position = params.p_max;
+  packet_params.min_velocity = params.v_min;
+  packet_params.max_velocity = params.v_max;
+  packet_params.min_effort = params.t_min;
+  packet_params.max_effort = params.t_max;
+  packet_params.min_gain_kp = params.kp_min;
+  packet_params.max_gain_kp = params.kp_max;
+  packet_params.min_gain_kd = params.kd_min;
+  packet_params.max_gain_kd = params.kd_max;
+  packet_params.temperature_scale = params.temperature_scale;
+  return cybergear_driver_core::CybergearPacket(packet_params);
+}
+
+inline struct can_frame toSocketCan(const cybergear_driver_core::CanFrame & packet)
+{
+  struct can_frame frame{};
+  frame.can_id = packet.id | CAN_EFF_FLAG;
+  frame.can_dlc = 8;
+  std::copy(packet.data.begin(), packet.data.end(), frame.data);
+  return frame;
+}
 
 // =============================================================================
 // CAN Protocol Command Modes & Run Modes
@@ -112,36 +145,14 @@ inline struct can_frame buildMitControlFrame(
   double tau_ff,
   const MotorParams & params)
 {
-  struct can_frame frame;
-  std::memset(&frame, 0, sizeof(frame));
-
-  double p_target = p_des * params.direction;
-  double v_target = v_des * params.direction;
-  double t_target = tau_ff * params.direction;
-
-  uint16_t p_mapped = linearMapping(p_target, params.p_min, params.p_max);
-  uint16_t v_mapped = linearMapping(v_target, params.v_min, params.v_max);
-  uint16_t kp_mapped = linearMapping(kp, params.kp_min, params.kp_max);
-  uint16_t kd_mapped = linearMapping(kd, params.kd_min, params.kd_max);
-  uint16_t tau_mapped = linearMapping(t_target, params.t_min, params.t_max);
-
-  // Arbitration ID: (CMD_MOTOR_CONTROL << 24) | (tau_mapped << 8) | motor_id
-  frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_CONTROL) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(tau_mapped) & 0xFFFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
-                 CAN_EFF_FLAG;
-
-  frame.can_dlc = 8;
-  frame.data[0] = static_cast<uint8_t>((p_mapped >> 8) & 0xFF);
-  frame.data[1] = static_cast<uint8_t>(p_mapped & 0xFF);
-  frame.data[2] = static_cast<uint8_t>((v_mapped >> 8) & 0xFF);
-  frame.data[3] = static_cast<uint8_t>(v_mapped & 0xFF);
-  frame.data[4] = static_cast<uint8_t>((kp_mapped >> 8) & 0xFF);
-  frame.data[5] = static_cast<uint8_t>(kp_mapped & 0xFF);
-  frame.data[6] = static_cast<uint8_t>((kd_mapped >> 8) & 0xFF);
-  frame.data[7] = static_cast<uint8_t>(kd_mapped & 0xFF);
-
-  return frame;
+  auto packet = makeCybergearPacket(motor_id, params);
+  cybergear_driver_core::MoveParam command;
+  command.position = p_des * params.direction;
+  command.velocity = v_des * params.direction;
+  command.effort = tau_ff * params.direction;
+  command.kp = kp;
+  command.kd = kd;
+  return toSocketCan(packet.createMoveCommand(command));
 }
 
 /**
@@ -149,13 +160,9 @@ inline struct can_frame buildMitControlFrame(
  */
 inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFE)
 {
-  struct can_frame frame;
-  std::memset(&frame, 0, sizeof(frame));
-
-  frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_ENABLE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
-                 CAN_EFF_FLAG;
+  struct can_frame frame{};
+  auto packet = makeCybergearPacket(motor_id, MotorParams{}, master_id);
+  frame.can_id = packet.frameId().getEnableTorqueId() | CAN_EFF_FLAG;
   frame.can_dlc = 8;
   return frame;
 }
@@ -166,15 +173,10 @@ inline struct can_frame buildEnableMotorFrame(uint8_t motor_id, uint8_t master_i
 inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id = 0xFE,
                                             bool clear_fault = false)
 {
-  struct can_frame frame;
-  std::memset(&frame, 0, sizeof(frame));
-
-  frame.can_id = ((static_cast<uint32_t>(CMD_MOTOR_STOP) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
-                 CAN_EFF_FLAG;
+  struct can_frame frame{};
+  auto packet = makeCybergearPacket(motor_id, MotorParams{}, master_id);
+  frame.can_id = packet.frameId().getResetTorqueId() | CAN_EFF_FLAG;
   frame.can_dlc = 8;
-  // RobStride private protocol: byte 0 = 1 requests fault clearing while disabled.
   frame.data[0] = clear_fault ? 1 : 0;
   return frame;
 }
@@ -184,63 +186,23 @@ inline struct can_frame buildStopMotorFrame(uint8_t motor_id, uint8_t master_id 
  */
 inline struct can_frame buildSetRunModeFrame(uint8_t motor_id, RunMode mode, uint8_t master_id = 0xFE)
 {
-  struct can_frame frame;
-  std::memset(&frame, 0, sizeof(frame));
-
-  frame.can_id = ((static_cast<uint32_t>(CMD_SINGLE_PARAM_WRITE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
-                 CAN_EFF_FLAG;
-  frame.can_dlc = 8;
-
-  // Parameter index 0x7005 (run_mode) in Little Endian
-  frame.data[0] = 0x05;
-  frame.data[1] = 0x70;
-  frame.data[2] = 0x00;
-  frame.data[3] = 0x00;
-
-  // Value in byte 4
-  frame.data[4] = static_cast<uint8_t>(mode);
-  frame.data[5] = 0x00;
-  frame.data[6] = 0x00;
-  frame.data[7] = 0x00;
-
-  return frame;
+  auto packet = makeCybergearPacket(motor_id, MotorParams{}, master_id);
+  return toSocketCan(packet.createChangeRunMode(static_cast<uint8_t>(mode)));
 }
 
 /**
  * @brief Builds a write frame for the RobStride firmware torque limit.
  *
- * The motor applies this limit to its internal MIT impedance controller. The
- * MIT ``tau_ff`` encoding range remains :math:`[-17, 17]` N m so that CAN
- * command and feedback scaling remain compatible with the RS00 protocol.
+ * The motor applies this limit to its internal MIT impedance controller.
+ * Command and feedback use the CyberGear RS00 encoding range [-14, 14] N m.
+ * The Jaguar operating cap is configured separately.
  */
 inline struct can_frame buildSetTorqueLimitFrame(
   uint8_t motor_id, double torque_limit_nm = RS00_TORQUE_LIMIT_NM, uint8_t master_id = 0xFE)
 {
-  struct can_frame frame;
-  std::memset(&frame, 0, sizeof(frame));
-
-  frame.can_id = ((static_cast<uint32_t>(CMD_SINGLE_PARAM_WRITE) & 0x1F) << 24) |
-                 ((static_cast<uint32_t>(master_id) & 0xFF) << 8) |
-                 (static_cast<uint32_t>(motor_id) & 0xFF) |
-                 CAN_EFF_FLAG;
-  frame.can_dlc = 8;
-
-  frame.data[0] = static_cast<uint8_t>(PARAM_LIMIT_TORQUE & 0xFF);
-  frame.data[1] = static_cast<uint8_t>((PARAM_LIMIT_TORQUE >> 8) & 0xFF);
-  frame.data[2] = static_cast<uint8_t>((PARAM_LIMIT_TORQUE >> 16) & 0xFF);
-  frame.data[3] = static_cast<uint8_t>((PARAM_LIMIT_TORQUE >> 24) & 0xFF);
-
-  const float bounded_limit = static_cast<float>(std::clamp(torque_limit_nm, 0.0, RS00_TORQUE_LIMIT_NM));
-  uint32_t encoded_limit = 0;
-  static_assert(sizeof(encoded_limit) == sizeof(bounded_limit));
-  std::memcpy(&encoded_limit, &bounded_limit, sizeof(encoded_limit));
-  for (size_t byte_index = 0; byte_index < sizeof(encoded_limit); ++byte_index) {
-    frame.data[4 + byte_index] = static_cast<uint8_t>((encoded_limit >> (8 * byte_index)) & 0xFF);
-  }
-
-  return frame;
+  auto packet = makeCybergearPacket(motor_id, MotorParams{}, master_id);
+  return toSocketCan(packet.createLimitTorqueCommand(
+    static_cast<float>(std::clamp(torque_limit_nm, 0.0, RS00_TORQUE_LIMIT_NM))));
 }
 
 // =============================================================================
@@ -260,35 +222,24 @@ struct MotorFeedback
 inline MotorFeedback parseFeedbackFrame(const struct can_frame & frame, const MotorParams & params)
 {
   MotorFeedback fb;
-  if (!(frame.can_id & CAN_EFF_FLAG) || (frame.can_id & (CAN_RTR_FLAG | CAN_ERR_FLAG))) {
+  if (!(frame.can_id & CAN_EFF_FLAG) ||
+      (frame.can_id & (CAN_RTR_FLAG | CAN_ERR_FLAG)) || frame.can_dlc != 8) {
     return fb;
   }
-
-  uint32_t raw_id = frame.can_id & CAN_EFF_MASK;
-  uint8_t comm_mode = static_cast<uint8_t>((raw_id >> 24) & 0x1F);
-
-  if (comm_mode != CMD_MOTOR_FEEDBACK) {
-    return fb;
-  }
-
+  const uint32_t raw_id = frame.can_id & CAN_EFF_MASK;
   fb.motor_id = static_cast<uint8_t>((raw_id >> 8) & 0xFF);
-
-  if (frame.can_dlc != 8) {
-    return fb;
-  }
-
-  uint16_t p_raw = (static_cast<uint16_t>(frame.data[0]) << 8) | frame.data[1];
-  uint16_t v_raw = (static_cast<uint16_t>(frame.data[2]) << 8) | frame.data[3];
-  uint16_t t_raw = (static_cast<uint16_t>(frame.data[4]) << 8) | frame.data[5];
-  uint16_t tem_raw = (static_cast<uint16_t>(frame.data[6]) << 8) | frame.data[7];
-
-  fb.position = uintToFloat(p_raw, params.p_min, params.p_max) * params.direction;
-  fb.velocity = uintToFloat(v_raw, params.v_min, params.v_max) * params.direction;
-  fb.torque = uintToFloat(t_raw, params.t_min, params.t_max) * params.direction;
-  fb.temperature = static_cast<double>(tem_raw) / 10.0;
-  fb.error = ((raw_id >> 16) & 0x3F) != 0;
+  // The packet class requires the device and primary IDs to differ.
+  if (fb.motor_id == 0xFE) return fb;
+  auto packet = makeCybergearPacket(fb.motor_id, params);
+  if (!packet.frameId().isFeedback(raw_id)) return fb;
+  cybergear_driver_core::CanData data{};
+  std::copy(std::begin(frame.data), std::end(frame.data), data.begin());
+  fb.position = packet.parsePosition(data) * params.direction;
+  fb.velocity = packet.parseVelocity(data) * params.direction;
+  fb.torque = packet.parseEffort(data) * params.direction;
+  fb.temperature = packet.parseTemperature(data);
+  fb.error = packet.frameId().hasError(raw_id);
   fb.valid = true;
-
   return fb;
 }
 
