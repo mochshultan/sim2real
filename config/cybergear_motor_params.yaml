@@ -1,0 +1,96 @@
+motor_types:
+    RS00:
+        max_position: 12.566370614
+        min_position: -12.566370614
+        max_velocity: 33.0
+        min_velocity: -33.0
+        max_effort: 14.0
+        min_effort: -14.0
+        limit_torque: 14.0
+        max_gain_kp: 500.0
+        min_gain_kp: 0.0
+        max_gain_kd: 5.0
+        min_gain_kd: 0.0
+        max_current: 15.5
+        min_current: -15.5
+        temperature_scale: 0.1
+
+    RS02:
+        max_position: 12.566370614
+        min_position: -12.566370614
+        max_velocity: 44.0
+        min_velocity: -44.0
+        max_effort: 17.0
+        min_effort: -17.0
+        limit_torque: 17.0
+        max_gain_kp: 500.0
+        min_gain_kp: 0.0
+        max_gain_kd: 5.0
+        min_gain_kd: 0.0
+        max_current: 23.0
+        min_current: -23.0
+        temperature_scale: 0.1
+
+    RS03:
+        max_position: 12.566370614
+        min_position: -12.566370614
+        max_velocity: 20.0
+        min_velocity: -20.0
+        max_effort: 60.0
+        min_effort: -60.0
+        limit_torque: 60.0
+        max_gain_kp: 5000.0
+        min_gain_kp: 0.0
+        max_gain_kd: 100.0
+        min_gain_kd: 0.0
+        max_current: 43.0
+        min_current: -43.0
+        temperature_scale: 0.1
+
+    RS04:
+        max_position: 12.566370614
+        min_position: -12.566370614
+        max_velocity: 15.0
+        min_velocity: -15.0
+        max_effort: 120.0
+        min_effort: -120.0
+        limit_torque: 120.0
+        max_gain_kp: 5000.0
+        min_gain_kp: 0.0
+        max_gain_kd: 100.0
+        min_gain_kd: 0.0
+        max_current: 90.0
+        min_current: -90.0
+        temperature_scale: 0.1
+
+    RS05:
+        max_position: 12.566370614
+        min_position: -12.566370614
+        max_velocity: 50.0
+        min_velocity: -50.0
+        max_effort: 5.5
+        min_effort: -5.5
+        limit_torque: 5.5
+        max_gain_kp: 500.0
+        min_gain_kp: 0.0
+        max_gain_kd: 5.0
+        min_gain_kd: 0.0
+        max_current: 11.0
+        min_current: -11.0
+        temperature_scale: 0.1
+
+    RS06:
+        max_position: 12.566370614
+        min_position: -12.566370614
+        max_velocity: 50.0
+        min_velocity: -50.0
+        max_effort: 36.0
+        min_effort: -36.0
+        limit_torque: 36.0
+        max_gain_kp: 5000.0
+        min_gain_kp: 0.0
+        max_gain_kd: 100.0
+        min_gain_kd: 0.0
+        max_current: 57.0
+        min_current: -57.0
+        temperature_scale: 0.1
