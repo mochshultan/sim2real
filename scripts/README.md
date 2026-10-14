@@ -63,6 +63,48 @@ connected.
 | [`bringup_imu.sh`](./bringup_imu.sh) | Sets `/dev/ttyUSB0` permissions and starts the `serial_imu talker` node. |
 | [`plot_torques.sh`](./plot_torques.sh) | Opens `rqt_plot` with 12 RobStride motor channels. |
 | [`stop_all.sh`](./stop_all.sh) | Stops robot processes, ROS 2 daemons, and CAN interfaces. |
+| [`wifi_switch.sh`](./wifi_switch.sh) | Saves a static IPv4 configuration for `erc_5G` and switches between `erc_5G` and `ntnu_guest` using NetworkManager. |
+
+### Pindah Wi-Fi dengan IP statis
+
+Jalankan dari folder proyek. Atur alamat sekali sebelum pertama kali menyambung:
+
+```bash
+./scripts/wifi_switch.sh setup
+./scripts/wifi_switch.sh erc
+```
+
+`setup` meminta IP/prefix, gateway, dan DNS lalu menyimpannya di profil
+NetworkManager, tanpa berpindah jaringan. Gunakan IP yang dialokasikan untuk
+komputer ini pada subnet router `erc_5G`; reservasi atau keluarkan IP tersebut
+dari pool DHCP router agar tidak bentrok dengan perangkat lain.
+
+Konfigurasi juga dapat diberikan langsung. Contoh berikut harus disesuaikan
+dengan jaringan router:
+
+```bash
+./scripts/wifi_switch.sh setup 192.168.1.50/24 192.168.1.1 1.1.1.1,8.8.8.8
+```
+
+Untuk kembali dan melihat koneksi:
+
+```bash
+./scripts/wifi_switch.sh guest
+./scripts/wifi_switch.sh status
+```
+
+Perintah `erc` juga menyimpan pilihan untuk boot berikutnya: profil `erc_5G`
+tersedia sebelum login, autoconnect aktif dengan prioritas tertinggi, dan
+autoconnect profil Wi-Fi lain dimatikan. Jika `erc_5G` tidak terjangkau, komputer
+tidak otomatis berpindah ke jaringan lain.
+Perintah `guest` mengaktifkan profil `ntnu_guest` yang sudah tersimpan untuk
+sementara; pilihan otomatis saat boot tetap `erc_5G`.
+Password `erc_5G` memakai kredensial profil yang tersimpan; jika belum tersedia,
+`nmcli --ask` memintanya saat menghubungkan. Jika profil `erc_5G` belum ada,
+`setup` membuat profil WPA Personal dengan autoconnect dimatikan. Untuk mengubah
+alamat, jalankan `setup` kembali. Gunakan `sudo` jika izin NetworkManager ditolak.
+Saat dijalankan melalui SSH di Wi-Fi yang diganti, sesi akan terputus; sambungkan
+kembali memakai alamat pada jaringan tujuan.
 
 ## 5. PACE System Identification Data
 

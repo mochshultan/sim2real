@@ -6,6 +6,11 @@ int main()
 {
   using namespace robstride;
   MotorParams params;
+  auto packet = makeCybergearPacket(1, params);
+  const auto read_param = packet.createGetParamCommand(0x7017);
+  assert(read_param.id == 0x1100FE01U);
+  const cybergear_driver_core::CanData expected_read_data{0x17, 0x70, 0, 0, 0, 0, 0, 0};
+  assert(read_param.data == expected_read_data);
   auto frame = buildEnableMotorFrame(1);
   assert(frame.can_dlc == 8);
   assert((frame.can_id & CAN_EFF_MASK & 0xFFFFU) == 0xFE01U);

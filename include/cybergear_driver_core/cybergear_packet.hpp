@@ -68,7 +68,9 @@ class CybergearPacket {
     CybergearFrameId frameId() { return frame_id_; }
 
     CanFrame createGetParamCommand(const uint16_t param_index) {
-        CanFrame can_frame;
+        CanFrame can_frame{};
+        can_frame.data[0] = param_index & 0x00ff;
+        can_frame.data[1] = param_index >> 8;
         can_frame.id = frame_id_.getReadParameterId();
         return can_frame;
     }
