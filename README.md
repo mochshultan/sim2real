@@ -162,8 +162,9 @@ Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
 delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
 
 Deployment safety limits are different from the simulator's nominal limit:
-normal control is clamped to `13.5 Nm`, the RS00 firmware limit is `14 Nm`, and
-the controller watchdog reacts to sustained feedback above `15 Nm`. Normal walk
+normal control and the startup firmware torque cap are `13.5 Nm`. CAN torque
+encoding uses the CyberGear RS00 range of `[-14, 14] Nm`, and the controller
+watchdog reacts to sustained feedback above `13.8 Nm`. Normal walk
 and sit/stand transition gains use Kp `40.0` and Kd `2.5`, matching the trained
 nominal actuator gains.
 Emergency safe-park remains Kp `14.0` and Kd `0.5`; standby remains zero torque
@@ -391,3 +392,22 @@ With $w_{\text{ang\_l2}} = -0.5$, this term penalizes:
 1. **Yaw Stall**: Resisting turning commands or failing to pivot around $Z$ when steering is requested.
 2. **Uncommanded Yaw Drift**: Spinning out, twisting, or drifting off heading when commanded to walk straight or stand still ($\omega_{\text{cmd}, z} = 0$).
 Together, these terms maintain precise heading and drive execution across challenging rough terrains and obstacles.
+
+## Standalone CAN driver using the CyberGear protocol
+
+The native `robstride_can_node` uses packet encoding and feedback decoding copied
+from the pinned Pion CyberGear driver core. It runs directly as a ROS node without
+`controller_manager`; see [the migration and IMU comparison](docs/cybergear_driver_and_imu.md)
+for provenance, parameters, interfaces, and remaining validation.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd /path/to/jaguar_workspace
+colcon build --packages-select jaguar_control --symlink-install
+source install/setup.bash
+ros2 launch jaguar_control robstride_standalone.launch.py
+```
+
+The launch starts only the CAN hardware node, which configures and enables motors
+on `can0` and `can1`. It does not launch the RL policy or the IMU. Use the existing
+`sim2real.launch.py` for the complete deployment stack.
