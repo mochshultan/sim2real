@@ -11,6 +11,14 @@ find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
+# yaml-cpp versions export either a namespaced target or the older plain target.
+if(TARGET yaml-cpp::yaml-cpp)
+  set(JAGUAR_YAML_CPP_TARGET yaml-cpp::yaml-cpp)
+elseif(TARGET yaml-cpp)
+  set(JAGUAR_YAML_CPP_TARGET yaml-cpp)
+else()
+  message(FATAL_ERROR "yaml-cpp was found but exports no supported CMake target")
+endif()
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -60,7 +68,7 @@ endif()
 
 target_link_libraries(robstride_can_node
   Threads::Threads
-  yaml-cpp::yaml-cpp
+  ${JAGUAR_YAML_CPP_TARGET}
 )
 
 # Install C++ Executable
