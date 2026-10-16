@@ -3,19 +3,19 @@ robstride_can_hardware:
   ros__parameters:
     rate_hz: 200
     rt_priority: 80
-    default_coxa_kp: 40.0
-    default_coxa_kd: 2.5
-    default_kp: 40.0
-    default_kd: 2.5
-    default_knee_kp: 40.0
-    default_knee_kd: 2.5
+    default_coxa_kp: 38.0
+    default_coxa_kd: 3.5
+    default_kp: 38.0
+    default_kd: 3.5
+    default_knee_kp: 38.0
+    default_knee_kd: 3.5
 
 jaguar_can_hardware:
   ros__parameters:
     rate_hz: 200
-    default_coxa_kp: 40.0
-    default_coxa_kd: 2.5
-    default_kp: 40.0
-    default_kd: 2.5
-    default_knee_kp: 40.0
-    default_knee_kd: 2.5
+    default_coxa_kp: 38.0
+    default_coxa_kd: 3.5
+    default_kp: 38.0
+    default_kd: 3.5
+    default_knee_kp: 38.0
+    default_knee_kd: 3.5

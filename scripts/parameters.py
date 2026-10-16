@@ -87,12 +87,12 @@ import yaml
 # Dynamic parameter loader from config/sim2real.yaml (Single Source of Truth)
 _CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "sim2real.yaml"))
 
-_coxa_kp = 40.0
-_coxa_kd = 2.5
-_pitch_kp = 40.0
-_pitch_kd = 2.5
-_knee_kp = 40.0
-_knee_kd = 2.5
+_coxa_kp = 38.0
+_coxa_kd = 3.5
+_pitch_kp = 38.0
+_pitch_kd = 3.5
+_knee_kp = 38.0
+_knee_kd = 3.5
 _can_hz = 200
 
 if os.path.isfile(_CONFIG_FILE):
