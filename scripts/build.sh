@@ -19,7 +19,7 @@ if [ -f "$SCRIPT_DIR/CMakeLists.txt" ]; then
 elif [ -f "$SCRIPT_DIR/../CMakeLists.txt" ]; then
     WORKSPACE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
-    WORKSPACE_DIR="/home/erc/sim2real"
+    WORKSPACE_DIR="/home/qr1/sim2real"
 fi
 
 cd "$WORKSPACE_DIR"

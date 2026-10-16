@@ -7,6 +7,7 @@ available so the controller never retains a stale velocity.
 """
 
 import time
+import math
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -18,13 +19,21 @@ class JaguarCmdVelMux(Node):
         super().__init__("jaguar_cmd_vel_mux")
         self.declare_parameter("xbox_timeout", 0.30)
         self.declare_parameter("keyboard_timeout", 0.30)
+        self.declare_parameter("xbox_linear_accel_limit", 0.5)
+        self.declare_parameter("xbox_angular_accel_limit", 1.0)
         self.xbox_timeout = float(self.get_parameter("xbox_timeout").value)
         self.keyboard_timeout = float(self.get_parameter("keyboard_timeout").value)
+        self.linear_accel = float(self.get_parameter("xbox_linear_accel_limit").value)
+        self.angular_accel = float(self.get_parameter("xbox_angular_accel_limit").value)
+        if not all(math.isfinite(v) and v > 0 for v in (self.linear_accel, self.angular_accel)):
+            raise ValueError("Xbox acceleration limits must be finite and positive")
 
         self.xbox_cmd = Twist()
         self.keyboard_cmd = Twist()
         self.xbox_stamp = 0.0
         self.keyboard_stamp = 0.0
+        self.smoothed_xbox = Twist()
+        self.last_publish_time = time.monotonic()
 
         self.create_subscription(Twist, "/cmd_vel/xbox", self._xbox_cb, 10)
         self.create_subscription(Twist, "/cmd_vel/keyboard", self._keyboard_cb, 10)
@@ -45,12 +54,28 @@ class JaguarCmdVelMux(Node):
 
     def _publish(self) -> None:
         now = time.monotonic()
-        if now - self.xbox_stamp <= self.xbox_timeout:
-            cmd = self.xbox_cmd
-        elif now - self.keyboard_stamp <= self.keyboard_timeout:
-            cmd = self.keyboard_cmd
-        else:
+        # Cap elapsed time so a delayed timer cannot cause a large command jump.
+        dt = min(max(now - self.last_publish_time, 0.0), 0.02)
+        self.last_publish_time = now
+        if self.xbox_stamp > 0.0 and now - self.xbox_stamp <= self.xbox_timeout:
             cmd = Twist()
+            dx = self.xbox_cmd.linear.x - self.smoothed_xbox.linear.x
+            dy = self.xbox_cmd.linear.y - self.smoothed_xbox.linear.y
+            distance = math.hypot(dx, dy)
+            scale = min(1.0, self.linear_accel * dt / distance) if distance else 0.0
+            cmd.linear.x = self.smoothed_xbox.linear.x + dx * scale
+            cmd.linear.y = self.smoothed_xbox.linear.y + dy * scale
+            delta_yaw = self.xbox_cmd.angular.z - self.smoothed_xbox.angular.z
+            yaw_step = self.angular_accel * dt
+            cmd.angular.z = self.smoothed_xbox.angular.z + max(-yaw_step, min(yaw_step, delta_yaw))
+            self.smoothed_xbox = cmd
+        else:
+            # Drop stale Xbox history immediately, including on source changes.
+            self.smoothed_xbox = Twist()
+            if self.keyboard_stamp > 0.0 and now - self.keyboard_stamp <= self.keyboard_timeout:
+                cmd = self.keyboard_cmd
+            else:
+                cmd = Twist()
         self.output.publish(cmd)
 
 

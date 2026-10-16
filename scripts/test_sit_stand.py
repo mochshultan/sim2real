@@ -53,10 +53,10 @@ STAND_POSE = np.array([
 # PHYSICAL HARD JOINT LIMITS & SAFETY THRESHOLDS (NXP Jaguar Quadruped)
 # ==============================================================================
 JOINT_LIMITS_LOWER = np.array([
-    -0.50, -2.50, -0.25,  # BL: collar, hip, knee
-    -0.50, -2.50, -0.25,  # BR: collar, hip, knee
-    -0.50, -2.50, -0.25,  # FL: collar, hip, knee
-    -0.50, -2.50, -0.25,  # FR: collar, hip, knee
+    -0.50, -2.50, -0.35,  # BL: collar, hip, knee
+    -0.50, -2.50, -0.35,  # BR: collar, hip, knee
+    -0.50, -2.50, -0.35,  # FL: collar, hip, knee
+    -0.50, -2.50, -0.35,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
 JOINT_LIMITS_UPPER = np.array([

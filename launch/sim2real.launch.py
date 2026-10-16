@@ -108,6 +108,7 @@ def generate_launch_description():
         executable="jaguar_cmd_vel_mux.py",
         name="jaguar_cmd_vel_mux",
         output="screen",
+        parameters=[config_file],
     )
 
     # 3A. RobStride C++ Hard Real-Time CAN Node (Default, Deterministic 200 Hz)
