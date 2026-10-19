@@ -8,8 +8,8 @@ import yaml
 
 
 ROOT = Path(__file__).parents[1]
-POLICY_SHA256 = "80a2878cb3f5a4527d9ec77801df798dbb4c7e4f8f87a9751856c209caaa2aba"
-CHECKPOINT_SHA256 = "810b85b123d12d653364215fcf76e9614b6759ddeb4a9e674836161a8eee07c0"
+POLICY_SHA256 = "85ccb1b06492dca0a5089ac930f349bbd71285d41057cae25779550c6617a9c9"
+CHECKPOINT_SHA256 = "9f5d1dbe029372987e654443f8dd9e4f74b6f8eba98cc6abe22880c14e23d20e"
 
 
 def _sha256(path: Path) -> str:
@@ -21,10 +21,10 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_and_archived_policy_are_model_17500_export(self):
+    def test_default_and_archived_policy_are_model_19999_export(self):
         default_policy = ROOT / "models/policy.pt"
-        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_fourfeet_17500_20261016.pt"
-        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_fourfeet_17500_20261016.pt"
+        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.pt"
+        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.pt"
 
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
         self.assertEqual(_sha256(archived_policy), POLICY_SHA256)

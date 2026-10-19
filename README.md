@@ -6,25 +6,26 @@ Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobS
 
 The default deployment artifact is deterministically fixed at
 `models/policy.pt`; `policy_path` can override it explicitly. It is the
-estimator-only TorchScript export for checkpoint iteration 17500 from the Isaac
+estimator-only TorchScript export for checkpoint iteration 19999 from the Isaac
 Lab run
-`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-16_13-26-58_stand021-kp38kd35-stand10pct-cmd5s-fourfeet-w1-resume14998`.
+`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-16_19-21-26_stand021-kp38kd35-stand10pct-fourfeet-coxa-w1-std1-resume17500-2500it`.
 
 The source checkpoint is archived as
-`models/model_adaboot_ideal_l2c2_fourfeet_17500_20261016.pt`; the matching named
+`models/model_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.pt`; the matching named
 TorchScript export is
-`models/policy_adaboot_ideal_l2c2_fourfeet_17500_20261016.pt`. The checkpoint SHA-256 is
-`810b85b123d12d653364215fcf76e9614b6759ddeb4a9e674836161a8eee07c0`, and
+`models/policy_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.pt`. The checkpoint SHA-256 is
+`9f5d1dbe029372987e654443f8dd9e4f74b6f8eba98cc6abe22880c14e23d20e`, and
 the TorchScript SHA-256 is
-`80a2878cb3f5a4527d9ec77801df798dbb4c7e4f8f87a9751856c209caaa2aba`.
+`85ccb1b06492dca0a5089ac930f349bbd71285d41057cae25779550c6617a9c9`.
 Reconstructing the exported policy from the checkpoint produced an exact
 numerical match on randomized `(16, 5, 45)` input (`max_abs_diff = 0.0`).
 
 This checkpoint continues the Kp 38 / Kd 3.5 run with a +1.0 reward for
-simultaneous four-foot contact during stand commands. Stand commands are
-sampled at 10%, with command resampling every 5 seconds. The exact training
+simultaneous four-foot contact during stand commands and a +1.0 nominal-coxa
+stance reward. Stand commands are sampled at 10%, with command resampling every
+5 seconds and action-noise standard deviation reset to 1.0. The exact training
 configuration hashes and export validation are recorded in
-`models/deployment_adaboot_ideal_l2c2_fourfeet_17500_20261016.json`.
+`models/deployment_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.json`.
 
 The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
 the flattened 5-step history (`225 -> 128 -> 64 -> 3`), then the actor consumes

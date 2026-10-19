@@ -1,0 +1,21 @@
+{
+  "training_run": "nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-16_19-21-26_stand021-kp38kd35-stand10pct-fourfeet-coxa-w1-std1-resume17500-2500it",
+  "checkpoint_iteration": 19999,
+  "checkpoint_file": "model_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.pt",
+  "checkpoint_sha256": "9f5d1dbe029372987e654443f8dd9e4f74b6f8eba98cc6abe22880c14e23d20e",
+  "policy_file": "policy_adaboot_ideal_l2c2_fourfeet_coxa_19999_20261016.pt",
+  "policy_sha256": "85ccb1b06492dca0a5089ac930f349bbd71285d41057cae25779550c6617a9c9",
+  "training_env_sha256": "04de4df349f2425e7898cddac3ff576dc72d7899799ea9ca7678762aa1c2fecd",
+  "training_agent_sha256": "d9704eef165f0d791abf50d1e917e0b0f80af736bc54730e7d1409a16994c675",
+  "training_nominal_kp": 38.0,
+  "training_nominal_kd": 3.5,
+  "input_shape": ["batch", 5, 45],
+  "output_shape": ["batch", 12],
+  "training_actor_export_max_abs_diff": 0.0,
+  "feet_contact_stand_weight": 1.0,
+  "coxa_nominal_stand_weight": 1.0,
+  "standing_fraction": 0.1,
+  "command_resampling_seconds": [5.0, 5.0],
+  "resume_action_std": 1.0,
+  "validation": "CPU inference and configuration checks; no live hardware motion test"
+}
