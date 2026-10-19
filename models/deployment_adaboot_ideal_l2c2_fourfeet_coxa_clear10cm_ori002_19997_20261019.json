@@ -1,0 +1,23 @@
+{
+  "training_run": "nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-19_10-50-33_stand021-kp38kd35-stand10pct-cmd5s-fourfeet-coxa-clear10cm-ori002-resume14998-5000it",
+  "checkpoint_iteration": 19997,
+  "checkpoint_file": "model_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.pt",
+  "checkpoint_sha256": "b9e7efe611edb0388821552019254d788ebb1bf2c1cda1d5297f1bbbd7df8350",
+  "policy_file": "policy_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.pt",
+  "policy_sha256": "bd7bac578657e02fbcd3e74c7c6645127ae5a7d4089e2c7ffa1df2b440a3b2cb",
+  "training_env_sha256": "2dbcbfe1603f9b238d701e206c4519fa786da0093bbb5a119796f4319fb0edcf",
+  "training_agent_sha256": "9325eb95c087a2f165f9a51cfb0ca6490bc3f8fa6cd6396080249b88cbb80c22",
+  "training_nominal_kp": 38.0,
+  "training_nominal_kd": 3.5,
+  "input_shape": ["batch", 5, 45],
+  "output_shape": ["batch", 12],
+  "training_actor_export_max_abs_diff": 0.0,
+  "feet_contact_stand_weight": 1.0,
+  "coxa_nominal_stand_weight": 1.0,
+  "directional_foot_clearance_target_m": 0.1,
+  "flat_orientation_l2_weight": -0.02,
+  "standing_fraction": 0.1,
+  "command_resampling_seconds": [5.0, 5.0],
+  "resume_action_std": 1.0,
+  "validation": "CPU inference and configuration checks; no live hardware motion test"
+}
