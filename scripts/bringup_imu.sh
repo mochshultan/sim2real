@@ -35,16 +35,8 @@ sudo chmod 666 "$IMU_PORT" 2>/dev/null || true
 echo -e "✅ Port Serial IMU Terdeteksi: ${GREEN}$IMU_PORT${NC}"
 
 # 2. Source ROS 2 Base Environment
-if [ -f "/opt/ros/humble/setup.bash" ]; then
-    source /opt/ros/humble/setup.bash
-    echo -e "✅ ROS 2 Humble Environment Loaded."
-elif [ -f "/opt/ros/foxy/setup.bash" ]; then
-    source /opt/ros/foxy/setup.bash
-    echo -e "✅ ROS 2 Foxy Environment Loaded."
-else
-    echo -e "${RED}[ERROR] ROS 2 setup.bash tidak ditemukan di /opt/ros!${NC}"
-    exit 1
-fi
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/source_ros.sh"
+echo -e "✅ ROS 2 Jazzy Environment Loaded."
 
 # 3. Source Workspace Overlay with serial_imu package
 if [ -f "/home/qr1/sim2real/install/setup.bash" ]; then

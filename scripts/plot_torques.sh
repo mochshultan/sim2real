@@ -18,14 +18,7 @@ echo -e "${CYAN} 🐾 NXP JAGUAR: 12-MOTOR RQT PLOTTER                ${NC}"
 echo -e "${CYAN}=====================================================${NC}"
 
 # 1. Source ROS 2 Environment
-if [ -f "/opt/ros/humble/setup.bash" ]; then
-    source /opt/ros/humble/setup.bash
-elif [ -f "/opt/ros/foxy/setup.bash" ]; then
-    source /opt/ros/foxy/setup.bash
-else
-    echo -e "${RED}[ERROR] ROS 2 environment not found in /opt/ros!${NC}"
-    exit 1
-fi
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/source_ros.sh"
 
 # 2. Parse mode (default: effort / torque)
 MODE="${1:-effort}"

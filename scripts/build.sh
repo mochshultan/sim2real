@@ -25,19 +25,11 @@ fi
 cd "$WORKSPACE_DIR"
 
 echo "====================================================="
-echo " Building NXP Jaguar Control (ROS 2 Humble)          "
+echo " Building NXP Jaguar Control (ROS 2 Jazzy)           "
 echo "====================================================="
 
 echo "[1/3] Sourcing ROS 2..."
-if [ -f "/opt/ros/jazzy/setup.bash" ]; then
-    source /opt/ros/jazzy/setup.bash
-elif [ -f "/opt/ros/humble/setup.bash" ]; then
-    source /opt/ros/humble/setup.bash
-elif [ -f "/opt/ros/foxy/setup.bash" ]; then
-    source /opt/ros/foxy/setup.bash
-else
-    echo "Warning: No ROS 2 installation found in /opt/ros."
-fi
+source "$WORKSPACE_DIR/scripts/source_ros.sh" || { status=$?; return "$status" 2>/dev/null || exit "$status"; }
 
 echo "[2/3] Running colcon build..."
 CMAKE_ARGS=""

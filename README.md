@@ -2,6 +2,10 @@
 
 Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobStride RS00 actuators via ROS 2.
 
+The robot runtime targets **Ubuntu 24.04 LTS / ROS 2 Jazzy / Python 3.12**.
+For an existing Ubuntu 22.04/Humble installation, follow the
+[Jazzy migration guide](docs/upgrade_jazzy.md) before rebuilding.
+
 ### Current policy
 
 The default deployment artifact is deterministically fixed at
@@ -241,7 +245,7 @@ cd /home/erc/sim2real
 #### Terminal 3: Real-Time C++ CAN Node (200 Hz)
 ```bash
 cd /home/erc/sim2real
-source /opt/ros/humble/setup.bash
+source ~/sim2real/scripts/source_ros.sh
 source install/setup.bash
 ros2 run jaguar_control robstride_can_node
 ```
@@ -249,14 +253,14 @@ ros2 run jaguar_control robstride_can_node
 #### Terminal 4: Sensor Diagnostics Dashboard
 ```bash
 cd /home/erc/sim2real
-source /opt/ros/humble/setup.bash
+source ~/sim2real/scripts/source_ros.sh
 python3 scripts/check_states.py
 ```
 
 #### Terminal 5: Sim-to-Real RL Controller Node
 ```bash
 cd /home/erc/sim2real
-source /opt/ros/humble/setup.bash
+source ~/sim2real/scripts/source_ros.sh
 source install/setup.bash
 ros2 run jaguar_control nxp_jaguar_controller.py
 ```
@@ -264,7 +268,7 @@ ros2 run jaguar_control nxp_jaguar_controller.py
 #### Terminal 6: Teleoperation Hub
 ```bash
 cd /home/erc/sim2real
-source /opt/ros/humble/setup.bash
+source ~/sim2real/scripts/source_ros.sh
 source install/setup.bash
 ros2 run jaguar_control keyboard_teleop.py
 ```
@@ -282,7 +286,7 @@ Execution sequence:
 sudo /home/erc/sim2real/scripts/bringup_canbus.sh
 
 # 2. Launch full stack:
-source /opt/ros/humble/setup.bash
+source ~/sim2real/scripts/source_ros.sh
 source /home/erc/sim2real/install/setup.bash
 ros2 launch jaguar_control sim2real.launch.py
 ```
@@ -409,7 +413,7 @@ from the pinned Pion CyberGear driver core. It runs directly as a ROS node witho
 for provenance, parameters, interfaces, and remaining validation.
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source ~/sim2real/scripts/source_ros.sh
 cd /path/to/jaguar_workspace
 colcon build --packages-select jaguar_control --symlink-install
 source install/setup.bash
