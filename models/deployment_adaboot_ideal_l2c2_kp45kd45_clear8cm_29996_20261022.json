@@ -1,0 +1,67 @@
+{
+  "training_run": "/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-22_01-40-39_stand021-kp45kd45-stand10pct-cmd5s-fourfeet-coxa-clear8cm-ori002-torque95of145-w001-resume19997-10kit",
+  "checkpoint_iteration": 29996,
+  "checkpoint_file": "model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt",
+  "policy_file": "policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt",
+  "checkpoint_sha256": "4544c25e7602a294b8ed6df58e98532c3a1a08b066741b4eab56e386b5e56311",
+  "policy_sha256": "15c2e2cf7775361b7edbebe3e2181f0e4bae5ad8024c826b340cffb891bef5a0",
+  "training_env_sha256": "6f9b155ae467bde13ef9359d7e6fd81715663b2c80832cb6b27fdccf71dcb7fe",
+  "training_agent_sha256": "613168d9ae10bcd8aea70cacde8ea9141c7200ba7cb76761809b3fa0643984db",
+  "training_nominal_kp": 45.0,
+  "training_nominal_kd": 4.5,
+  "joint_leg_order": [
+    "FR",
+    "FL",
+    "BR",
+    "BL"
+  ],
+  "joint_groups": [
+    "roll",
+    "hip",
+    "knee"
+  ],
+  "nominal_joint_pos_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.51,
+    -1.51,
+    -1.49,
+    -1.49,
+    1.22,
+    1.22,
+    1.2,
+    1.2
+  ],
+  "action_scale": 0.25,
+  "control_dt_s": 0.02,
+  "input_shape": [
+    "batch",
+    5,
+    45
+  ],
+  "output_shape": [
+    "batch",
+    12
+  ],
+  "training_actor_export_max_abs_diff": 0.0,
+  "training_original_export_max_abs_diff": 0.0,
+  "directional_foot_clearance_target_m": 0.08,
+  "flat_orientation_l2_weight": -0.02,
+  "base_height_target_m": 0.21,
+  "joint_torque_soft_limit": {
+    "torque_limit_nm": 14.5,
+    "soft_limit_ratio": 0.95,
+    "onset_nm": 13.775,
+    "weight": -0.01
+  },
+  "standing_fraction": 0.1,
+  "command_resampling_seconds": [
+    5.0,
+    5.0
+  ],
+  "hardware_torque_limit_nm": 13.5,
+  "hardware_watchdog_nm": 13.8,
+  "validation": "CPU parity with checkpoint reconstruction and original run export, batches 1/16/64; no live hardware motion"
+}

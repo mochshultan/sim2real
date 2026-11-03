@@ -71,12 +71,14 @@ STANDBY_ANGLE = [
 RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
-# Matches the deployed Pion DreamWaQ checkpoint's old nominal reference.
+# Matches Isaac Lab q0 (nxp_jaguar.py):
+#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.49, Knee: +1.20
+#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.51, Knee: +1.22
 DEFAULT_ANGLE = [
-     0.0, -1.0, 1.0,  # BL
-     0.0, -1.0, 1.0,  # BR
-     0.0, -1.0, 1.0,  # FL
-     0.0, -1.0, 1.0,  # FR
+     0.0, -1.49,  1.20,  # BL
+     0.0, -1.49,  1.20,  # BR
+     0.0, -1.51,  1.22,  # FL
+     0.0, -1.51,  1.22,  # FR
 ]
 
 import os

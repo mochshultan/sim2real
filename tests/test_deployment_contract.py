@@ -8,8 +8,8 @@ import yaml
 
 
 ROOT = Path(__file__).parents[1]
-POLICY_SHA256 = "f3aaf8b6c97b54776369c26cd37803add796f9c65eecadcbf84f42586980b750"
-CHECKPOINT_SHA256 = "d86feccbf5f65e77cf4a7a618187a9f35c887f8bdb7f102a871fe4ff18d1c374"
+POLICY_SHA256 = "15c2e2cf7775361b7edbebe3e2181f0e4bae5ad8024c826b340cffb891bef5a0"
+CHECKPOINT_SHA256 = "4544c25e7602a294b8ed6df58e98532c3a1a08b066741b4eab56e386b5e56311"
 
 
 def _sha256(path: Path) -> str:
@@ -21,10 +21,10 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_and_archived_policy_are_pion_9999_export(self):
+    def test_default_and_archived_policy_are_jaguar_29996_export(self):
         default_policy = ROOT / "models/policy.pt"
-        archived_policy = ROOT / "models/policy_pion_dreamwaq_oldnominal_9999_20261028.pt"
-        checkpoint = ROOT / "models/model_pion_dreamwaq_oldnominal_9999_20261028.pt"
+        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
+        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
 
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
         self.assertEqual(_sha256(archived_policy), POLICY_SHA256)
@@ -72,8 +72,8 @@ class DeploymentContractTests(unittest.TestCase):
 
     def test_controller_nominal_pose_matches_training(self):
         source = (ROOT / "scripts/nxp_jaguar_controller.py").read_text()
-        self.assertIn("-1.0, -1.0, -1.0, -1.0", source)
-        self.assertIn("1.0,  1.0,  1.0,  1.0", source)
+        self.assertIn("-1.51, -1.51, -1.49, -1.49", source)
+        self.assertIn("1.22,  1.22,  1.20,  1.20", source)
 
 
 if __name__ == "__main__":

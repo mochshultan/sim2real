@@ -1,27 +1,28 @@
 seed: 42
 device: cuda:0
 num_steps_per_env: 48
-max_iterations: 1000
+max_iterations: 10000
 empirical_normalization: {}
 obs_groups:
   actor:
   - policy
+  - base_lin_vel_target
   critic:
   - critic
 clip_actions: null
 check_for_nan: true
 save_interval: 100
-experiment_name: pion_qr1_dreamwaq
-run_name: ''
+experiment_name: nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2
+run_name: stand021-kp45kd45-stand10pct-cmd5s-fourfeet-coxa-clear8cm-ori002-torque95of145-w001-resume19997-10kit
 logger: tensorboard
 neptune_project: isaaclab
 wandb_project: isaaclab
-resume: false
+resume: true
 load_run: .*
-load_checkpoint: model_.*.pt
-class_name: DreamWaQRunner
+load_checkpoint: /home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-19_10-50-33_stand021-kp38kd35-stand10pct-cmd5s-fourfeet-coxa-clear10cm-ori002-resume14998-5000it/model_19997.pt
+class_name: OnPolicyRunner
 actor:
-  class_name: MLPModel
+  class_name: isaaclab_tasks.manager_based.locomotion.velocity.config.nxp_jaguar_baseline_tibia_adaboot.velocity_estimator:VelocityEstimatorActor
   hidden_dims:
   - 512
   - 256
@@ -32,10 +33,6 @@ actor:
     class_name: GaussianDistribution
     init_std: 1.0
     std_type: scalar
-  stochastic: {}
-  init_noise_std: {}
-  noise_std_type: scalar
-  state_dependent_std: false
 critic:
   class_name: MLPModel
   hidden_dims:
@@ -45,12 +42,8 @@ critic:
   activation: elu
   obs_normalization: true
   distribution_cfg: null
-  stochastic: {}
-  init_noise_std: {}
-  noise_std_type: scalar
-  state_dependent_std: false
 algorithm:
-  class_name: PPO
+  class_name: isaaclab_tasks.manager_based.locomotion.velocity.config.nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2.l2c2_adaboot_ppo:IdealAdaBootL2C2PPO
   num_learning_epochs: 5
   num_mini_batches: 4
   learning_rate: 0.001
@@ -68,20 +61,16 @@ algorithm:
   share_cnn_encoders: false
   rnd_cfg: null
   symmetry_cfg: null
+  estimator_loss_coef: 1.0
+  l2c2_lambda_min: 0.01
+  l2c2_lambda_max: 1.0
+  l2c2_sigma: 1.0
+  l2c2_beta: 0.1
 policy: {}
 entropy_adaptive: true
 entropy_coef_initial: 0.01
 entropy_coef_final: 0.001
 entropy_success_ema_alpha: 0.01
 entropy_success_metric: Metrics/success_rate
-reset_action_std_on_resume: false
+reset_action_std_on_resume: true
 resume_action_std: 1.0
-history_len: 5
-latent_dim: 16
-vae_beta_coef: 0.001
-enable_l2c2: false
-l2c2_lambda_min: 0.01
-l2c2_lambda_max: 1.0
-l2c2_sigma: 1.0
-l2c2_beta: 0.1
-input_summary_entry_point: isaaclab_tasks.manager_based.locomotion.velocity.config.pion_qr1_dreamwaq.input_summary:build_input_summary
