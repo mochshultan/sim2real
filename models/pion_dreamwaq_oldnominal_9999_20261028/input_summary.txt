@@ -1,0 +1,32 @@
+[Pion DreamWaQ] NETWORK INPUTS
+CENet history: [B, 5, 45] = 225 scalars; oldest frame first.
+Actor: 64D = policy 45D + velocity 3D + context 16D.
+Velocity during training: AdaBoot mixes CENet estimate and privileged target; inference uses CENet estimate.
+ACTOR PROPRIOCEPTION:
+  slice       term                     dim  scale          clip          function
+  [  0:3  ]  base_ang_vel               3  0.25           None          base_ang_vel
+  [  3:6  ]  projected_gravity          3  1.0            None          projected_gravity
+  [  6:9  ]  velocity_commands          3  (2.0, 2.0, 0.25) None          generated_commands
+  [  9:21 ]  joint_pos                 12  1.0            None          joint_pos_rel_calibrated
+  [ 21:33 ]  joint_vel                 12  0.05           None          joint_vel_rel
+  [ 33:45 ]  actions                   12  1.0            None          last_action
+  Total: 45D; observation corruption=True.
+CRITIC:
+  slice       term                     dim  scale          clip          function
+  [  0:3  ]  base_ang_vel               3  1.0            None          base_ang_vel
+  [  3:6  ]  base_lin_vel               3  1.0            None          base_lin_vel
+  [  6:9  ]  projected_gravity          3  1.0            None          projected_gravity
+  [  9:12 ]  velocity_commands          3  1.0            None          generated_commands
+  [ 12:24 ]  joint_pos                 12  1.0            None          joint_pos_rel
+  [ 24:36 ]  joint_vel                 12  0.05           None          joint_vel_rel
+  [ 36:48 ]  actions                   12  1.0            None          last_action
+  [ 48:235]  height_scan              187  5.0            (-1.0, 1.0)   height_scan
+  [235:259]  contact_wrench            24  0.01           None          contact_wrench
+  Total: 259D; observation corruption=False.
+Actor [45:48]: velocity input; [48:64]: CENet context.
+Critic contact_wrench: per tibia [Fx,Fy,Fz,tau_x,tau_y,tau_z] in the world frame [N,N*m];
+  tau = (p_tibia - p_base) x F; moment about the base, scaled by the configured contact_wrench scale.
+CENet supervision: velocity_target (3D), training only; scale=2.0.
+Joint/action order: ['FL_collar_joint', 'FR_collar_joint', 'BL_collar_joint', 'BR_collar_joint', 'FL_hip_joint', 'FR_hip_joint', 'BL_hip_joint', 'BR_hip_joint', 'FL_knee_joint', 'FR_knee_joint', 'BL_knee_joint', 'BR_knee_joint']
+Tibia wrench order: ['fl_tibia_link', 'fr_tibia_link', 'bl_tibia_link', 'br_tibia_link']
+Standing command probability: 10%; resampling [s]: (5.0, 5.0).

@@ -52,11 +52,11 @@ SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 # Isaac order: [0..3 Rolls (FR, FL, BR, BL), 4..7 Hips (FR, FL, BR, BL), 8..11 Knees (FR, FL, BR, BL)]
 RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range(12)], dtype=np.float32)
 
-# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
+# Nominal reference from the deployed Pion DreamWaQ 2026-10-28 checkpoint.
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
-   -1.51, -1.51, -1.49, -1.49,   # Hip Pitches (Fr, Fl, Br, Bl)
-    1.22,  1.22,  1.20,  1.20,   # Knees (Fr, Fl, Br, Bl)
+   -1.0, -1.0, -1.0, -1.0,      # Hip Pitches (Fr, Fl, Br, Bl)
+    1.0,  1.0,  1.0,  1.0,      # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
 
 # Hard Physical Limits in Isaac Lab Joint Order: 4 Rolls (Fr, Fl, Br, Bl), 4 Hips, 4 Knees
@@ -138,8 +138,7 @@ class JaguarObservationBuilder:
         self.history_buf = np.zeros((1, history_len, self.obs_dim), dtype=np.float32)
 
     def reset_history(self, initial_obs_45d: np.ndarray):
-        self.history_buf.fill(0.0)
-        self.history_buf[0, -1, :] = initial_obs_45d
+        self.history_buf[0, :, :] = initial_obs_45d
         self.last_action[:] = 0.0
 
     def build_step_observation(self, ang_vel, quat, cmd, joint_pos, joint_vel) -> np.ndarray:

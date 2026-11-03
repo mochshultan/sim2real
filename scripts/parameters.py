@@ -71,14 +71,12 @@ STANDBY_ANGLE = [
 RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
 # Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
-# Matches Isaac Lab q0 (nxp_jaguar.py):
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.49, Knee: +1.20
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.51, Knee: +1.22
+# Matches the deployed Pion DreamWaQ checkpoint's old nominal reference.
 DEFAULT_ANGLE = [
-     0.0, -1.49,  1.20,  # BL
-     0.0, -1.49,  1.20,  # BR
-     0.0, -1.51,  1.22,  # FL
-     0.0, -1.51,  1.22,  # FR
+     0.0, -1.0, 1.0,  # BL
+     0.0, -1.0, 1.0,  # BR
+     0.0, -1.0, 1.0,  # FL
+     0.0, -1.0, 1.0,  # FR
 ]
 
 import os
@@ -87,12 +85,12 @@ import yaml
 # Dynamic parameter loader from config/sim2real.yaml (Single Source of Truth)
 _CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "sim2real.yaml"))
 
-_coxa_kp = 38.0
-_coxa_kd = 3.5
-_pitch_kp = 38.0
-_pitch_kd = 3.5
-_knee_kp = 38.0
-_knee_kd = 3.5
+_coxa_kp = 45.0
+_coxa_kd = 4.5
+_pitch_kp = 45.0
+_pitch_kd = 4.5
+_knee_kp = 45.0
+_knee_kd = 4.5
 _can_hz = 200
 
 if os.path.isfile(_CONFIG_FILE):

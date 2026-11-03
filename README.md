@@ -1,6 +1,6 @@
 # NXP Jaguar Quadruped: Sim-to-Real Deployment (Branch: `cpp`)
 
-Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobStride RS00 actuators via ROS 2.
+Reinforcement learning control deployment from Isaac Lab (Pion DreamWaQ) to RobStride RS00 actuators via ROS 2.
 
 The robot runtime targets **Ubuntu 24.04 LTS / ROS 2 Jazzy / Python 3.12**.
 For an existing Ubuntu 22.04/Humble installation, follow the
@@ -8,36 +8,40 @@ For an existing Ubuntu 22.04/Humble installation, follow the
 
 ### Current policy
 
-The default deployment artifact is deterministically fixed at
-`models/policy.pt`; `policy_path` can override it explicitly. It is the
-estimator-only TorchScript export for checkpoint iteration 19997 from the Isaac
-Lab run
-`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-19_10-50-33_stand021-kp38kd35-stand10pct-cmd5s-fourfeet-coxa-clear10cm-ori002-resume14998-5000it`.
+The default artifact is `models/policy.pt`: Pion-QR1 DreamWaQ PhysX without
+L2C2, checkpoint `model_9999.pt` (10k iterations), from
+`2026-10-28_19-36-34_pion-dreamwaq-plain-adaptive-base23cm-newreward-10k`.
+It had the highest final training success-rate EMA (98.74%) among six completed
+Pion 10k runs using the old nominal reference. This is a training metric;
+physical robot performance has not been tested.
 
-The source checkpoint is archived as
-`models/model_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.pt`; the matching named
-TorchScript export is
-`models/policy_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.pt`. The checkpoint SHA-256 is
-`b9e7efe611edb0388821552019254d788ebb1bf2c1cda1d5297f1bbbd7df8350`, and
-the TorchScript SHA-256 is
-`bd7bac578657e02fbcd3e74c7c6645127ae5a7d4089e2c7ffa1df2b440a3b2cb`.
-Reconstructing the exported policy from the checkpoint produced an exact
-numerical match on randomized `(16, 5, 45)` input (`max_abs_diff = 0.0`).
+The controller uses the checkpoint's nominal pose: collar 0 rad, hip -1 rad,
+knee +1 rad. Observations contain `q - q0`, and targets use
+`q_des = q0 + 0.25 * action`. Normal and transition gains are Kp 45 / Kd 4.5.
+Motor calibration offsets remain separate from this policy reference.
 
-This checkpoint continues the Kp 38 / Kd 3.5 run with a +1.0 reward for
-simultaneous four-foot contact during stand commands and a +1.0 nominal-coxa
-stance reward. Directional tibia clearance target is 10 cm and the flat
-orientation penalty is -0.02. Stand commands are sampled at 10%, with command
-resampling every 5 seconds and action-noise standard deviation reset to 1.0.
-The exact training configuration hashes and export validation are recorded in
-`models/deployment_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.json`.
+The policy accepts `(batch, 5, 45)` and returns `(batch, 12)`. An embedded
+adapter converts the controller's FR/FL/BR/BL joint groups to the training
+FL/FR/BL/BR order for positions, velocities, previous actions, and output.
+CENet supplies velocity and a 16-D latent context to the 64-D actor input;
+actor hidden layers are 512, 256, 128. Observation normalization is embedded.
+History starts with five copies of the first observation, as in DreamWaQ play.
 
-The export expects `(batch, 5, 45)` and returns `(batch, 12)`. Its estimator maps
-the flattened 5-step history (`225 -> 128 -> 64 -> 3`), then the actor consumes
-the current 45-D observation plus the 3-D estimated velocity (`48 -> 512 -> 256
--> 128 -> 12`). Observation normalization is embedded in the export. The
-training snapshots are YAML (`params/env.yaml` and `params/agent.yaml`); TOML
-files in IsaacLab are package configuration, not this experiment's actuator
+The checkpoint and named export are
+`models/model_pion_dreamwaq_oldnominal_9999_20261028.pt` and
+`models/policy_pion_dreamwaq_oldnominal_9999_20261028.pt`.
+[Deployment metadata](models/deployment_pion_dreamwaq_oldnominal_9999_20261028.json)
+records SHA-256 hashes, the source run, and validation. The original training
+snapshots and raw Pion-order export are in
+`models/pion_dreamwaq_oldnominal_9999_20261028/`.
+Every inference tensor matched the checkpoint exactly; randomized adapter
+comparisons for batches 1, 16, 64 had zero error. The previous default is
+preserved in `models/backup_model/`, identified by its SHA-256.
+
+Reproduce with the IsaacLab Python environment:
+```bash
+python scripts/export_pion_dreamwaq_policy.py /path/to/the/source/run
+```
 configuration.
 
 ## Overview
@@ -62,7 +66,7 @@ The `cpp` branch executes low-level actuator communication through a native Linu
 
 ```
 [ HIGH-LEVEL: RL Policy ]
-      │  Model: AdaBoot-Ideal TorchScript JIT (`policy.pt`) from Isaac Lab
+      │  Model: Pion DreamWaQ TorchScript JIT (`policy.pt`) from Isaac Lab
       │  Rate: 50 Hz (dt = 0.02 s) | Input: 5x45 Observation History | Output: 12-D Target Δq
       ▼
 [ MID-LEVEL: ROS 2 Controller Node (`scripts/nxp_jaguar_controller.py`) ]
@@ -145,14 +149,14 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 | **1** | `Fl_roll_joint` | $0.0\text{ rad}$ | **6** | `FL_collar_joint` | **1** | `can1` | Front Left |
 | **2** | `Br_roll_joint` | $0.0\text{ rad}$ | **3** | `BR_collar_joint` | **4** | `can0` | Rear Right |
 | **3** | `Bl_roll_joint` | $0.0\text{ rad}$ | **0** | `BL_collar_joint` | **4** | `can1` | Rear Left |
-| **4** | `Fr_hip_pitch_joint` | $-1.51\text{ rad}$ | **10** | `FR_hip_joint` | **2** | `can0` | Front Right |
-| **5** | `Fl_hip_pitch_joint` | $-1.51\text{ rad}$ | **7** | `FL_hip_joint` | **2** | `can1` | Front Left |
-| **6** | `Br_hip_pitch_joint` | $-1.49\text{ rad}$ | **4** | `BR_hip_joint` | **5** | `can0` | Rear Right |
-| **7** | `Bl_hip_pitch_joint` | $-1.49\text{ rad}$ | **1** | `BL_hip_joint` | **5** | `can1` | Rear Left |
-| **8** | `Fr_knee_joint` | $+1.22\text{ rad}$ | **11** | `FR_knee_joint` | **3** | `can0` | Front Right |
-| **9** | `Fl_knee_joint` | $+1.22\text{ rad}$ | **8** | `FL_knee_joint` | **3** | `can1` | Front Left |
-| **10** | `Br_knee_joint` | $+1.20\text{ rad}$ | **5** | `BR_knee_joint` | **6** | `can0` | Rear Right |
-| **11** | `Bl_knee_joint` | $+1.20\text{ rad}$ | **2** | `BL_knee_joint` | **6** | `can1` | Rear Left |
+| **4** | `Fr_hip_pitch_joint` | $-1.0\text{ rad}$ | **10** | `FR_hip_joint` | **2** | `can0` | Front Right |
+| **5** | `Fl_hip_pitch_joint` | $-1.0\text{ rad}$ | **7** | `FL_hip_joint` | **2** | `can1` | Front Left |
+| **6** | `Br_hip_pitch_joint` | $-1.0\text{ rad}$ | **4** | `BR_hip_joint` | **5** | `can0` | Rear Right |
+| **7** | `Bl_hip_pitch_joint` | $-1.0\text{ rad}$ | **1** | `BL_hip_joint` | **5** | `can1` | Rear Left |
+| **8** | `Fr_knee_joint` | $+1.0\text{ rad}$ | **11** | `FR_knee_joint` | **3** | `can0` | Front Right |
+| **9** | `Fl_knee_joint` | $+1.0\text{ rad}$ | **8** | `FL_knee_joint` | **3** | `can1` | Front Left |
+| **10** | `Br_knee_joint` | $+1.0\text{ rad}$ | **5** | `BR_knee_joint` | **6** | `can0` | Rear Right |
+| **11** | `Bl_knee_joint` | $+1.0\text{ rad}$ | **2** | `BL_knee_joint` | **6** | `can1` | Rear Left |
 
 ## 6. Actuator Parameters and PD Impedance Gains
 
@@ -164,12 +168,12 @@ ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
 
 | Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
 | :--- | :--- | :---: | :--- | :---: |
-| Roll/collar | `IdealPDActuator` | 38.0 / 3.5 | 14 Nm, 20 rad/s | 38.0 / 3.5 |
-| Hip pitch | `IdealPDActuator` | 38.0 / 3.5 | 14 Nm, 20 rad/s | 38.0 / 3.5 |
-| Knee | `RemotizedPDActuator` | 38.0 / 3.5 | 14 Nm, 20 rad/s; 1:1 knee lookup | 38.0 / 3.5 |
+| Roll/collar | `IdealPDActuator` | 45.0 / 4.5 | 14 Nm, 20 rad/s | 45.0 / 4.5 |
+| Hip pitch | `IdealPDActuator` | 45.0 / 4.5 | 14 Nm, 20 rad/s | 45.0 / 4.5 |
+| Knee | `RemotizedPDActuator` | 45.0 / 4.5 | 14 Nm, 20 rad/s; 1:1 knee lookup | 45.0 / 4.5 |
 
 Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
-(Kp `34.2–41.8`, Kd `3.15–3.85`). Motor strength is also randomized by
+(Kp `40.5–49.5`, Kd `4.05–4.95`). Motor strength is also randomized by
 `0.9–1.1`; the randomized effort is capped at `13.5 Nm`. The action system
 delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
 
@@ -177,7 +181,7 @@ Deployment safety limits are different from the simulator's nominal limit:
 normal control and the startup firmware torque cap are `13.5 Nm`. CAN torque
 encoding uses the CyberGear RS00 range of `[-14, 14] Nm`, and the controller
 watchdog reacts to sustained feedback above `13.8 Nm`. Normal walk
-and sit/stand transition gains use Kp `38.0` and Kd `3.5`, matching the trained
+and sit/stand transition gains use Kp `45.0` and Kd `4.5`, matching the trained
 nominal actuator gains.
 Emergency safe-park remains Kp `14.0` and Kd `0.5`; standby remains zero torque
 (Kp/Kd `0/0`).
@@ -366,7 +370,7 @@ When the chassis collapses to the floor ($\approx 10\text{ cm}$), the entire sha
 The reward `base_height_l2_safe` calculates true vertical clearance between the base origin and the ground plane ($Z_{\text{root}} - Z_{\text{ground}}$), anchoring stance height at **0.21 m**.
 
 ### 3. Stand-Still Joint Deviation Penalty
-When planar velocity commands drop below threshold ($\|\mathbf{v}_{\text{cmd}}\| < 0.1\text{ m/s}$), the `stand_still` reward penalizes joint deviations from nominal stance $q_0$ (front hip/knee `-1.51/1.22 rad`, rear hip/knee `-1.49/1.20 rad`, rolls `0.0 rad`). This prevents standing drift and limit-cycle oscillations while stationary.
+When planar velocity commands drop below threshold ($\|\mathbf{v}_{\text{cmd}}\| < 0.1\text{ m/s}$), the `stand_still` reward penalizes joint deviations from nominal stance $q_0$ (hip/knee `-1.0/+1.0 rad`, rolls `0.0 rad`). This prevents standing drift and limit-cycle oscillations while stationary.
 
 ### 4. Unitree A1-Style Analytical Spherical Foot Contact Modeling
 Previously, NXP Jaguar modeled foot ground interaction using the convex-hull approximation of the entire tibia CAD mesh (`physics:approximation = "convexHull"`). In high-frequency physics engines (PhysX), polygonal mesh contacts suffer from:

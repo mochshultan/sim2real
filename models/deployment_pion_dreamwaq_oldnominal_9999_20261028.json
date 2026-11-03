@@ -1,0 +1,75 @@
+{
+  "source_run": "/home/shultan/IsaacLab/logs/dreamwaq/pion_qr1_dreamwaq/2026-10-28_19-36-34_pion-dreamwaq-plain-adaptive-base23cm-newreward-10k",
+  "iteration": 9999,
+  "selection_metric": "AdaptiveEntropy/success_rate_ema at final iteration",
+  "selection_value": 0.9873995872845652,
+  "selection_scope": "six completed old-nominal Pion 10k runs",
+  "input_shape": [
+    "batch",
+    5,
+    45
+  ],
+  "output_shape": [
+    "batch",
+    12
+  ],
+  "controller_leg_order": [
+    "FR",
+    "FL",
+    "BR",
+    "BL"
+  ],
+  "training_leg_order": [
+    "FL",
+    "FR",
+    "BL",
+    "BR"
+  ],
+  "joint_groups": [
+    "collar",
+    "hip",
+    "knee"
+  ],
+  "joint_permutation": [
+    1,
+    0,
+    3,
+    2,
+    5,
+    4,
+    7,
+    6,
+    9,
+    8,
+    11,
+    10
+  ],
+  "nominal_joint_pos_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "action_scale": 0.25,
+  "kp": 45.0,
+  "kd": 4.5,
+  "control_dt_s": 0.02,
+  "raw_export_state_matches_checkpoint": true,
+  "adapter_max_abs_error": 0.0,
+  "checkpoint_sha256": "d86feccbf5f65e77cf4a7a618187a9f35c887f8bdb7f102a871fe4ff18d1c374",
+  "raw_policy_sha256": "644b458bd3ad9d4b51e11437091afcfd9f1f8d2e8c3eb1a5e3b73fef136c4bdc",
+  "policy_sha256": "f3aaf8b6c97b54776369c26cd37803add796f9c65eecadcbf84f42586980b750",
+  "env_sha256": "e28f9227c6263374a6fea6ef31693c2ee164221e93a3abe9275f75c513e11700",
+  "agent_sha256": "ac6ea1a67c96251a9107f23aa5c3ac376587e9a621170fc9b9bfff42fcd41bc4",
+  "validation_scope": "offline state equality and randomized permutation parity; no hardware motion",
+  "hardware_torque_limit_nm": 13.5,
+  "training_torque_limit_nm": 14.0
+}

@@ -8,8 +8,8 @@ import yaml
 
 
 ROOT = Path(__file__).parents[1]
-POLICY_SHA256 = "bd7bac578657e02fbcd3e74c7c6645127ae5a7d4089e2c7ffa1df2b440a3b2cb"
-CHECKPOINT_SHA256 = "b9e7efe611edb0388821552019254d788ebb1bf2c1cda1d5297f1bbbd7df8350"
+POLICY_SHA256 = "f3aaf8b6c97b54776369c26cd37803add796f9c65eecadcbf84f42586980b750"
+CHECKPOINT_SHA256 = "d86feccbf5f65e77cf4a7a618187a9f35c887f8bdb7f102a871fe4ff18d1c374"
 
 
 def _sha256(path: Path) -> str:
@@ -21,10 +21,10 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_and_archived_policy_are_model_19997_export(self):
+    def test_default_and_archived_policy_are_pion_9999_export(self):
         default_policy = ROOT / "models/policy.pt"
-        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.pt"
-        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_fourfeet_coxa_clear10cm_ori002_19997_20261019.pt"
+        archived_policy = ROOT / "models/policy_pion_dreamwaq_oldnominal_9999_20261028.pt"
+        checkpoint = ROOT / "models/model_pion_dreamwaq_oldnominal_9999_20261028.pt"
 
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
         self.assertEqual(_sha256(archived_policy), POLICY_SHA256)
@@ -45,14 +45,14 @@ class DeploymentContractTests(unittest.TestCase):
 
         for mode in ("rl", "transition"):
             for joint in ("roll", "pitch", "knee"):
-                self.assertEqual(controller[f"{mode}_kp_{joint}"], 38.0)
-                self.assertEqual(controller[f"{mode}_kd_{joint}"], 3.5)
+                self.assertEqual(controller[f"{mode}_kp_{joint}"], 45.0)
+                self.assertEqual(controller[f"{mode}_kd_{joint}"], 4.5)
 
         for node in hardware_nodes:
             hardware = config[node]["ros__parameters"]
             for prefix in ("default_coxa", "default", "default_knee"):
-                self.assertEqual(hardware[f"{prefix}_kp"], 38.0)
-                self.assertEqual(hardware[f"{prefix}_kd"], 3.5)
+                self.assertEqual(hardware[f"{prefix}_kp"], 45.0)
+                self.assertEqual(hardware[f"{prefix}_kd"], 4.5)
 
         self.assertEqual(controller["safe_park_kp"], 14.0)
         self.assertEqual(controller["safe_park_kd"], 0.5)
@@ -63,7 +63,7 @@ class DeploymentContractTests(unittest.TestCase):
                 parameters = node.get("ros__parameters", {})
                 for name, value in parameters.items():
                     if name.endswith("_kd") and name.startswith(("rl_", "transition_", "default")):
-                        self.assertEqual(value, 3.5, f"{config_name}: {name}")
+                        self.assertEqual(value, 4.5, f"{config_name}: {name}")
 
         sim2sim = yaml.safe_load((ROOT / "config/sim2sim_mujoco.yaml").read_text())["sim2sim_mujoco"]
         self.assertEqual(sim2sim["walk_gains"]["coxa_kd"], 3.5)
@@ -72,8 +72,8 @@ class DeploymentContractTests(unittest.TestCase):
 
     def test_controller_nominal_pose_matches_training(self):
         source = (ROOT / "scripts/nxp_jaguar_controller.py").read_text()
-        self.assertIn("-1.51, -1.51, -1.49, -1.49", source)
-        self.assertIn("1.22,  1.22,  1.20,  1.20", source)
+        self.assertIn("-1.0, -1.0, -1.0, -1.0", source)
+        self.assertIn("1.0,  1.0,  1.0,  1.0", source)
 
 
 if __name__ == "__main__":
