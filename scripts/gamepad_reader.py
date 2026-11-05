@@ -20,6 +20,7 @@ from typing import Callable, Optional, Dict, Any, List
 
 import json
 import numpy as np
+from project_paths import gamepad_calibration_file
 
 # IOCTL Constants for Linux Joystick API
 JSIOCGNAME = lambda length: 0x80006a13 + (length << 16)
@@ -28,15 +29,14 @@ JSIOCGBUTTONS = 0x80016a12
 DEADZONE_DEFAULT = 0.10
 MAX_EVENTS_PER_BATCH = 64
 
-CALIBRATION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamepad_calibration.json")
-
 def load_gamepad_calibration() -> Optional[Dict[str, Any]]:
-    if os.path.exists(CALIBRATION_FILE):
+    calibration_file = gamepad_calibration_file()
+    if calibration_file.is_file():
         try:
-            with open(CALIBRATION_FILE, "r") as f:
+            with calibration_file.open() as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except (OSError, ValueError) as error:
+            print(f"Cannot read gamepad calibration {calibration_file}: {error}", file=sys.stderr)
     return None
 
 

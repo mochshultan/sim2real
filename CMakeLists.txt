@@ -98,6 +98,7 @@ install(PROGRAMS
   scripts/policy_observation.py
   scripts/remote_xbox_forwarder.py
   scripts/gamepad_reader.py
+  scripts/calibrate_xbox.py
   scripts/scan_robostride_ids.py
   scripts/set_robostride_zero.py
   scripts/calibrate_sit_zero.py

@@ -19,6 +19,8 @@ import struct
 import fcntl
 import select
 import numpy as np
+from pathlib import Path
+from project_paths import user_gamepad_calibration
 from typing import Dict, List, Any, Optional
 
 # ANSI Color Codes
@@ -40,7 +42,7 @@ JSIOCGNAME = lambda length: 0x80006a13 + (length << 16)
 JSIOCGAXES = 0x80016a11
 JSIOCGBUTTONS = 0x80016a12
 
-CALIBRATION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamepad_calibration.json")
+CALIBRATION_FILE = str(user_gamepad_calibration())
 
 
 class XboxCalibrator:
@@ -253,6 +255,7 @@ class XboxCalibrator:
     def save_calibration(self, filepath: str = CALIBRATION_FILE):
         """Saves calibration dictionary to JSON file."""
         try:
+            Path(filepath).parent.mkdir(parents=True, exist_ok=True)
             with open(filepath, "w") as f:
                 json.dump(self.calib_data, f, indent=4)
             print(f"{C_GREEN}💾 Profil kalibrasi tersimpan di:{C_RESET} {C_BOLD}{filepath}{C_RESET}\n")
