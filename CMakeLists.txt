@@ -7,7 +7,6 @@ endif()
 
 # Find ROS 2 dependencies
 find_package(ament_cmake REQUIRED)
-find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
@@ -56,6 +55,7 @@ ament_target_dependencies(robstride_can_node
 )
 
 if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_executable(test_can_protocol tests/test_can_protocol.cpp)
   target_include_directories(test_can_protocol PRIVATE include)
   target_compile_features(test_can_protocol PRIVATE cxx_std_17)
@@ -64,6 +64,18 @@ if(BUILD_TESTING)
   target_include_directories(test_motion_safety PRIVATE include)
   target_compile_features(test_motion_safety PRIVATE cxx_std_17)
   add_test(NAME motion_safety COMMAND test_motion_safety)
+  add_executable(test_serial_parser tests/test_serial_parser.c)
+  target_compile_features(test_serial_parser PRIVATE c_std_99)
+  add_test(NAME serial_parser COMMAND test_serial_parser)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_can_protocol PRIVATE -UNDEBUG)
+    target_compile_options(test_motion_safety PRIVATE -UNDEBUG)
+  endif()
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_serial_parser PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME python_tests COMMAND ${Python3_EXECUTABLE} -m pytest
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests -q -p no:cacheprovider)
 endif()
 
 target_link_libraries(robstride_can_node
@@ -84,35 +96,44 @@ install(PROGRAMS
   scripts/keyboard_cmd_vel.py
   scripts/jaguar_cmd_vel_mux.py
   scripts/can_hardware_node.py
-  scripts/robstride_motor_lib.py
   scripts/robstride_motor_test.py
   scripts/test_sit_stand.py
   scripts/check_states.py
   scripts/check_joints.py
-  scripts/parameters.py
-  scripts/motion_limits.py
-  scripts/project_paths.py
-  scripts/joint_layout.py
-  scripts/policy_observation.py
   scripts/remote_xbox_forwarder.py
   scripts/gamepad_reader.py
-  scripts/calibrate_xbox.py
   scripts/scan_robostride_ids.py
   scripts/set_robostride_zero.py
   scripts/calibrate_sit_zero.py
   scripts/calibrate_stand_pose.py
+  scripts/calibrate_parallel_link.py
+  scripts/calibrate_xbox.py
+  scripts/monitor_joints.py
+  scripts/record_sim2real_benchmark.py
   scripts/pace/run_jaguar_chirp.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install directories (config, launch, models, urdf, meshes)
-install(DIRECTORY
-  config
-  launch
-  models
-  urdf
-  meshes
+# Importable modules live beside the executable scripts, without extra ROS nodes.
+install(FILES
+  scripts/robstride_motor_lib.py
+  scripts/parameters.py
+  scripts/motion_limits.py
+  scripts/joint_layout.py
+  scripts/project_paths.py
+  scripts/policy_observation.py
+  scripts/parallel_link_mapping.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Deploy only runtime assets. Training checkpoints and offline tools stay in source.
+install(DIRECTORY config launch urdf meshes
   DESTINATION share/${PROJECT_NAME}
+  PATTERN "__pycache__" EXCLUDE
+)
+install(FILES models/policy.pt
+  models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json
+  DESTINATION share/${PROJECT_NAME}/models
 )
 
 ament_package()
