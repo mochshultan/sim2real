@@ -32,8 +32,8 @@ struct MotorParams
 };
 
 constexpr double RS00_TORQUE_LIMIT_NM = 14.0;
-// Match the Isaac Lab Tibia training actuator limit during normal operation.
-constexpr double RS00_CONTROL_TORQUE_LIMIT_NM = 13.5;
+// Default control ceiling matches the configured RS00 hardware maximum.
+constexpr double RS00_CONTROL_TORQUE_LIMIT_NM = RS00_TORQUE_LIMIT_NM;
 constexpr uint32_t PARAM_LIMIT_TORQUE = 0x700B;
 
 // Adapt the copied CyberGear packet implementation to the existing Jaguar API.

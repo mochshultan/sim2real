@@ -196,8 +196,10 @@ The generated user profile overrides the factory JSON after input-node restart.
 
 ## Safety and recovery
 
-Normal control torque is capped at 13.5 Nm. The controller's configurable
-feedback threshold defaults to 13.8 Nm with five-cycle debounce. Recoverable
+Normal control torque is capped at 14 Nm. The controller's configurable
+feedback threshold defaults to 13.8 Nm with five-cycle debounce (about 100 ms).
+This independent watchdog can request safe park before the 14 Nm cap is reached;
+`torque_safety_enabled:=false` makes only this watchdog log instead. Recoverable
 faults request `SAFE_PARK`; failed parking or unusable feedback escalates to
 an E-stop. Sensor freshness, position/tracking limits and timing checks remain
 active. Tilt protection requests safe shutdown rather than automatically

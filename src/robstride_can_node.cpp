@@ -79,8 +79,10 @@ public:
       throw std::invalid_argument("rate_hz must be 1..1000 and rt_priority 1..99");
     }
     if (!hw_manager_.setControlTorqueLimit(control_torque_limit_nm_)) {
-      throw std::invalid_argument("control_torque_limit_nm must be in (0, 13.5] Nm");
+      throw std::invalid_argument("control_torque_limit_nm must be in (0, 14.0] Nm");
     }
+    RCLCPP_INFO(this->get_logger(), "Control torque cap: %.2f Nm (firmware ceiling %.2f Nm)",
+      control_torque_limit_nm_, motor_params.firmware_torque_limit);
 
     buildNameMapping();
 

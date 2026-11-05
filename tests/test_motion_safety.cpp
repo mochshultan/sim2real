@@ -36,8 +36,14 @@ int main()
   const auto ms = [](int n) { return std::chrono::milliseconds(n); };
   RobStrideHardwareManager limits;
   for (const auto & cfg : limits.getJointConfigs()) {
-    assert(cfg.max_effort == RS00_CONTROL_TORQUE_LIMIT_NM);
+    assert(cfg.max_effort == 14.0);
   }
+  assert(limits.setControlTorqueLimit(14.0));
+  assert(!limits.setControlTorqueLimit(14.01));
+  assert(!limits.setControlTorqueLimit(0.0));
+  assert(!limits.setControlTorqueLimit(std::numeric_limits<double>::quiet_NaN()));
+  assert(limits.setControlTorqueLimit(3.0));  // Suspended PACE tests keep their lower cap.
+  for (const auto & cfg : limits.getJointConfigs()) assert(cfg.max_effort == 3.0);
   // The reported 1.581 rad tracking error is below the unified 2.0 threshold.
   RobStrideHardwareManager normal;
   command(normal, 2.5);

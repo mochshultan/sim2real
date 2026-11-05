@@ -34,7 +34,7 @@ robstride_can_hardware:
     default_kd: 4.5
     default_knee_kp: 45.0
     default_knee_kd: 4.5
-    control_torque_limit_nm: 13.5
+    control_torque_limit_nm: 14.0
 
 jaguar_can_hardware:
   ros__parameters:
@@ -48,7 +48,7 @@ jaguar_can_hardware:
 
 nxp_jaguar_controller:
   ros__parameters:
-    # Low-level control is clamped at 13.5 Nm; this is the feedback watchdog.
+    # Driver/firmware cap is 14 Nm; this independent feedback watchdog can trip below it.
     torque_safety_enabled: true  # false: log overtorque only, continue control
     overtorque_threshold: 13.8
     shutdown_duration: 3.0

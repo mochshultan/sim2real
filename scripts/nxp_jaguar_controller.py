@@ -236,7 +236,7 @@ class NXPJaguarControllerNode(Node):
         self.safe_park_kp = float(self.get_parameter("safe_park_kp").value)
         self.safe_park_kd = float(self.get_parameter("safe_park_kd").value)
         self.safe_park_double_press_window = float(self.get_parameter("safe_park_double_press_window").value)
-        if (not P.RS00_CONTROL_TORQUE_LIMIT_NM < self.overtorque_threshold <= P.RS00_TORQUE_LIMIT_NM or
+        if (not 0.0 < self.overtorque_threshold <= P.RS00_TORQUE_LIMIT_NM or
                 self.safe_park_duration <= 0 or self.safe_park_kp < 0 or self.safe_park_kd < 0 or
                 self.safe_park_double_press_window <= 0):
             raise ValueError("Invalid torque or safe-park safety parameters")

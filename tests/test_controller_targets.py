@@ -14,6 +14,29 @@ from nxp_jaguar_controller import (
     NXPJaguarControllerNode as Controller, DEFAULT_JOINT_POS, STAND_JOINT_POS,
 )
 from policy_observation import JaguarObservationBuilder
+import parameters as hardware
+from project_paths import load_default_config
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_fourteen_nm_cap_accepts_independent_feedback_watchdog(enabled):
+    values = {"torque_safety_enabled": enabled}
+
+    def declare(name, default):
+        values.setdefault(name, default)
+
+    def parameter(name):
+        value = values[name]
+        return SimpleNamespace(
+            value=value, get_parameter_value=lambda: SimpleNamespace(string_value=value),
+        )
+
+    node = SimpleNamespace(declare_parameter=declare, get_parameter=parameter, get_logger=Mock())
+    Controller._configure_parameters(node)
+    assert hardware.RS00_CONTROL_TORQUE_LIMIT_NM == 14.0
+    assert load_default_config()["robstride_can_hardware"]["ros__parameters"]["control_torque_limit_nm"] == 14.0
+    assert node.overtorque_threshold == 13.8
+    assert node.torque_safety_enabled is enabled
 
 
 @pytest.mark.parametrize("duration", [2.0, 4.0])
