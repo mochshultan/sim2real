@@ -95,6 +95,7 @@ install(PROGRAMS
   scripts/motion_limits.py
   scripts/project_paths.py
   scripts/joint_layout.py
+  scripts/policy_observation.py
   scripts/remote_xbox_forwarder.py
   scripts/gamepad_reader.py
   scripts/scan_robostride_ids.py

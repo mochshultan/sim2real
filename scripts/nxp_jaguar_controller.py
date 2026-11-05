@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NXP Jaguar Sim-to-Real Controller Node for ROS 2.
-Deploys Isaac Lab 3.0 TorchScript Policy (DreamWaQ) to RobStride RS00 Hardware.
+Deploys the Jaguar AdaBoot TorchScript policy to RobStride RS00 hardware.
 """
 
 import os
@@ -16,41 +16,25 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import Imu, Joy, JointState
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray, String
+from std_msgs.msg import Bool, Float32MultiArray, String
 from std_srvs.srv import Trigger
+
+from joint_layout import ISAAC_JOINT_NAMES, ROS_NAME_TO_ISAAC_IDX
+import parameters as P
+from motion_limits import declare_motion_limits
+from policy_observation import JaguarObservationBuilder
+from project_paths import package_file
 
 # ==============================================================================
 # 1. NXP JAGUAR JOINT ORDER & NOMINAL CONFIGURATION
 # ==============================================================================
 N_JOINTS = 12
 
-# Isaac Lab 3.0 Joint Order (Grouped by Joint Type)
-ISAAC_JOINT_NAMES = [
-    "Fr_roll_joint", "Fl_roll_joint", "Br_roll_joint", "Bl_roll_joint",
-    "Fr_hip_pitch_joint", "Fl_hip_pitch_joint", "Br_hip_pitch_joint", "Bl_hip_pitch_joint",
-    "Fr_knee_joint", "Fl_knee_joint", "Br_knee_joint", "Bl_knee_joint",
-]
-
-# ROS CAN Hardware Joint Names (Grouped by Leg: BL, BR, FL, FR)
-ROS_JOINT_NAMES = [
-    'BL_collar_joint', 'BL_hip_joint', 'BL_knee_joint',
-    'BR_collar_joint', 'BR_hip_joint', 'BR_knee_joint',
-    'FL_collar_joint', 'FL_hip_joint', 'FL_knee_joint',
-    'FR_collar_joint', 'FR_hip_joint', 'FR_knee_joint',
-]
-
-import parameters as P
-
 # Remapping Indices: ROS CAN Order (BL, BR, FL, FR) <-> Isaac Lab Order
-ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
-ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
+ROS_TO_ISAAC = P.ROS_TO_ISAAC
 
 # Standby Sitting Joint Angles (0.0 rad)
 SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
-
-# Relax Joint Angles (Equal to calibrated motor offsets in Isaac order; raw motor at 0.0 rad)
-# Isaac order: [0..3 Rolls (FR, FL, BR, BL), 4..7 Hips (FR, FL, BR, BL), 8..11 Knees (FR, FL, BR, BL)]
-RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range(12)], dtype=np.float32)
 
 # Standing target [rad], mapped from ROS order into Isaac order.
 STAND_JOINT_POS = np.array(P.STAND_ANGLE, dtype=np.float32)[ROS_TO_ISAAC]
@@ -106,234 +90,15 @@ TRANSITION_KP_KNEE = float(P.KP_GAIN[2])
 TRANSITION_KD_KNEE = float(P.KD_GAIN[2])
 
 # Isaac order: [0..3 Rolls, 4..7 Hips, 8..11 Knees]
-DEFAULT_TRANSITION_KP = [TRANSITION_KP_ROLL] * 4 + [TRANSITION_KP_PITCH] * 4 + [TRANSITION_KP_KNEE] * 4
-DEFAULT_TRANSITION_KD = [TRANSITION_KD_ROLL] * 4 + [TRANSITION_KD_PITCH] * 4 + [TRANSITION_KD_KNEE] * 4
 
-DEFAULT_RL_KP = [RL_KP_ROLL] * 4 + [RL_KP_PITCH] * 4 + [RL_KP_KNEE] * 4
-DEFAULT_RL_KD = [RL_KD_ROLL] * 4 + [RL_KD_PITCH] * 4 + [RL_KD_KNEE] * 4
-
-MAX_HOMING_VEL = 0.45    # rad/s (ultra-smooth continuous rate limit for startup homing)
-
-# ==============================================================================
-# 2. 45-DIMENSIONAL TEMPORAL OBSERVATION BUILDER (DREAMWAQ CENET)
-# ==============================================================================
-ROS_NAME_TO_ISAAC_IDX = {
-    'FR_collar_joint': 0, 'Fr_roll_joint': 0,
-    'FL_collar_joint': 1, 'Fl_roll_joint': 1,
-    'BR_collar_joint': 2, 'Br_roll_joint': 2,
-    'BL_collar_joint': 3, 'Bl_roll_joint': 3,
-    'FR_hip_joint': 4,    'Fr_hip_pitch_joint': 4,
-    'FL_hip_joint': 5,    'Fl_hip_pitch_joint': 5,
-    'BR_hip_joint': 6,    'Br_hip_pitch_joint': 6,
-    'BL_hip_joint': 7,    'Bl_hip_pitch_joint': 7,
-    'FR_knee_joint': 8,   'Fr_knee_joint': 8,
-    'FL_knee_joint': 9,   'Fl_knee_joint': 9,
-    'BR_knee_joint': 10,  'Br_knee_joint': 10,
-    'BL_knee_joint': 11,  'Bl_knee_joint': 11,
-}
-
-class JaguarObservationBuilder:
-    def __init__(self, history_len: int = 5):
-        self.history_len = history_len
-        self.obs_dim = 45
-        self.last_action = np.zeros(12, dtype=np.float32)
-        # Temporal history ring buffer: shape (1, 5, 45)
-        self.history_buf = np.zeros((1, history_len, self.obs_dim), dtype=np.float32)
-
-    def reset_history(self, initial_obs_45d: np.ndarray):
-        self.history_buf.fill(0.0)
-        self.history_buf[0, -1, :] = initial_obs_45d
-        self.last_action[:] = 0.0
-
-    def build_step_observation(self, ang_vel, quat, cmd, joint_pos, joint_vel) -> np.ndarray:
-        """
-        Builds 45D proprioceptive observation vector:
-        [0:3]   Angular Velocity (base frame gyro)
-        [3:6]   Projected Gravity Vector
-        [6:9]   Velocity Commands [vx, vy, wz]
-        [9:21]  Relative Joint Positions (joint_pos - default_pos)
-        [21:33] Joint Velocities
-        [33:45] Last Action
-        """
-        qx, qy, qz, qw = quat
-        # Gravity projection in body frame (R^T * [0, 0, -1])
-        gx = -2.0 * (qx * qz - qw * qy)
-        gy = -2.0 * (qy * qz + qw * qx)
-        gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
-
-        rel_joint_pos = joint_pos - DEFAULT_JOINT_POS
-
-        obs_45d = np.concatenate([
-            ang_vel * 0.25,              # DreamWaQ angular velocity scale
-            [gx, gy, gz],                # 3D: projected gravity
-            cmd * np.array([2.0, 2.0, 0.25], dtype=np.float32),
-                                         # DreamWaQ command scales
-            rel_joint_pos,               # 12D: q - q0 (scale 1.0)
-            joint_vel * 0.05,            # DreamWaQ joint velocity scale
-            self.last_action,            # 12D: a_{t-1}
-        ], axis=0).astype(np.float32)
-
-        return obs_45d
-
-    def update_and_get_history(self, obs_45d: np.ndarray) -> torch.Tensor:
-        # Shift history left and insert newest observation at the end
-        self.history_buf = np.roll(self.history_buf, shift=-1, axis=1)
-        self.history_buf[0, -1, :] = obs_45d
-        return torch.from_numpy(self.history_buf).float()
-
-    def update_last_action(self, action_np: np.ndarray):
-        self.last_action = action_np.copy()
-
-# ==============================================================================
-# 3. ROS 2 CONTROLLER NODE
-# ==============================================================================
-from std_msgs.msg import Bool
-from motion_limits import declare_motion_limits
 
 class NXPJaguarControllerNode(Node):
     def __init__(self):
         super().__init__("nxp_jaguar_controller")
-        self.motion_limits = declare_motion_limits(self)
+        policy_path = self._configure_parameters()
+        self._load_policy(policy_path)
 
-        # Declare parameters
-        self.declare_parameter("policy_path", "")
-        self.declare_parameter("torque_safety_enabled", True)
-        self.declare_parameter("overtorque_threshold", 13.8)
-        self.declare_parameter("shutdown_duration", 3.0)
-        self.declare_parameter("shutdown_settle_delay", 0.5)
-        self.declare_parameter("safe_park_duration", 2.0)
-        self.declare_parameter("safe_park_kp", 14.0)
-        self.declare_parameter("safe_park_kd", 0.5)
-        self.declare_parameter("safe_park_double_press_window", 1.0)
-        self.declare_parameter("cmd_timeout", 0.25)       # Seconds of no input before zeroing cmd_vel (Watchdog)
-        self.declare_parameter("action_ema_alpha", 0.0)   # Action EMA filter (0.0 = disabled per user request)
-        self.declare_parameter("walk_ramp_duration", 0.8) # Soft-start cosine ramp duration when entering WALK (s)
-        self.declare_parameter("imu_upside_down", True)   # True if IMU is mounted rotated 180 deg around X on chassis
-
-        # Gain Parameters (Stiffness & Damping)
-        self.declare_parameter("rl_kp_pitch", RL_KP_PITCH)
-        self.declare_parameter("rl_kd_pitch", RL_KD_PITCH)
-        self.declare_parameter("rl_kp_roll", RL_KP_ROLL)
-        self.declare_parameter("rl_kd_roll", RL_KD_ROLL)
-        self.declare_parameter("rl_kp_knee", RL_KP_KNEE)
-        self.declare_parameter("rl_kd_knee", RL_KD_KNEE)
-        self.declare_parameter("transition_kp_pitch", TRANSITION_KP_PITCH)
-        self.declare_parameter("transition_kd_pitch", TRANSITION_KD_PITCH)
-        self.declare_parameter("transition_kp_roll", TRANSITION_KP_ROLL)
-        self.declare_parameter("transition_kd_roll", TRANSITION_KD_ROLL)
-        self.declare_parameter("transition_kp_knee", TRANSITION_KP_KNEE)
-        self.declare_parameter("transition_kd_knee", TRANSITION_KD_KNEE)
-        self.declare_parameter("use_imu_stabilization", True)
-        self.declare_parameter("imu_kp_pitch", 0.55)
-        self.declare_parameter("imu_kd_pitch", 0.04)
-        self.declare_parameter("imu_kp_roll", 0.30)
-        self.declare_parameter("imu_kd_roll", 0.03)
-        self.declare_parameter("imu_hip_tolerance", 0.15)
-        self.declare_parameter("imu_roll_tolerance", 0.12)
-        self.declare_parameter("imu_tilt_deadband", 0.02)
-
-        policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
-        if not policy_param:
-            models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
-            candidates = [os.path.join(models_dir, "policy.pt")]
-            try:
-                from ament_index_python.packages import get_package_share_directory
-                installed_models_dir = os.path.join(
-                    get_package_share_directory("jaguar_control"), "models")
-                candidates.append(os.path.join(installed_models_dir, "policy.pt"))
-            except Exception:
-                pass
-            policy_param = next((path for path in candidates if os.path.isfile(path)), candidates[0])
-        if not os.path.isfile(policy_param):
-            raise FileNotFoundError(f"TorchScript policy not found: {policy_param}. Set policy_path explicitly.")
-
-        # Deployment target is the robot mini PC. Keep inference CPU-only and
-        # avoid allowing Torch to consume every control-core thread.
-        torch.set_num_threads(max(1, int(os.environ.get("JAGUAR_TORCH_THREADS", "1"))))
-
-        self.torque_safety_enabled = bool(self.get_parameter("torque_safety_enabled").value)
-        self.overtorque_threshold = float(self.get_parameter("overtorque_threshold").value)
-        self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
-        self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
-        self.safe_park_duration = float(self.get_parameter("safe_park_duration").value)
-        self.safe_park_kp = float(self.get_parameter("safe_park_kp").value)
-        self.safe_park_kd = float(self.get_parameter("safe_park_kd").value)
-        self.safe_park_double_press_window = float(self.get_parameter("safe_park_double_press_window").value)
-        if (not P.RS00_CONTROL_TORQUE_LIMIT_NM < self.overtorque_threshold <= P.RS00_TORQUE_LIMIT_NM or
-                self.safe_park_duration <= 0 or self.safe_park_kp < 0 or self.safe_park_kd < 0 or
-                self.safe_park_double_press_window <= 0):
-            raise ValueError("Invalid torque or safe-park safety parameters")
-        self.cmd_timeout = float(self.get_parameter("cmd_timeout").value)
-        self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
-        self.walk_ramp_duration = float(self.get_parameter("walk_ramp_duration").value)
-        self.imu_upside_down = bool(self.get_parameter("imu_upside_down").value)
-        self.walk_start_time = 0.0
-        self.sitdown_settle_delay = 0.5
-        self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
-        if not self.torque_safety_enabled:
-            self.get_logger().warn(
-                "Torque safety OFF: sustained overtorque will only be logged; "
-                "firmware torque limits and other safety checks remain active."
-            )
-        self.last_cmd_time = 0.0
-
-        # Load Gains
-        self.rl_kp_pitch = float(self.get_parameter("rl_kp_pitch").value)
-        self.rl_kd_pitch = float(self.get_parameter("rl_kd_pitch").value)
-        self.rl_kp_roll = float(self.get_parameter("rl_kp_roll").value)
-        self.rl_kd_roll = float(self.get_parameter("rl_kd_roll").value)
-        self.rl_kp_knee = float(self.get_parameter("rl_kp_knee").value)
-        self.rl_kd_knee = float(self.get_parameter("rl_kd_knee").value)
-        self.transition_kp_pitch = float(self.get_parameter("transition_kp_pitch").value)
-        self.transition_kd_pitch = float(self.get_parameter("transition_kd_pitch").value)
-        self.transition_kp_roll = float(self.get_parameter("transition_kp_roll").value)
-        self.transition_kd_roll = float(self.get_parameter("transition_kd_roll").value)
-        self.transition_kp_knee = float(self.get_parameter("transition_kp_knee").value)
-        self.transition_kd_knee = float(self.get_parameter("transition_kd_knee").value)
-        self.use_imu_stabilization = bool(self.get_parameter("use_imu_stabilization").value)
-        self.imu_kp_pitch = float(self.get_parameter("imu_kp_pitch").value)
-        self.imu_kd_pitch = float(self.get_parameter("imu_kd_pitch").value)
-        self.imu_kp_roll = float(self.get_parameter("imu_kp_roll").value)
-        self.imu_kd_roll = float(self.get_parameter("imu_kd_roll").value)
-        self.imu_hip_tolerance = float(self.get_parameter("imu_hip_tolerance").value)
-        self.imu_roll_tolerance = float(self.get_parameter("imu_roll_tolerance").value)
-        self.imu_tilt_deadband = float(self.get_parameter("imu_tilt_deadband").value)
-        imu_values = (
-            self.imu_kp_pitch, self.imu_kd_pitch, self.imu_kp_roll, self.imu_kd_roll,
-            self.imu_hip_tolerance, self.imu_roll_tolerance, self.imu_tilt_deadband,
-        )
-        if not all(np.isfinite(value) and value >= 0.0 for value in imu_values):
-            raise ValueError("IMU stabilization gains, tolerances, and deadband must be finite and non-negative")
-
-        self.rl_kp = [self.rl_kp_roll] * 4 + [self.rl_kp_pitch] * 4 + [self.rl_kp_knee] * 4
-        self.rl_kd = [self.rl_kd_roll] * 4 + [self.rl_kd_pitch] * 4 + [self.rl_kd_knee] * 4
-        self.transition_kp = [self.transition_kp_roll] * 4 + [self.transition_kp_pitch] * 4 + [self.transition_kp_knee] * 4
-        self.transition_kd = [self.transition_kd_roll] * 4 + [self.transition_kd_pitch] * 4 + [self.transition_kd_knee] * 4
-
-        self.filtered_action = np.zeros(12, dtype=np.float32)
-
-        self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
-        self.policy = torch.jit.load(policy_param, map_location="cpu")
-        self.policy.eval()
-        self.policy_expects_temporal = True
-        with torch.no_grad():
-            try:
-                probe = self.policy(torch.zeros((1, 5, 45), dtype=torch.float32))
-                if tuple(probe.shape) == (1, 12) and torch.isfinite(probe).all():
-                    self.policy_expects_temporal = True
-                else:
-                    self.policy_expects_temporal = False
-            except Exception:
-                self.policy_expects_temporal = False
-
-            if not self.policy_expects_temporal:
-                probe = self.policy(torch.zeros((1, 45), dtype=torch.float32))
-
-        if tuple(probe.shape) != (1, 12) or not torch.isfinite(probe).all():
-            raise RuntimeError(f"Policy contract failure: expected finite (1,12), got {tuple(probe.shape)}")
-        self.get_logger().info(f"Policy verified: expects_temporal={self.policy_expects_temporal}, output_shape={tuple(probe.shape)}")
-
-        self.obs_builder = JaguarObservationBuilder()
+        self.obs_builder = JaguarObservationBuilder(DEFAULT_JOINT_POS)
         self.state_lock = threading.Lock()
 
         # State Variables
@@ -412,6 +177,143 @@ class NXPJaguarControllerNode(Node):
             f"roll tolerance={self.imu_roll_tolerance:.3f} rad | knees=fixed"
         )
 
+    def _configure_parameters(self):
+        """Declare ROS overrides and validate controller/safety configuration."""
+        self.motion_limits = declare_motion_limits(self)
+
+        # Declare parameters
+        self.declare_parameter("policy_path", "")
+        self.declare_parameter("torque_safety_enabled", True)
+        self.declare_parameter("overtorque_threshold", 13.8)
+        self.declare_parameter("shutdown_duration", 3.0)
+        self.declare_parameter("shutdown_settle_delay", 0.5)
+        self.declare_parameter("safe_park_duration", 2.0)
+        self.declare_parameter("safe_park_kp", 14.0)
+        self.declare_parameter("safe_park_kd", 0.5)
+        self.declare_parameter("safe_park_double_press_window", 1.0)
+        self.declare_parameter("cmd_timeout", 0.25)       # Seconds of no input before zeroing cmd_vel (Watchdog)
+        self.declare_parameter("action_ema_alpha", 0.0)   # Action EMA filter (0.0 = disabled per user request)
+        self.declare_parameter("walk_ramp_duration", 0.8) # Soft-start cosine ramp duration when entering WALK (s)
+        self.declare_parameter("imu_upside_down", True)   # True if IMU is mounted rotated 180 deg around X on chassis
+
+        # Gain Parameters (Stiffness & Damping)
+        self.declare_parameter("rl_kp_pitch", RL_KP_PITCH)
+        self.declare_parameter("rl_kd_pitch", RL_KD_PITCH)
+        self.declare_parameter("rl_kp_roll", RL_KP_ROLL)
+        self.declare_parameter("rl_kd_roll", RL_KD_ROLL)
+        self.declare_parameter("rl_kp_knee", RL_KP_KNEE)
+        self.declare_parameter("rl_kd_knee", RL_KD_KNEE)
+        self.declare_parameter("transition_kp_pitch", TRANSITION_KP_PITCH)
+        self.declare_parameter("transition_kd_pitch", TRANSITION_KD_PITCH)
+        self.declare_parameter("transition_kp_roll", TRANSITION_KP_ROLL)
+        self.declare_parameter("transition_kd_roll", TRANSITION_KD_ROLL)
+        self.declare_parameter("transition_kp_knee", TRANSITION_KP_KNEE)
+        self.declare_parameter("transition_kd_knee", TRANSITION_KD_KNEE)
+        self.declare_parameter("use_imu_stabilization", True)
+        self.declare_parameter("imu_kp_pitch", 0.55)
+        self.declare_parameter("imu_kd_pitch", 0.04)
+        self.declare_parameter("imu_kp_roll", 0.30)
+        self.declare_parameter("imu_kd_roll", 0.03)
+        self.declare_parameter("imu_hip_tolerance", 0.15)
+        self.declare_parameter("imu_roll_tolerance", 0.12)
+        self.declare_parameter("imu_tilt_deadband", 0.02)
+
+        policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
+        if not policy_param:
+            policy_param = str(package_file("models", "policy.pt"))
+        if not os.path.isfile(policy_param):
+            raise FileNotFoundError(f"TorchScript policy not found: {policy_param}. Set policy_path explicitly.")
+
+        # Deployment target is the robot mini PC. Keep inference CPU-only and
+        # avoid allowing Torch to consume every control-core thread.
+        torch.set_num_threads(max(1, int(os.environ.get("JAGUAR_TORCH_THREADS", "1"))))
+
+        self.torque_safety_enabled = bool(self.get_parameter("torque_safety_enabled").value)
+        self.overtorque_threshold = float(self.get_parameter("overtorque_threshold").value)
+        self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
+        self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
+        self.safe_park_duration = float(self.get_parameter("safe_park_duration").value)
+        self.safe_park_kp = float(self.get_parameter("safe_park_kp").value)
+        self.safe_park_kd = float(self.get_parameter("safe_park_kd").value)
+        self.safe_park_double_press_window = float(self.get_parameter("safe_park_double_press_window").value)
+        if (not P.RS00_CONTROL_TORQUE_LIMIT_NM < self.overtorque_threshold <= P.RS00_TORQUE_LIMIT_NM or
+                self.safe_park_duration <= 0 or self.safe_park_kp < 0 or self.safe_park_kd < 0 or
+                self.safe_park_double_press_window <= 0):
+            raise ValueError("Invalid torque or safe-park safety parameters")
+        self.cmd_timeout = float(self.get_parameter("cmd_timeout").value)
+        self.action_ema_alpha = float(self.get_parameter("action_ema_alpha").value)
+        self.walk_ramp_duration = float(self.get_parameter("walk_ramp_duration").value)
+        self.imu_upside_down = bool(self.get_parameter("imu_upside_down").value)
+        self.walk_start_time = 0.0
+        self.sitdown_settle_delay = 0.5
+        self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
+        if not self.torque_safety_enabled:
+            self.get_logger().warn(
+                "Torque safety OFF: sustained overtorque will only be logged; "
+                "firmware torque limits and other safety checks remain active."
+            )
+        self.last_cmd_time = 0.0
+
+        # Load Gains
+        self.rl_kp_pitch = float(self.get_parameter("rl_kp_pitch").value)
+        self.rl_kd_pitch = float(self.get_parameter("rl_kd_pitch").value)
+        self.rl_kp_roll = float(self.get_parameter("rl_kp_roll").value)
+        self.rl_kd_roll = float(self.get_parameter("rl_kd_roll").value)
+        self.rl_kp_knee = float(self.get_parameter("rl_kp_knee").value)
+        self.rl_kd_knee = float(self.get_parameter("rl_kd_knee").value)
+        self.transition_kp_pitch = float(self.get_parameter("transition_kp_pitch").value)
+        self.transition_kd_pitch = float(self.get_parameter("transition_kd_pitch").value)
+        self.transition_kp_roll = float(self.get_parameter("transition_kp_roll").value)
+        self.transition_kd_roll = float(self.get_parameter("transition_kd_roll").value)
+        self.transition_kp_knee = float(self.get_parameter("transition_kp_knee").value)
+        self.transition_kd_knee = float(self.get_parameter("transition_kd_knee").value)
+        self.use_imu_stabilization = bool(self.get_parameter("use_imu_stabilization").value)
+        self.imu_kp_pitch = float(self.get_parameter("imu_kp_pitch").value)
+        self.imu_kd_pitch = float(self.get_parameter("imu_kd_pitch").value)
+        self.imu_kp_roll = float(self.get_parameter("imu_kp_roll").value)
+        self.imu_kd_roll = float(self.get_parameter("imu_kd_roll").value)
+        self.imu_hip_tolerance = float(self.get_parameter("imu_hip_tolerance").value)
+        self.imu_roll_tolerance = float(self.get_parameter("imu_roll_tolerance").value)
+        self.imu_tilt_deadband = float(self.get_parameter("imu_tilt_deadband").value)
+        imu_values = (
+            self.imu_kp_pitch, self.imu_kd_pitch, self.imu_kp_roll, self.imu_kd_roll,
+            self.imu_hip_tolerance, self.imu_roll_tolerance, self.imu_tilt_deadband,
+        )
+        if not all(np.isfinite(value) and value >= 0.0 for value in imu_values):
+            raise ValueError("IMU stabilization gains, tolerances, and deadband must be finite and non-negative")
+
+        self.rl_kp = [self.rl_kp_roll] * 4 + [self.rl_kp_pitch] * 4 + [self.rl_kp_knee] * 4
+        self.rl_kd = [self.rl_kd_roll] * 4 + [self.rl_kd_pitch] * 4 + [self.rl_kd_knee] * 4
+        self.transition_kp = [self.transition_kp_roll] * 4 + [self.transition_kp_pitch] * 4 + [self.transition_kp_knee] * 4
+        self.transition_kd = [self.transition_kd_roll] * 4 + [self.transition_kd_pitch] * 4 + [self.transition_kd_knee] * 4
+
+        self.filtered_action = np.zeros(12, dtype=np.float32)
+
+        return policy_param
+
+    def _load_policy(self, policy_param):
+        """Load and verify the CPU inference contract before enabling callbacks."""
+        self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
+        self.policy = torch.jit.load(policy_param, map_location="cpu")
+        self.policy.eval()
+        self.policy_expects_temporal = True
+        with torch.no_grad():
+            try:
+                probe = self.policy(torch.zeros((1, 5, 45), dtype=torch.float32))
+                if tuple(probe.shape) == (1, 12) and torch.isfinite(probe).all():
+                    self.policy_expects_temporal = True
+                else:
+                    self.policy_expects_temporal = False
+            except Exception:
+                self.policy_expects_temporal = False
+
+            if not self.policy_expects_temporal:
+                probe = self.policy(torch.zeros((1, 45), dtype=torch.float32))
+
+        if tuple(probe.shape) != (1, 12) or not torch.isfinite(probe).all():
+            raise RuntimeError(f"Policy contract failure: expected finite (1,12), got {tuple(probe.shape)}")
+        self.get_logger().info(f"Policy verified: expects_temporal={self.policy_expects_temporal}, output_shape={tuple(probe.shape)}")
+
     def _trigger_hard_estop(self, reason: str):
         if self.state == "DISABLED":
             return
@@ -450,7 +352,7 @@ class NXPJaguarControllerNode(Node):
             self.filtered_action[:] = 0.0
             self.transition_start_pos = self.joint_pos.copy()
             self.transition_target_pos = self.joint_pos.copy()
-            self.obs_builder = JaguarObservationBuilder()
+            self.obs_builder = JaguarObservationBuilder(DEFAULT_JOINT_POS)
         self.overtorque_counter = 0
         self.soft_fault_times.clear()
         self.last_safe_park_request = 0.0
@@ -772,6 +674,68 @@ class NXPJaguarControllerNode(Node):
         # Velocity comes from /cmd_vel or the benchmark override. Mode and safety
         # buttons remain on their separate topics regardless of command source.
 
+    def _transition_targets(self, now, duration):
+        elapsed = now - self.transition_start_time
+        alpha = float(np.clip(elapsed / duration, 0.0, 1.0))
+        smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
+        diff = self.transition_target_pos - self.transition_start_pos
+        target_pos = self.transition_start_pos + smooth_alpha * diff
+        target_vel = (math.pi / (2.0 * duration)) * math.sin(math.pi * alpha) * diff
+        return elapsed, alpha, target_pos, target_vel
+
+    def _walk_targets(self, now, pos, vel, quat, ang_v, cmd):
+        """Run policy inference and blend its targets with the standing pose."""
+        # 1. Build 45-Dimensional Step Observation & Update 5-Step History Buffer (1, 5, 45)
+        obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
+        history_tensor = self.obs_builder.update_and_get_history(obs_45d)
+
+        # 2. Neural Network Forward Inference
+        with torch.no_grad():
+            if self.policy_expects_temporal:
+                actions = self.policy(history_tensor)
+            else:
+                obs_tensor = torch.from_numpy(obs_45d).unsqueeze(0).float()
+                actions = self.policy(obs_tensor)
+
+        raw_action = actions.squeeze(0).cpu().numpy()
+        if raw_action.shape != (12,) or not np.all(np.isfinite(raw_action)):
+            self._trigger_safe_shutdown(now, "Invalid policy output")
+            return
+        self.obs_builder.update_last_action(raw_action)
+
+        # Apply Single Action EMA Low-Pass Filter on Policy Actions (bypass if alpha <= 0.0)
+        if self.action_ema_alpha > 0.0:
+            self.filtered_action = (
+                self.action_ema_alpha * self.filtered_action + (1.0 - self.action_ema_alpha) * raw_action
+            )
+        else:
+            self.filtered_action = raw_action.copy()
+
+        # Smooth soft-start / ramp into WALK mode (cosine S-curve) to eliminate initial step shock
+        walk_elapsed = now - self.walk_start_time
+        if self.walk_ramp_duration > 0.0 and walk_elapsed < self.walk_ramp_duration:
+            ramp = 0.5 * (1.0 - math.cos(math.pi * (walk_elapsed / self.walk_ramp_duration)))
+        else:
+            ramp = 1.0
+
+        applied_action = ramp * self.filtered_action
+        target_pos = ((1.0 - ramp) * STAND_JOINT_POS
+                      + ramp * DEFAULT_JOINT_POS + ACTION_SCALE * applied_action)
+        target_vel = np.zeros(12, dtype=np.float32)
+
+        # Impedance tracking gains for RL with smooth damping transition
+        cmd_kp = self.rl_kp[:]
+        cmd_kd = [
+            float((1.0 - ramp) * tkd + ramp * rkd)
+            for tkd, rkd in zip(self.transition_kd, self.rl_kd)
+        ]
+
+        # 3. Publish Debug State Vector
+        debug_msg = Float32MultiArray()
+        debug_msg.data = obs_45d.tolist()
+        self.debug_pub.publish(debug_msg)
+        return target_pos, target_vel, cmd_kp, cmd_kd
+
     def _control_loop(self):
         t_start = time.perf_counter()
         dt = t_start - self.last_loop_time
@@ -812,11 +776,10 @@ class NXPJaguarControllerNode(Node):
             tau = self.joint_tau.copy()
             quat = self.body_quat.copy()
             ang_v = self.body_ang_vel.copy()
-            lin_v = self.body_lin_vel.copy()
             cmd = self.cmd_vel.copy()
 
-        # Failsafe 1: sustained feedback >15 Nm requests SAFE_PARK. A repeated
-        # fault while parking escalates through _trigger_safe_shutdown to E-stop.
+        # Failsafe 1: sustained overtorque requests SAFE_PARK (then E-stop if
+        # repeated during parking), or only logs when torque safety is disabled.
         max_tau = self._update_overtorque_safety(now, tau)
 
         # Failsafe 2: Tilt Safety Protection (Emergency sit if tilt > 60 deg, gz > -0.5 in active states)
@@ -836,13 +799,7 @@ class NXPJaguarControllerNode(Node):
             cmd_kp = [0.0] * 12
             cmd_kd = [0.0] * 12
         elif self.state == "STANDUP":
-            elapsed = now - self.transition_start_time
-            alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
-            # Smooth S-curve interpolation from measured starting posture
-            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            diff = self.transition_target_pos - self.transition_start_pos
-            target_pos = self.transition_start_pos + smooth_alpha * diff
-            target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
+            elapsed, alpha, target_pos, target_vel = self._transition_targets(now, self.transition_duration)
             target_pos += self._compute_imu_stabilization(alpha, "STANDUP")
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
@@ -863,12 +820,7 @@ class NXPJaguarControllerNode(Node):
             debug_msg.data = obs_45d.tolist()
             self.debug_pub.publish(debug_msg)
         elif self.state == "SITDOWN":
-            elapsed = now - self.transition_start_time
-            alpha = float(np.clip(elapsed / self.transition_duration, 0.0, 1.0))
-            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            diff = self.transition_target_pos - self.transition_start_pos
-            target_pos = self.transition_start_pos + smooth_alpha * diff
-            target_vel = (math.pi / (2.0 * self.transition_duration)) * math.sin(math.pi * alpha) * diff
+            elapsed, alpha, target_pos, target_vel = self._transition_targets(now, self.transition_duration)
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
@@ -880,12 +832,7 @@ class NXPJaguarControllerNode(Node):
                     cmd_kd = [0.0] * 12
                     self.get_logger().info("[CONTROLLER] SITDOWN complete -> Motors relaxed to STANDBY (Passive Zero-Torque)")
         elif self.state == "SAFE_PARK":
-            elapsed = now - self.transition_start_time
-            alpha = float(np.clip(elapsed / self.safe_park_duration, 0.0, 1.0))
-            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            diff = self.transition_target_pos - self.transition_start_pos
-            target_pos = self.transition_start_pos + smooth_alpha * diff
-            target_vel = (math.pi / (2.0 * self.safe_park_duration)) * math.sin(math.pi * alpha) * diff
+            elapsed, alpha, target_pos, target_vel = self._transition_targets(now, self.safe_park_duration)
             cmd_kp = [self.safe_park_kp] * 12
             cmd_kd = [self.safe_park_kd] * 12
             if alpha >= 1.0:
@@ -905,57 +852,18 @@ class NXPJaguarControllerNode(Node):
 
         # RL
         elif self.state == "WALK":
-            # 1. Build 45-Dimensional Step Observation & Update 5-Step History Buffer (1, 5, 45)
-            obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
-            history_tensor = self.obs_builder.update_and_get_history(obs_45d)
-
-            # 2. Neural Network Forward Inference
-            with torch.no_grad():
-                if self.policy_expects_temporal:
-                    actions = self.policy(history_tensor)
-                else:
-                    obs_tensor = torch.from_numpy(obs_45d).unsqueeze(0).float()
-                    actions = self.policy(obs_tensor)
-
-            raw_action = actions.squeeze(0).cpu().numpy()
-            if raw_action.shape != (12,) or not np.all(np.isfinite(raw_action)):
-                self._trigger_safe_shutdown(now, "Invalid policy output")
+            targets = self._walk_targets(now, pos, vel, quat, ang_v, cmd)
+            if targets is None:
                 return
-            self.obs_builder.update_last_action(raw_action)
+            target_pos, target_vel, cmd_kp, cmd_kd = targets
 
-            # Apply Single Action EMA Low-Pass Filter on Policy Actions (bypass if alpha <= 0.0)
-            if self.action_ema_alpha > 0.0:
-                self.filtered_action = (
-                    self.action_ema_alpha * self.filtered_action + (1.0 - self.action_ema_alpha) * raw_action
-                )
-            else:
-                self.filtered_action = raw_action.copy()
+        if not self._publish_targets(target_pos, target_vel, cmd_kp, cmd_kd, now):
+            return
+        self._report_loop_status(t_start, cmd, max_tau)
 
-            # Smooth soft-start / ramp into WALK mode (cosine S-curve) to eliminate initial step shock
-            walk_elapsed = now - self.walk_start_time
-            if self.walk_ramp_duration > 0.0 and walk_elapsed < self.walk_ramp_duration:
-                ramp = 0.5 * (1.0 - math.cos(math.pi * (walk_elapsed / self.walk_ramp_duration)))
-            else:
-                ramp = 1.0
-
-            applied_action = ramp * self.filtered_action
-            target_pos = ((1.0 - ramp) * STAND_JOINT_POS
-                          + ramp * DEFAULT_JOINT_POS + ACTION_SCALE * applied_action)
-            target_vel = np.zeros(12, dtype=np.float32)
-
-            # Impedance tracking gains for RL with smooth damping transition
-            cmd_kp = self.rl_kp[:]
-            cmd_kd = [
-                float((1.0 - ramp) * tkd + ramp * rkd)
-                for tkd, rkd in zip(self.transition_kd, self.rl_kd)
-            ]
-
-            # 3. Publish Debug State Vector
-            debug_msg = Float32MultiArray()
-            debug_msg.data = obs_45d.tolist()
-            self.debug_pub.publish(debug_msg)
-
-        # Publish Joint Commands to CAN Motor Node only during active states
+    def _publish_targets(self, target_pos, target_vel, cmd_kp, cmd_kd, now):
+        """Clamp and check tracking before publishing motor targets."""
+        # Publish passive zero-gain commands in standby and targets in active states
         if target_pos is not None:
             # Physical safety clamping to prevent exceeding mechanical limits
             target_pos = np.clip(target_pos, ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
@@ -972,7 +880,7 @@ class NXPJaguarControllerNode(Node):
                         f"actual={self.joint_pos[fault_idx]:+.3f} rad "
                         f"target={target_pos[fault_idx]:+.3f} rad "
                         f"error={max_err:.2f} rad > 2.00 rad! Failsafe tripped.")
-                    return
+                    return False
 
             cmd_msg = JointState()
             cmd_msg.header.stamp = self.get_clock().now().to_msg()
@@ -985,6 +893,10 @@ class NXPJaguarControllerNode(Node):
             park_status.data = self.state == "SAFE_PARK"
             self.safe_park_active_pub.publish(park_status)
 
+        return True
+
+    def _report_loop_status(self, t_start, cmd, max_tau):
+        """Publish diagnostics and enforce the existing timing watchdog."""
         t_end = time.perf_counter()
         self.compute_latency_ms = (t_end - t_start) * 1000.0
         now_sec = self.get_clock().now().nanoseconds / 1e9
@@ -1015,7 +927,6 @@ class NXPJaguarControllerNode(Node):
         status_msg = String()
         status_msg.data = f"State: {self.state} | Cmd: [{cmd[0]:.2f}, {cmd[1]:.2f}, {cmd[2]:.2f}] | Freq: {self.actual_freq:.1f} Hz | Latency: {self.compute_latency_ms:.1f} ms | MaxTau: {max_tau:.1f} Nm"
         self.status_pub.publish(status_msg)
-
 
 
 def main(args=None):
