@@ -304,7 +304,7 @@ class LinuxGamepadReader:
                 self.state.btn_thumb_l = raw_buttons[13] if len(raw_buttons) > 13 else 0
                 self.state.btn_thumb_r = raw_buttons[14] if len(raw_buttons) > 14 else 0
 
-                # Axes for Bluetooth: 0:LX, 1:LY, 2:RX (ABS_Z), 3:RY (ABS_RZ), 4:LT, 5:RT, 6:DpadX, 7:DpadY
+                # Axes for Bluetooth: 0:LX, 1:LY, 2:RX (ABS_Z), 3:RY (ABS_RZ), 4:RT (ABS_GAS), 5:LT (ABS_BRAKE), 6:DpadX, 7:DpadY
                 self.state.lx = raw_axes[0] if len(raw_axes) > 0 else 0.0
                 self.state.ly = -raw_axes[1] if len(raw_axes) > 1 else 0.0  # Up is +
                 self.state.rx = raw_axes[2] if len(raw_axes) > 2 else 0.0
@@ -312,9 +312,9 @@ class LinuxGamepadReader:
 
                 # Triggers: -1.0 (released) .. +1.0 (pressed) -> map to 0.0 .. 1.0
                 if len(raw_axes) > 4:
-                    self.state.lt = max(0.0, (raw_axes[4] + 1.0) / 2.0)
+                    self.state.rt = min(1.0, max(0.0, (raw_axes[4] + 1.0) / 2.0))
                 if len(raw_axes) > 5:
-                    self.state.rt = max(0.0, (raw_axes[5] + 1.0) / 2.0)
+                    self.state.lt = min(1.0, max(0.0, (raw_axes[5] + 1.0) / 2.0))
 
                 # D-Pad from Hat axes
                 if len(raw_axes) > 6:
