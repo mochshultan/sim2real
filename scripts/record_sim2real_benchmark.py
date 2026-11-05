@@ -21,6 +21,7 @@ import time
 from datetime import datetime
 import numpy as np
 
+from joint_layout import ROS_NAME_TO_ISAAC_IDX, ROS_TO_ISAAC
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
@@ -28,21 +29,6 @@ from sensor_msgs.msg import Imu, JointState, Joy
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray, String
 
-ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
-ROS_NAME_TO_ISAAC_IDX = {
-    'FR_collar_joint': 0, 'Fr_roll_joint': 0,
-    'FL_collar_joint': 1, 'Fl_roll_joint': 1,
-    'BR_collar_joint': 2, 'Br_roll_joint': 2,
-    'BL_collar_joint': 3, 'Bl_roll_joint': 3,
-    'FR_hip_joint': 4,    'Fr_hip_pitch_joint': 4,
-    'FL_hip_joint': 5,    'Fl_hip_pitch_joint': 5,
-    'BR_hip_joint': 6,    'Br_hip_pitch_joint': 6,
-    'BL_hip_joint': 7,    'Bl_hip_pitch_joint': 7,
-    'FR_knee_joint': 8,   'Fr_knee_joint': 8,
-    'FL_knee_joint': 9,   'Fl_knee_joint': 9,
-    'BR_knee_joint': 10,  'Br_knee_joint': 10,
-    'BL_knee_joint': 11,  'Bl_knee_joint': 11,
-}
 
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,

@@ -20,23 +20,12 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, String, Float32MultiArray
 
+from joint_layout import NAME_TO_ROS_INDEX
 import parameters as P
 from robstride_motor_lib import RobStrideMotorController
 
 # Remapping dictionary: Isaac / ROS joint name to ROS CAN array index [0..11]
 # ROS order: BL (0..2), BR (3..5), FL (6..8), FR (9..11)
-NAME_TO_ROS_INDEX = {
-    # ROS CAN Names
-    'BL_collar_joint': 0, 'BL_hip_joint': 1, 'BL_knee_joint': 2,
-    'BR_collar_joint': 3, 'BR_hip_joint': 4, 'BR_knee_joint': 5,
-    'FL_collar_joint': 6, 'FL_hip_joint': 7, 'FL_knee_joint': 8,
-    'FR_collar_joint': 9, 'FR_hip_joint': 10, 'FR_knee_joint': 11,
-    # Isaac Lab Names
-    'Bl_roll_joint': 0, 'Bl_hip_pitch_joint': 1, 'Bl_knee_joint': 2,
-    'Br_roll_joint': 3, 'Br_hip_pitch_joint': 4, 'Br_knee_joint': 5,
-    'Fl_roll_joint': 6, 'Fl_hip_pitch_joint': 7, 'Fl_knee_joint': 8,
-    'Fr_roll_joint': 9, 'Fr_hip_pitch_joint': 10, 'Fr_knee_joint': 11,
-}
 
 class RobotHardwareState:
     def __init__(self):

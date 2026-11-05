@@ -92,6 +92,8 @@ install(PROGRAMS
   scripts/jaguar_main.py
   scripts/jaguar_utils.py
   scripts/parameters.py
+  scripts/project_paths.py
+  scripts/joint_layout.py
   scripts/remote_xbox_forwarder.py
   scripts/gamepad_reader.py
   scripts/scan_robostride_ids.py

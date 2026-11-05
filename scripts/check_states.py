@@ -7,6 +7,8 @@ Verifies 45-D Observation dimensions and joint ordering against Isaac Lab policy
 import sys
 import time
 import numpy as np
+from joint_layout import ISAAC_JOINT_NAMES, ROS_NAME_TO_ISAAC_IDX, ROS_TO_ISAAC
+import parameters as P
 
 import rclpy
 from rclpy.node import Node
@@ -14,30 +16,10 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import Imu, JointState, Joy
 from geometry_msgs.msg import Twist
 
-ISAAC_JOINT_NAMES = [
-    "Fr_roll_joint", "Fl_roll_joint", "Br_roll_joint", "Bl_roll_joint",
-    "Fr_hip_pitch_joint", "Fl_hip_pitch_joint", "Br_hip_pitch_joint", "Bl_hip_pitch_joint",
-    "Fr_knee_joint", "Fl_knee_joint", "Br_knee_joint", "Bl_knee_joint",
-]
 
-ROS_NAME_TO_ISAAC_IDX = {
-    'FR_collar_joint': 0, 'Fr_roll_joint': 0,
-    'FL_collar_joint': 1, 'Fl_roll_joint': 1,
-    'BR_collar_joint': 2, 'Br_roll_joint': 2,
-    'BL_collar_joint': 3, 'Bl_roll_joint': 3,
-    'FR_hip_joint': 4,    'Fr_hip_pitch_joint': 4,
-    'FL_hip_joint': 5,    'Fl_hip_pitch_joint': 5,
-    'BR_hip_joint': 6,    'Br_hip_pitch_joint': 6,
-    'BL_hip_joint': 7,    'Bl_hip_pitch_joint': 7,
-    'FR_knee_joint': 8,   'Fr_knee_joint': 8,
-    'FL_knee_joint': 9,   'Fl_knee_joint': 9,
-    'BR_knee_joint': 10,  'Br_knee_joint': 10,
-    'BL_knee_joint': 11,  'Bl_knee_joint': 11,
-}
+STAND_JOINT_POS = np.array(P.STAND_ANGLE, dtype=np.float32)[ROS_TO_ISAAC]
 
-ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
-
-# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
+# Policy reference pose synchronized with Isaac Lab NXP Jaguar
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
    -1.51, -1.51, -1.49, -1.49,   # Hip Pitches (Fr, Fl, Br, Bl)
@@ -183,7 +165,7 @@ class StateCheckerNode(Node):
         imu_ok = (self.imu_count > 0)
         joints_ok = (self.joint_count > 0)
         grav_ok = (gz < -0.5)
-        standing_error = np.max(np.abs(rel_pos))
+        standing_error = np.max(np.abs(self.joint_pos - STAND_JOINT_POS))
 
         print(f"   [{'OK' if imu_ok else 'FAIL'}] IMU Stream Active: {'Received' if imu_ok else 'Waiting for /imu/data or /Imu_data'}")
         print(f"   [{'OK' if joints_ok else 'FAIL'}] Joint State Stream: {'Received 12 joints' if joints_ok else 'Waiting for /joint_states'}")

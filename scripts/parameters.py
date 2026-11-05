@@ -3,6 +3,10 @@
 RobStride RS00 Motors mapped across 2 CAN buses (can0 & can1).
 """
 
+from project_paths import load_default_config
+from joint_layout import ROS_JOINT_NAMES, ROS_TO_ISAAC
+
+
 N_JOINTS = 12
 RS00_TORQUE_LIMIT_NM = 14.0
 """RobStride RS00 firmware torque limit [N·m]."""
@@ -52,12 +56,7 @@ MOTOR_OFFSET_ANGLE = [
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
-JOINT_NAME = [
-    'BL_collar_joint', 'BL_hip_joint', 'BL_knee_joint',
-    'BR_collar_joint', 'BR_hip_joint', 'BR_knee_joint',
-    'FL_collar_joint', 'FL_hip_joint', 'FL_knee_joint',
-    'FR_collar_joint', 'FR_hip_joint', 'FR_knee_joint',
-]
+JOINT_NAME = ROS_JOINT_NAMES
 
 # Standby Joint Angles (Folded/Sitting position = 0.0 rad after mechanical zeroing)
 STANDBY_ANGLE = [
@@ -67,13 +66,17 @@ STANDBY_ANGLE = [
      0.0,  0.0,  0.0,  # FR
 ]
 
-# Relax Pose Joint Angles (Equal to calibrated motor offsets; raw motor reading = 0.0 rad)
-RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
-# Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
-# Matches Isaac Lab q0 (nxp_jaguar.py):
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.49, Knee: +1.20
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.51, Knee: +1.22
+# Standing joint angles [rad] in ROS order (BL, BR, FL, FR).
+STAND_ANGLE = [
+     0.0, -1.49,  1.20,  # BL: coxa, hip, knee
+     0.0, -1.49,  1.20,  # BR: coxa, hip, knee
+     0.0, -1.51,  1.22,  # FL: coxa, hip, knee
+     0.0, -1.51,  1.22,  # FR: coxa, hip, knee
+]
+
+# Trained policy reference joint angles in ROS joint order (BL, BR, FL, FR).
+# Matches the deployed Jaguar AdaBoot Ideal L2C2 checkpoint 29996.
 DEFAULT_ANGLE = [
      0.0, -1.49,  1.20,  # BL
      0.0, -1.49,  1.20,  # BR
@@ -81,35 +84,16 @@ DEFAULT_ANGLE = [
      0.0, -1.51,  1.22,  # FR
 ]
 
-import os
-import yaml
-
-# Dynamic parameter loader from config/sim2real.yaml (Single Source of Truth)
-_CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "sim2real.yaml"))
-
-_coxa_kp = 45.0
-_coxa_kd = 4.5
-_pitch_kp = 45.0
-_pitch_kd = 4.5
-_knee_kp = 45.0
-_knee_kd = 4.5
-_can_hz = 200
-
-if os.path.isfile(_CONFIG_FILE):
-    try:
-        with open(_CONFIG_FILE, "r") as _f:
-            _cfg = yaml.safe_load(_f)
-        if _cfg and "robstride_can_hardware" in _cfg:
-            _hw = _cfg["robstride_can_hardware"].get("ros__parameters", {})
-            _coxa_kp = float(_hw.get("default_coxa_kp", _coxa_kp))
-            _coxa_kd = float(_hw.get("default_coxa_kd", _coxa_kd))
-            _pitch_kp = float(_hw.get("default_kp", _pitch_kp))
-            _pitch_kd = float(_hw.get("default_kd", _pitch_kd))
-            _knee_kp = float(_hw.get("default_knee_kp", _knee_kp))
-            _knee_kd = float(_hw.get("default_knee_kd", _knee_kd))
-            _can_hz = int(_hw.get("rate_hz", _can_hz))
-    except Exception:
-        pass
+# Shared defaults for standalone hardware/calibration tools. ROS nodes can
+# override these defaults through their parameter files at launch.
+_hw = load_default_config()["robstride_can_hardware"]["ros__parameters"]
+_coxa_kp = float(_hw["default_coxa_kp"])
+_coxa_kd = float(_hw["default_coxa_kd"])
+_pitch_kp = float(_hw["default_kp"])
+_pitch_kd = float(_hw["default_kd"])
+_knee_kp = float(_hw["default_knee_kp"])
+_knee_kd = float(_hw["default_knee_kd"])
+_can_hz = int(_hw["rate_hz"])
 
 # PD Control Gains for RS00 Motors (ROS Order: BL, BR, FL, FR)
 KP_GAIN = [
@@ -125,15 +109,4 @@ KD_GAIN = [
     _coxa_kd, _pitch_kd, _knee_kd,  # FR: collar, hip, knee
 ]
 
-# Isaac Lab RL Policy Control Parameters
-ACTION_SCALE = 0.25
-ACTION_CLIPPING = 10.0
-CONTROL_HZ = 50       # 50 Hz control loop (dt = 0.02s)
-CONTROL_DT = 0.02
-
-CAN_HZ = _can_hz          # CAN communication rate loaded from YAML
-
-# Remapping Indices: ROS CAN Order (BL, BR, FL, FR) <-> Isaac Lab Order (Rolls, Hips, Knees)
-# Isaac Lab: [FR_r, FL_r, BR_r, BL_r, FR_h, FL_h, BR_h, BL_h, FR_k, FL_k, BR_k, BL_k]
-ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
-ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
+CAN_HZ = _can_hz
