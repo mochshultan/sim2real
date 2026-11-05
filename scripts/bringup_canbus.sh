@@ -32,6 +32,8 @@ for iface in can0 can1; do
 done
 
 echo -e "\n${GREEN}📊 Current CAN Interfaces Status:${NC}"
-ip -brief link show can0 can1
+for iface in can0 can1; do
+  ip -brief link show dev "$iface"
+done
 echo -e "\n${GREEN}✅ CAN bus initialization complete.${NC}"
 
