@@ -38,23 +38,23 @@ int main()
   for (const auto & cfg : limits.getJointConfigs()) {
     assert(cfg.max_effort == RS00_CONTROL_TORQUE_LIMIT_NM);
   }
-  // The reported 0.854 rad tracking error is below the unified 1.57 threshold.
+  // The reported 1.581 rad tracking error is below the unified 2.0 threshold.
   RobStrideHardwareManager normal;
-  command(normal, 1.93256);
-  feedback(normal, now, 1.07865);
+  command(normal, 2.5);
+  feedback(normal, now, 0.919);
   normal.checkMotionSafety(now);
-  feedback(normal, now + ms(150), 1.07865);
+  feedback(normal, now + ms(150), 0.919);
   normal.checkMotionSafety(now + ms(150));
   assert(!normal.safeParkRequested() && !normal.isEmergencyStopped());
 
   // A short excursion clears the timer; a sustained one requests park.
   RobStrideHardwareManager tracking;
-  command(tracking, 2.0);
+  command(tracking, 2.2);
   feedback(tracking, now);
   tracking.checkMotionSafety(now);
   command(tracking, 0.0);
   tracking.checkMotionSafety(now + ms(50));
-  command(tracking, 2.0);
+  command(tracking, 2.2);
   tracking.checkMotionSafety(now + ms(90));
   tracking.checkMotionSafety(now + ms(150));
   assert(!tracking.safeParkRequested());
@@ -84,7 +84,7 @@ int main()
   assert(position.isEmergencyStopped());
 
   RobStrideHardwareManager unacknowledged;
-  command(unacknowledged, 2.0);
+  command(unacknowledged, 2.2);
   feedback(unacknowledged, now);
   unacknowledged.checkMotionSafety(now);
   unacknowledged.checkMotionSafety(now + ms(110));

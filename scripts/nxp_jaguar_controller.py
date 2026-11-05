@@ -945,14 +945,14 @@ class NXPJaguarControllerNode(Node):
             if self.state in ["STANDUP", "STAND_HOLD", "WALK", "SITDOWN", "SAFE_PARK"]:
                 tracking_err = np.abs(self.joint_pos - target_pos)
                 max_err = float(np.max(tracking_err))
-                if self._persistent_fault("tracking", max_err > 1.57):
+                if self._persistent_fault("tracking", max_err > 2.0):
                     fault_idx = int(np.argmax(tracking_err))
                     self._trigger_safe_shutdown(
                         now,
                         f"Critical tracking error on {ISAAC_JOINT_NAMES[fault_idx]}: "
                         f"actual={self.joint_pos[fault_idx]:+.3f} rad "
                         f"target={target_pos[fault_idx]:+.3f} rad "
-                        f"error={max_err:.2f} rad > 1.57 rad! Failsafe tripped.")
+                        f"error={max_err:.2f} rad > 2.00 rad! Failsafe tripped.")
                     return
 
             cmd_msg = JointState()

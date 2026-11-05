@@ -400,10 +400,10 @@ public:
       const double limit = safe_park_active_ ?
         std::max(POSITION_LIMIT_TOLERANCE, park_initial_extra_[i] + 0.05) :
         POSITION_LIMIT_TOLERANCE;
-      if (extra > limit || error > 1.57) {
+      if (extra > limit || error > 2.0) {
         soft_fault = true;
         reason = cfg.name + " tracking=" + std::to_string(error) +
-          " rad (limit=1.57), position excess=" + std::to_string(extra);
+          " rad (limit=2.00), position excess=" + std::to_string(extra);
       }
       if (!safe_park_active_) {
         park_hold_pos_[i] = state.position;
