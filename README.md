@@ -197,8 +197,11 @@ The generated user profile overrides the factory JSON after input-node restart.
 ## Safety and recovery
 
 Normal control torque is capped at 14 Nm. The controller's configurable
-feedback threshold defaults to 13.8 Nm with five-cycle debounce (about 100 ms).
-This independent watchdog can request safe park before the 14 Nm cap is reached;
+feedback threshold defaults to 14 Nm with five-cycle debounce (about 100 ms).
+Only feedback magnitude strictly greater than 14 Nm requests safe park;
+exactly +14 or -14 Nm does not trip the watchdog. With the normal CAN decoding
+range of [-14, 14] Nm, this condition cannot be detected from saturated feedback.
+The firmware cap does not prove that physical torque never overshoots;
 `torque_safety_enabled:=false` makes only this watchdog log instead. Recoverable
 faults request `SAFE_PARK`; failed parking or unusable feedback escalates to
 an E-stop. Sensor freshness, position/tracking limits and timing checks remain

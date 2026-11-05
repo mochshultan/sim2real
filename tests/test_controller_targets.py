@@ -35,7 +35,7 @@ def test_fourteen_nm_cap_accepts_independent_feedback_watchdog(enabled):
     Controller._configure_parameters(node)
     assert hardware.RS00_CONTROL_TORQUE_LIMIT_NM == 14.0
     assert load_default_config()["robstride_can_hardware"]["ros__parameters"]["control_torque_limit_nm"] == 14.0
-    assert node.overtorque_threshold == 13.8
+    assert node.overtorque_threshold == 14.0
     assert node.torque_safety_enabled is enabled
 
 

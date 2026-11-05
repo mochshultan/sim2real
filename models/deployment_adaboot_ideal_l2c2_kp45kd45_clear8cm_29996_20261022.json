@@ -62,7 +62,7 @@
     5.0
   ],
   "hardware_torque_limit_nm": 14.0,
-  "hardware_watchdog_nm": 13.8,
+  "hardware_watchdog_nm": 14.0,
   "validation": "CPU parity with checkpoint reconstruction and original run export, batches 1/16/64; no live hardware motion",
   "identity_policy_file": "policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
 }

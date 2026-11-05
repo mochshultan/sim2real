@@ -48,9 +48,9 @@ jaguar_can_hardware:
 
 nxp_jaguar_controller:
   ros__parameters:
-    # Driver/firmware cap is 14 Nm; this independent feedback watchdog can trip below it.
+    # Driver/firmware cap and independent feedback watchdog both use 14 Nm.
     torque_safety_enabled: true  # false: log overtorque only, continue control
-    overtorque_threshold: 13.8
+    overtorque_threshold: 14.0
     shutdown_duration: 3.0
     shutdown_settle_delay: 0.5
     safe_park_duration: 2.0

@@ -35,7 +35,7 @@ class SafetyTests(unittest.TestCase):
         self.node._sensors_ready = Mock(return_value=True)
         self.node.get_logger = Mock()
         self.node.torque_safety_enabled = True
-        self.node.overtorque_threshold = 13.8
+        self.node.overtorque_threshold = 14.0
         self.node.torque_overload_cycles = 5
         self.node.overtorque_counter = 0
 
@@ -63,11 +63,12 @@ class SafetyTests(unittest.TestCase):
 
     def test_overtorque_parks_only_after_five_samples_above_threshold(self):
         tau = np.zeros(12)
-        tau[4] = 13.81
+        # Synthetic over-range feedback verifies the strict comparator.
+        tau[4] = 14.01
 
         for cycle in range(4):
             max_tau = self.node._update_overtorque_safety(float(cycle), tau)
-        self.assertAlmostEqual(max_tau, 13.81)
+        self.assertAlmostEqual(max_tau, 14.01)
         self.node._request_safe_park.assert_not_called()
 
         self.node._update_overtorque_safety(4.0, tau)
@@ -76,21 +77,20 @@ class SafetyTests(unittest.TestCase):
 
     def test_torque_at_or_below_threshold_decays_counter_in_both_modes(self):
         for enabled in (True, False):
-            with self.subTest(enabled=enabled):
-                self.node.torque_safety_enabled = enabled
-                self.node.overtorque_counter = 4
-
-                max_tau = self.node._update_overtorque_safety(1.0, np.full(12, 13.8))
-
-                self.assertEqual(max_tau, 13.8)
-                self.assertEqual(self.node.overtorque_counter, 3)
+            for torque in (-14.0, -13.8, 0.0, 13.8, 14.0):
+                with self.subTest(enabled=enabled, torque=torque):
+                    self.node.torque_safety_enabled = enabled
+                    self.node.overtorque_counter = 4
+                    max_tau = self.node._update_overtorque_safety(1.0, np.full(12, torque))
+                    self.assertEqual(max_tau, abs(torque))
+                    self.assertEqual(self.node.overtorque_counter, 3)
         self.node._request_safe_park.assert_not_called()
         self.node.get_logger.return_value.warn.assert_not_called()
 
     def test_disabled_torque_safety_logs_sustained_overload_and_keeps_state(self):
         self.node.torque_safety_enabled = False
         tau = np.zeros(12)
-        tau[4] = -13.95
+        tau[4] = -14.10
         for state in ('STANDUP', 'STAND_HOLD', 'WALK', 'SITDOWN', 'SAFE_PARK'):
             with self.subTest(state=state):
                 self.node.state = state
@@ -104,20 +104,20 @@ class SafetyTests(unittest.TestCase):
                 for cycle in range(4, 15):
                     max_tau = self.node._update_overtorque_safety(float(cycle), tau)
 
-                self.assertEqual(max_tau, 13.95)
+                self.assertEqual(max_tau, 14.10)
                 self.assertEqual(self.node.state, state)
                 self.node._request_safe_park.assert_not_called()
                 self.node._trigger_hard_estop.assert_not_called()
                 message = logger.warn.call_args.args[0]
                 self.assertIn('joint_4', message)
-                self.assertIn('13.95 Nm > 13.80 Nm', message)
+                self.assertIn('14.10 Nm > 14.00 Nm', message)
                 self.assertIn('log only', message)
                 self.assertEqual(logger.warn.call_args.kwargs, {'throttle_duration_sec': 1.0})
 
     def test_enabled_overtorque_during_park_still_escalates_to_estop(self):
         self.node.state = 'SAFE_PARK'
         for cycle in range(5):
-            self.node._update_overtorque_safety(float(cycle), np.full(12, 13.95))
+            self.node._update_overtorque_safety(float(cycle), np.full(12, 14.10))
         self.node._trigger_hard_estop.assert_called_once()
         self.node._request_safe_park.assert_not_called()
 
@@ -128,7 +128,7 @@ class SafetyTests(unittest.TestCase):
                     self.node.torque_safety_enabled = enabled
                     self.node.state = state
                     self.node.overtorque_counter = 4
-                    self.node._update_overtorque_safety(1.0, np.full(12, 13.95))
+                    self.node._update_overtorque_safety(1.0, np.full(12, 14.10))
                     self.assertEqual(self.node.overtorque_counter, 3)
         self.node._request_safe_park.assert_not_called()
         self.node._trigger_hard_estop.assert_not_called()

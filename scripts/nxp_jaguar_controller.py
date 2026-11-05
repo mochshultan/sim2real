@@ -184,7 +184,7 @@ class NXPJaguarControllerNode(Node):
         # Declare parameters
         self.declare_parameter("policy_path", "")
         self.declare_parameter("torque_safety_enabled", True)
-        self.declare_parameter("overtorque_threshold", 13.8)
+        self.declare_parameter("overtorque_threshold", 14.0)
         self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
         self.declare_parameter("safe_park_duration", 2.0)

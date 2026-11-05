@@ -32,15 +32,19 @@ supports RS00 only because its calibration and safety contract are for RS00.
 | Temperature scale | 0.1 degrees C per count |
 | YAML firmware torque ceiling | 14 Nm |
 | Default Jaguar control and startup firmware cap | 14 Nm |
-| Controller feedback overtorque threshold | 13.8 Nm |
+| Controller feedback overtorque threshold | 14 Nm (strictly greater-than comparison) |
 
-The Python RS00 fallback uses the same torque range. The controller threshold
-was lowered from 15 to 13.8 Nm because 15 Nm is outside the new feedback encoding
-range. The operating cap is now 14 Nm; the independent 13.8 Nm feedback watchdog
-can still request safe park below that cap. Disabling `torque_safety_enabled`
-changes that watchdog to logging and leaves the firmware cap active.
-An old robot-side parameter file that
-sets the threshold above 14 Nm must be updated and is rejected by the controller.
+The Python RS00 fallback uses the same torque range. The control/firmware cap
+and the controller's default feedback threshold both use 14 Nm. Feedback at
+exactly +14 or -14 Nm does not trigger this watchdog. The normal CAN decoder
+represents only [-14, 14] Nm, so a threshold violation cannot be detected from
+saturated decoded feedback; it is not evidence that physical torque never
+exceeds the configured cap. Synthetic over-range feedback is used in unit tests
+to verify the watchdog's strict comparison and optional log-only behavior.
+
+Disabling `torque_safety_enabled` changes only this watchdog to logging and
+leaves the firmware cap active. A threshold above 14 Nm is rejected by the
+controller. Other motion, communication and motor-fault protections remain active.
 
 ## Run
 
