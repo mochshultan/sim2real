@@ -2,6 +2,7 @@
 """Export adaptive TorchScript policy for sim2real deployment."""
 
 import os
+from pathlib import Path
 import torch
 import torch.nn as nn
 
@@ -52,13 +53,13 @@ def main():
     parser.add_argument(
         "--checkpoint",
         type=str,
-        default="/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia/2026-09-15_14-38-50/model_2999.pt",
+        required=True,
         help="Path to training checkpoint model_*.pt",
     )
     parser.add_argument(
         "--raw-policy",
         type=str,
-        default="/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia/2026-09-15_14-38-50/exported/policy.pt",
+        default=None,
         help="Path to raw TorchScript policy exported from Isaac Lab / RSL-RL",
     )
     parser.add_argument(
@@ -70,13 +71,13 @@ def main():
     parser.add_argument(
         "--models-dir",
         type=str,
-        default="/home/shultan/jaguar_sim2real/models",
+        default=str(Path(__file__).resolve().parents[1] / "models"),
         help="Target models directory",
     )
     parser.add_argument(
         "--set-default",
         action="store_true",
-        default=True,
+        default=False,
         help="Also overwrite policy.pt and policy.onnx as default",
     )
     args = parser.parse_args()

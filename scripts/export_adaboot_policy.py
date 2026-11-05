@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -75,9 +76,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Export AdaBoot estimator-only policy for Jaguar sim-to-real")
     parser.add_argument(
         "--checkpoint",
-        default="/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_baseline_tibia_adaboot/2026-09-16_20-55-30/model_2999.pt",
+        required=True,
     )
-    parser.add_argument("--models-dir", default="/home/shultan/jaguar_sim2real/models")
+    parser.add_argument("--models-dir", default=str(Path(__file__).resolve().parents[1] / "models"))
     parser.add_argument("--tag", default="adaboot_tibia_2999_estimator")
     parser.add_argument("--set-default", action="store_true", help="Also replace models/policy.pt")
     args = parser.parse_args()
