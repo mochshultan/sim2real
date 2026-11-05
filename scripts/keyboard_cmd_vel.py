@@ -26,6 +26,7 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, String
+from motion_limits import declare_motion_limits
 
 
 class KeyboardCmdVel(Node):
@@ -45,6 +46,9 @@ class KeyboardCmdVel(Node):
 
     def __init__(self) -> None:
         super().__init__("jaguar_keyboard_cmd_vel")
+        self.motion_limits = declare_motion_limits(self)
+        self.max_linear = min(self.motion_limits["max_vx"], self.motion_limits["max_vy"])
+        self.max_yaw = self.motion_limits["max_wz"]
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel/keyboard", 10)
         self.joy_pub = self.create_publisher(Joy, "/joy", 10)
         self.safe_pub = self.create_publisher(Bool, "/jaguar/safe_stop", 10)
@@ -57,10 +61,10 @@ class KeyboardCmdVel(Node):
         self.desired = np.zeros(3, dtype=np.float32)
         self.model_input = np.zeros(3, dtype=np.float32)
         self.model_input_stamp = 0.0
-        self.target_linear = 0.30
-        self.target_yaw = 0.30
-        self.acceleration = 3.0
-        self.deceleration = 10.0
+        self.target_linear = min(0.30, self.max_linear)
+        self.target_yaw = min(0.30, self.max_yaw)
+        self.acceleration = self.motion_limits["linear_accel_limit"]
+        self.angular_acceleration = self.motion_limits["angular_accel_limit"]
         self.last_motion = 0.0
         self.pressed_keys = set()
         self.input_backend = "STARTING"
@@ -126,13 +130,13 @@ class KeyboardCmdVel(Node):
             elif not pressed:
                 return
             elif key == "p":
-                self.target_linear = min(1.5, self.target_linear + 0.05)
-                self.target_yaw = min(1.2, self.target_yaw + 0.05)
+                self.target_linear = min(self.max_linear, self.target_linear + 0.05)
+                self.target_yaw = min(self.max_yaw, self.target_yaw + 0.05)
                 self._update_desired_locked()
                 self.last_event = "Target speed dinaikkan"
             elif key == "o":
-                self.target_linear = max(0.05, self.target_linear - 0.05)
-                self.target_yaw = max(0.05, self.target_yaw - 0.05)
+                self.target_linear = min(self.max_linear, max(0.05, self.target_linear - 0.05))
+                self.target_yaw = min(self.max_yaw, max(0.05, self.target_yaw - 0.05))
                 self._update_desired_locked()
                 self.last_event = "Target speed diturunkan"
             elif key in ("x", " "):
@@ -237,15 +241,13 @@ class KeyboardCmdVel(Node):
                 self.pressed_keys.clear()
                 self._update_desired_locked()
             error = self.desired - self.current
-            accelerating = (self.current * self.desired >= 0.0) & (
-                np.abs(self.desired) > np.abs(self.current)
-            )
-            max_step = np.where(
-                accelerating,
-                self.acceleration * 0.02,
-                self.deceleration * 0.02,
-            ).astype(np.float32)
-            self.current += np.clip(error, -max_step, max_step)
+            # Bound the planar acceleration vector, including diagonal motion.
+            linear_distance = float(np.linalg.norm(error[:2]))
+            linear_step = self.acceleration * 0.02
+            if linear_distance > 0.0:
+                self.current[:2] += error[:2] * min(1.0, linear_step / linear_distance)
+            yaw_step = self.angular_acceleration * 0.02
+            self.current[2] += np.clip(error[2], -yaw_step, yaw_step)
             msg = Twist()
             msg.linear.x, msg.linear.y, msg.angular.z = map(float, self.current)
             self.cmd_pub.publish(msg)

@@ -94,7 +94,7 @@ def generate_launch_description():
         executable="keyboard_teleop.py",
         name="jaguar_unified_teleop",
         output="screen",
-        parameters=[{"keyboard_enabled": False}],
+        parameters=[config_file, {"keyboard_enabled": False}],
         remappings=[("/cmd_vel", "/cmd_vel/xbox")],
         condition=IfCondition(with_teleop),
     )

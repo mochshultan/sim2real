@@ -185,10 +185,12 @@ class JaguarObservationBuilder:
 # 3. ROS 2 CONTROLLER NODE
 # ==============================================================================
 from std_msgs.msg import Bool
+from motion_limits import declare_motion_limits
 
 class NXPJaguarControllerNode(Node):
     def __init__(self):
         super().__init__("nxp_jaguar_controller")
+        self.motion_limits = declare_motion_limits(self)
 
         # Declare parameters
         self.declare_parameter("policy_path", "")
@@ -570,9 +572,9 @@ class NXPJaguarControllerNode(Node):
         with self.state_lock:
             if time.monotonic() - self.last_benchmark_cmd_time <= self.cmd_timeout:
                 return
-            vx = float(np.clip(msg.linear.x, -1.5, 1.5))
-            vy = float(np.clip(msg.linear.y, -1.5, 1.5))
-            wz = float(np.clip(msg.angular.z, -1.2, 1.2))
+            vx = float(np.clip(msg.linear.x, -self.motion_limits["max_vx"], self.motion_limits["max_vx"]))
+            vy = float(np.clip(msg.linear.y, -self.motion_limits["max_vy"], self.motion_limits["max_vy"]))
+            wz = float(np.clip(msg.angular.z, -self.motion_limits["max_wz"], self.motion_limits["max_wz"]))
             self.cmd_vel[0] = vx
             self.cmd_vel[1] = vy
             self.cmd_vel[2] = wz
@@ -581,9 +583,9 @@ class NXPJaguarControllerNode(Node):
     def _benchmark_cmd_vel_cb(self, msg: Twist):
         now = self.get_clock().now().nanoseconds / 1e9
         with self.state_lock:
-            self.cmd_vel[0] = float(np.clip(msg.linear.x, -1.5, 1.5))
-            self.cmd_vel[1] = float(np.clip(msg.linear.y, -1.5, 1.5))
-            self.cmd_vel[2] = float(np.clip(msg.angular.z, -1.2, 1.2))
+            self.cmd_vel[0] = float(np.clip(msg.linear.x, -self.motion_limits["max_vx"], self.motion_limits["max_vx"]))
+            self.cmd_vel[1] = float(np.clip(msg.linear.y, -self.motion_limits["max_vy"], self.motion_limits["max_vy"]))
+            self.cmd_vel[2] = float(np.clip(msg.angular.z, -self.motion_limits["max_wz"], self.motion_limits["max_wz"]))
             self.last_cmd_time = now
             self.last_benchmark_cmd_time = time.monotonic()
 

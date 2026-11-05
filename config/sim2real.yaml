@@ -10,10 +10,19 @@ joy_node:
     deadzone: 0.10
     autorepeat_rate: 50.0
 
+/**:
+  ros__parameters:
+    # Shared body command limits for controller, Xbox and keyboard.
+    max_vx: 1.0  # m/s, forward/backward (per axis)
+    max_vy: 1.0  # m/s, sideways (per axis)
+    max_wz: 1.0  # rad/s, yaw
+    linear_accel_limit: 1.0  # m/s^2
+    angular_accel_limit: 1.0  # rad/s^2
+
 jaguar_cmd_vel_mux:
   ros__parameters:
-    xbox_linear_accel_limit: 0.5  # m/s^2; 0 -> 1 m/s in 2 seconds
-    xbox_angular_accel_limit: 1.0  # rad/s^2
+    xbox_timeout: 0.30
+    keyboard_timeout: 0.30
 
 robstride_can_hardware:
   ros__parameters:

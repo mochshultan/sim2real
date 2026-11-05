@@ -12,6 +12,7 @@ import math
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from motion_limits import declare_motion_limits
 
 
 class JaguarCmdVelMux(Node):
@@ -19,12 +20,11 @@ class JaguarCmdVelMux(Node):
         super().__init__("jaguar_cmd_vel_mux")
         self.declare_parameter("xbox_timeout", 0.30)
         self.declare_parameter("keyboard_timeout", 0.30)
-        self.declare_parameter("xbox_linear_accel_limit", 0.5)
-        self.declare_parameter("xbox_angular_accel_limit", 1.0)
+        self.motion_limits = declare_motion_limits(self)
         self.xbox_timeout = float(self.get_parameter("xbox_timeout").value)
         self.keyboard_timeout = float(self.get_parameter("keyboard_timeout").value)
-        self.linear_accel = float(self.get_parameter("xbox_linear_accel_limit").value)
-        self.angular_accel = float(self.get_parameter("xbox_angular_accel_limit").value)
+        self.linear_accel = self.motion_limits["linear_accel_limit"]
+        self.angular_accel = self.motion_limits["angular_accel_limit"]
         if not all(math.isfinite(v) and v > 0 for v in (self.linear_accel, self.angular_accel)):
             raise ValueError("Xbox acceleration limits must be finite and positive")
 
@@ -45,12 +45,22 @@ class JaguarCmdVelMux(Node):
         )
 
     def _xbox_cb(self, msg: Twist) -> None:
+        self._clamp_command(msg)
         self.xbox_cmd = msg
         self.xbox_stamp = time.monotonic()
 
     def _keyboard_cb(self, msg: Twist) -> None:
+        self._clamp_command(msg)
         self.keyboard_cmd = msg
         self.keyboard_stamp = time.monotonic()
+
+    def _clamp_command(self, msg: Twist) -> None:
+        for vector, axis, limit in ((msg.linear, "x", "max_vx"),
+                                    (msg.linear, "y", "max_vy"),
+                                    (msg.angular, "z", "max_wz")):
+            value = getattr(vector, axis)
+            bound = self.motion_limits[limit]
+            setattr(vector, axis, max(-bound, min(bound, value)) if math.isfinite(value) else 0.0)
 
     def _publish(self) -> None:
         now = time.monotonic()

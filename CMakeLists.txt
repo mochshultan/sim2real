@@ -92,6 +92,7 @@ install(PROGRAMS
   scripts/jaguar_main.py
   scripts/jaguar_utils.py
   scripts/parameters.py
+  scripts/motion_limits.py
   scripts/project_paths.py
   scripts/joint_layout.py
   scripts/remote_xbox_forwarder.py

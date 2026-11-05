@@ -29,6 +29,7 @@ from sensor_msgs.msg import Joy, Imu
 from std_msgs.msg import Bool, String
 
 from gamepad_reader import LinuxGamepadReader, XboxState
+from motion_limits import declare_motion_limits
 
 # ANSI Colors
 C_RESET   = "\033[0m"
@@ -43,10 +44,6 @@ C_WHITE   = "\033[1;37m"
 C_CLEAR   = "\033[2J\033[H"
 
 DEADZONE = 0.10
-MAX_VX = 1.5
-MIN_VX = -1.5
-MAX_VY = 1.5
-MAX_WZ = 1.2
 PUBLISH_PERIOD = 0.02
 UI_REFRESH_PERIOD = 0.25
 COMMAND_QOS = QoSProfile(
@@ -62,6 +59,11 @@ class UnifiedTeleopNode(Node):
         super().__init__("jaguar_unified_teleop")
         self.declare_parameter("keyboard_enabled", True)
         self.keyboard_enabled = bool(self.get_parameter("keyboard_enabled").value)
+
+        limits = declare_motion_limits(self)
+        self.max_vx = limits["max_vx"]
+        self.max_vy = limits["max_vy"]
+        self.max_wz = limits["max_wz"]
 
         # Publishers
         # Teleop velocity uses /cmd_vel. /joy carries mode pulses only.
@@ -106,9 +108,9 @@ class UnifiedTeleopNode(Node):
         self.gamepad_reader = LinuxGamepadReader(
             callback=self._on_gamepad_event,
             deadzone=DEADZONE,
-            max_vx=MAX_VX,
-            max_vy=MAX_VY,
-            max_wz=MAX_WZ,
+            max_vx=self.max_vx,
+            max_vy=self.max_vy,
+            max_wz=self.max_wz,
         )
 
         # Match the policy/controller loop so fresh stick events reach it within one cycle.
@@ -162,9 +164,9 @@ class UnifiedTeleopNode(Node):
                 self.input_source = source
                 self.xbox_active = True
                 self.last_remote_input = time.monotonic()
-                self.vx = round(float(np.clip(ly * MAX_VX, MIN_VX, MAX_VX)), 2) if np.isfinite(ly) and abs(ly) >= DEADZONE else 0.0
-                self.vy = round(float(np.clip(-lx * MAX_VY, -MAX_VY, MAX_VY)), 2) if np.isfinite(lx) and abs(lx) >= DEADZONE else 0.0
-                self.wz = round(float(np.clip(-rx * MAX_WZ, -MAX_WZ, MAX_WZ)), 2) if np.isfinite(rx) and abs(rx) >= DEADZONE else 0.0
+                self.vx = round(float(np.clip(ly * self.max_vx, -self.max_vx, self.max_vx)), 2) if np.isfinite(ly) and abs(ly) >= DEADZONE else 0.0
+                self.vy = round(float(np.clip(-lx * self.max_vy, -self.max_vy, self.max_vy)), 2) if np.isfinite(lx) and abs(lx) >= DEADZONE else 0.0
+                self.wz = round(float(np.clip(-rx * self.max_wz, -self.max_wz, self.max_wz)), 2) if np.isfinite(rx) and abs(rx) >= DEADZONE else 0.0
 
             if pressed(0):
                 self.current_state = "BERDIRI / STANDUP"
@@ -302,22 +304,22 @@ class UnifiedTeleopNode(Node):
                 self.btn_walk_pulse = True
                 self.last_action = f"{C_GREEN}[Key 3] Mode JALAN Aktif (RL Policy PPO){C_RESET}"
             elif k == 'w':
-                self.vx = round(min(MAX_VX, self.vx + 0.1), 2)
+                self.vx = round(min(self.max_vx, self.vx + 0.1), 2)
                 self.last_action = f"{C_CYAN}[Key W] Maju (+Vx) -> {self.vx:.2f} m/s{C_RESET}"
             elif k == 's':
-                self.vx = round(max(MIN_VX, self.vx - 0.1), 2)
+                self.vx = round(max(-self.max_vx, self.vx - 0.1), 2)
                 self.last_action = f"{C_CYAN}[Key S] Mundur (-Vx) -> {self.vx:.2f} m/s{C_RESET}"
             elif k == 'a':
-                self.vy = round(min(MAX_VY, self.vy + 0.1), 2)
+                self.vy = round(min(self.max_vy, self.vy + 0.1), 2)
                 self.last_action = f"{C_CYAN}[Key A] Geser Kiri (+Vy) -> {self.vy:.2f} m/s{C_RESET}"
             elif k == 'd':
-                self.vy = round(max(-MAX_VY, self.vy - 0.1), 2)
+                self.vy = round(max(-self.max_vy, self.vy - 0.1), 2)
                 self.last_action = f"{C_CYAN}[Key D] Geser Kanan (-Vy) -> {self.vy:.2f} m/s{C_RESET}"
             elif k == 'q':
-                self.wz = round(min(MAX_WZ, self.wz + 0.2), 2)
+                self.wz = round(min(self.max_wz, self.wz + 0.2), 2)
                 self.last_action = f"{C_CYAN}[Key Q] Putar Kiri (+Wz) -> {self.wz:.2f} rad/s{C_RESET}"
             elif k == 'e':
-                self.wz = round(max(-MAX_WZ, self.wz - 0.2), 2)
+                self.wz = round(max(-self.max_wz, self.wz - 0.2), 2)
                 self.last_action = f"{C_CYAN}[Key E] Putar Kanan (-Wz) -> {self.wz:.2f} rad/s{C_RESET}"
             elif k == 'x':
                 self.vx = 0.0
@@ -391,9 +393,9 @@ class UnifiedTeleopNode(Node):
             output.append(f" Perintah Terakhir   : {self.last_action}")
             output.append(f"{C_BOLD}{C_WHITE}------------------------------------------------------------------------{C_RESET}")
             output.append(f"{C_BOLD} Target Kecepatan Aktif (/cmd_vel):{C_RESET}")
-            output.append(f"   ▶ Vx  (Maju/Mundur)  : {C_BOLD}{self.vx:+5.2f} m/s{C_RESET}  [-0.8 .. +1.2]")
-            output.append(f"   ▶ Vy  (Geser Kiri/Kn): {C_BOLD}{self.vy:+5.2f} m/s{C_RESET}  [-0.5 .. +0.5]")
-            output.append(f"   ▶ Wz  (Putar Yaw)    : {C_BOLD}{self.wz:+5.2f} rad/s{C_RESET} [-1.2 .. +1.2]")
+            output.append(f"   ▶ Vx  (Maju/Mundur)  : {C_BOLD}{self.vx:+5.2f} m/s{C_RESET}  [-{self.max_vx:.1f} .. +{self.max_vx:.1f}]")
+            output.append(f"   ▶ Vy  (Geser Kiri/Kn): {C_BOLD}{self.vy:+5.2f} m/s{C_RESET}  [-{self.max_vy:.1f} .. +{self.max_vy:.1f}]")
+            output.append(f"   ▶ Wz  (Putar Yaw)    : {C_BOLD}{self.wz:+5.2f} rad/s{C_RESET} [-{self.max_wz:.1f} .. +{self.max_wz:.1f}]")
             output.append(f"{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
             output.append(f"{C_BOLD}{C_YELLOW} PANDUAN KONTROL (STIK XBOX BLUETOOTH & KEYBOARD SSH):{C_RESET}")
             output.append(f"  {C_BOLD}[Xbox X] / [1]{C_RESET} Duduk / Standby   {C_BOLD}[Xbox A] / [2]{C_RESET} Berdiri     {C_BOLD}[Xbox B] / [3]{C_RESET} Jalan (RL)")
