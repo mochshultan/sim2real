@@ -211,7 +211,7 @@ class StandPoseCalibrator:
         self.joint_tem = np.full(P.N_JOINTS, 25.0, dtype=np.float64)
 
         # Baseline stand pose angles from parameters.py (in ROS CAN order)
-        self.base_stand_angles = np.array(P.DEFAULT_ANGLE, dtype=np.float64)
+        self.base_stand_angles = np.array(P.STAND_ANGLE, dtype=np.float64)
         # Tuned target standing pose (ROS CAN order)
         self.stand_target = self.base_stand_angles.copy()
 
@@ -701,7 +701,7 @@ class StandPoseCalibrator:
         sys.stdout.flush()
 
     def print_final_stand_pose(self):
-        """Prints copy-pasteable standing pose constants for parameters.py, test_sit_stand.py, nxp_jaguar_controller.py, observation_builder.py."""
+        """Print the shared standing configuration and its Isaac-order preview."""
         stand_ros = self.stand_target.copy()
         
         # Convert to Isaac Lab joint order: [4 Rolls, 4 Hips, 4 Knees]
@@ -729,10 +729,10 @@ class StandPoseCalibrator:
             print(f"{P.JOINT_NAME[i]:<20} {init_v:+10.4f} rad       {diff:+10.4f} rad     {C_BOLD}{cur_v:+10.4f} rad{C_RESET}       {deg:+8.2f}°")
         print("-" * 90)
 
-        print("\r\n" + f"{C_BOLD}2. Salin ke {C_CYAN}scripts/parameters.py{C_RESET} & {C_CYAN}scripts/test_sit_stand.py{C_RESET} (ROS Order: BL, BR, FL, FR):{C_RESET}")
+        print("\r\n" + f"{C_BOLD}2. Salin ke {C_CYAN}scripts/parameters.py{C_RESET} (ROS Order: BL, BR, FL, FR):{C_RESET}")
         print("```python")
-        print("# Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)")
-        print("DEFAULT_ANGLE = [")
+        print("# Standing joint angles [rad] in ROS order (BL, BR, FL, FR)")
+        print("STAND_ANGLE = [")
         print(f"    {stand_ros[0]:+7.4f}, {stand_ros[1]:+7.4f}, {stand_ros[2]:+7.4f},  # BL (Collar, Hip, Knee)")
         print(f"    {stand_ros[3]:+7.4f}, {stand_ros[4]:+7.4f}, {stand_ros[5]:+7.4f},  # BR (Collar, Hip, Knee)")
         print(f"    {stand_ros[6]:+7.4f}, {stand_ros[7]:+7.4f}, {stand_ros[8]:+7.4f},  # FL (Collar, Hip, Knee)")
@@ -740,10 +740,10 @@ class StandPoseCalibrator:
         print("]")
         print("```")
 
-        print("\r\n" + f"{C_BOLD}3. Salin ke {C_CYAN}scripts/nxp_jaguar_controller.py{C_RESET} & {C_CYAN}sim2sim/observation_builder.py{C_RESET} (Isaac Order: Rolls, Hips, Knees):{C_RESET}")
+        print("\r\n" + f"{C_BOLD}3. Pratinjau Isaac Order (otomatis dari STAND_ANGLE):{C_RESET}")
         print("```python")
-        print("# Default Standing Pose synchronized with Isaac Lab NXP Jaguar")
-        print("DEFAULT_JOINT_POS = np.array([")
+        print("# Standing target [rad] in Isaac order")
+        print("STAND_JOINT_POS = np.array([")
         print(f"    {stand_isaac[0]:+7.4f}, {stand_isaac[1]:+7.4f}, {stand_isaac[2]:+7.4f}, {stand_isaac[3]:+7.4f},    # Rolls (Fr, Fl, Br, Bl)")
         print(f"    {stand_isaac[4]:+7.4f}, {stand_isaac[5]:+7.4f}, {stand_isaac[6]:+7.4f}, {stand_isaac[7]:+7.4f},    # Hip Pitches (Fr, Fl, Br, Bl)")
         print(f"    {stand_isaac[8]:+7.4f}, {stand_isaac[9]:+7.4f}, {stand_isaac[10]:+7.4f}, {stand_isaac[11]:+7.4f},    # Knees (Fr, Fl, Br, Bl)")

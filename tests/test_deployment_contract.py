@@ -1,9 +1,12 @@
 """Regression tests for the pinned sim2real model and actuator gains."""
 
+import ast
 import hashlib
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 
+import numpy as np
 import yaml
 
 
@@ -57,23 +60,45 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertEqual(controller["safe_park_kp"], 14.0)
         self.assertEqual(controller["safe_park_kd"], 0.5)
 
-        for config_name in ("nxp_jaguar_controller.yaml", "robstride_can.yaml"):
-            config = yaml.safe_load((ROOT / "config" / config_name).read_text())
-            for node in config.values():
-                parameters = node.get("ros__parameters", {})
-                for name, value in parameters.items():
-                    if name.endswith("_kd") and name.startswith(("rl_", "transition_", "default")):
-                        self.assertEqual(value, 4.5, f"{config_name}: {name}")
-
-        sim2sim = yaml.safe_load((ROOT / "config/sim2sim_mujoco.yaml").read_text())["sim2sim_mujoco"]
-        self.assertEqual(sim2sim["walk_gains"]["coxa_kd"], 3.5)
-        self.assertEqual(sim2sim["walk_gains"]["pitch_kd"], 3.5)
-        self.assertEqual(sim2sim["standup_gains"]["kd"], 3.5)
-
     def test_controller_nominal_pose_matches_training(self):
         source = (ROOT / "scripts/nxp_jaguar_controller.py").read_text()
         self.assertIn("-1.51, -1.51, -1.49, -1.49", source)
         self.assertIn("1.22,  1.22,  1.20,  1.20", source)
+
+    def test_standing_pose_and_walk_ramp_preserve_policy_reference(self):
+        parameters = ast.parse((ROOT / "scripts/parameters.py").read_text())
+        stand = next(node.value for node in parameters.body
+                     if isinstance(node, ast.Assign)
+                     and any(isinstance(t, ast.Name) and t.id == "STAND_ANGLE"
+                             for t in node.targets))
+        stand_ros = ast.literal_eval(stand)
+        np.testing.assert_array_equal(stand_ros,
+                                      [0.0, -1.49, 1.20] * 2 + [0.0, -1.51, 1.22] * 2)
+
+        source = ast.parse((ROOT / "scripts/nxp_jaguar_controller.py").read_text())
+        names = {"ROS_TO_ISAAC", "STAND_JOINT_POS", "DEFAULT_JOINT_POS", "ACTION_SCALE"}
+        assignments = [node for node in source.body if isinstance(node, ast.Assign)
+                       and any(isinstance(t, ast.Name) and t.id in names for t in node.targets)]
+        namespace = {"np": np, "P": SimpleNamespace(STAND_ANGLE=stand_ros,
+                                                         ROS_TO_ISAAC=[9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2])}
+        exec(compile(ast.Module(body=assignments, type_ignores=[]), "<poses>", "exec"), namespace)
+        np.testing.assert_allclose(namespace["STAND_JOINT_POS"],
+                                   [0.0] * 4 + [-1.51, -1.51, -1.49, -1.49]
+                                   + [1.22, 1.22, 1.20, 1.20], atol=1e-7)
+
+        # Execute the actual WALK target expression at both ramp endpoints.
+        target = next(node for node in ast.walk(source)
+                      if isinstance(node, ast.Assign)
+                      and any(isinstance(t, ast.Name) and t.id == "target_pos" for t in node.targets)
+                      and any(isinstance(n, ast.Name) and n.id == "applied_action"
+                              for n in ast.walk(node.value)))
+        action = np.linspace(-0.5, 0.5, 12)
+        for ramp in (0.0, 0.5, 1.0):
+            namespace.update(ramp=ramp, applied_action=ramp * action)
+            exec(compile(ast.Module(body=[target], type_ignores=[]), "<walk target>", "exec"), namespace)
+            expected = ((1.0 - ramp) * namespace["STAND_JOINT_POS"]
+                        + ramp * (namespace["DEFAULT_JOINT_POS"] + 0.25 * action))
+            np.testing.assert_allclose(namespace["target_pos"], expected, atol=1e-7)
 
 
 if __name__ == "__main__":

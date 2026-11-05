@@ -2,7 +2,7 @@
 """
 🐾 NXP Jaguar: Standalone Sit & Stand Transition Tester (CAN Direct)
 Interactive Terminal Control & Bluetooth/USB Xbox Gamepad interface for testing smooth,
-non-aggressive Sit (0.0 rad) and Stand transitions aligned with the trained nominal pose.
+non-aggressive Sit (0.0 rad) and Stand transitions using the configured standing pose.
 
 Supports:
 - Direct Linux Bluetooth & USB Xbox Gamepad (/dev/input/js*)
@@ -41,13 +41,8 @@ SIT_POSE = np.array([
     0.0,  0.0,  0.0,  # FR: collar, hip, knee
 ], dtype=np.float64)
 
-# Standing pose matching the training snapshot for the 0.21 m stance.
-STAND_POSE = np.array([
-    0.0, -1.49,  1.20,  # BL: collar, hip, knee
-    0.0, -1.49,  1.20,  # BR: collar, hip, knee
-    0.0, -1.51,  1.22,  # FL: collar, hip, knee
-    0.0, -1.51,  1.22,  # FR: collar, hip, knee
-], dtype=np.float64)
+# Standing pose [rad]: coxa 0; front hip/knee -1.51/+1.22, rear -1.49/+1.20.
+STAND_POSE = np.array(P.STAND_ANGLE, dtype=np.float64)
 
 # ==============================================================================
 # PHYSICAL HARD JOINT LIMITS & SAFETY THRESHOLDS (NXP Jaguar Quadruped)
@@ -68,7 +63,7 @@ JOINT_LIMITS_UPPER = np.array([
 
 MAX_ALLOWED_ERROR_RAD = 0.80  # Max allowable tracking error before Emergency Stop (rad)
 MAX_ALLOWED_TORQUE_NM = 14.0  # Max allowable joint torque before Emergency Stop (Nm)
-TRANSITION_KD = 3.5  # Match the trained Kd while standing up or moving to sit position
+TRANSITION_KD = float(P.KD_GAIN[1])  # Use configured damping during sit/stand transitions
 
 
 # ==============================================================================

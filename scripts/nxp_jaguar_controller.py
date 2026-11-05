@@ -52,7 +52,10 @@ SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 # Isaac order: [0..3 Rolls (FR, FL, BR, BL), 4..7 Hips (FR, FL, BR, BL), 8..11 Knees (FR, FL, BR, BL)]
 RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range(12)], dtype=np.float32)
 
-# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
+# Standing target [rad], mapped from ROS order into Isaac order.
+STAND_JOINT_POS = np.array(P.STAND_ANGLE, dtype=np.float32)[ROS_TO_ISAAC]
+
+# Nominal reference from the deployed Jaguar AdaBoot Ideal L2C2 checkpoint 29996.
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
    -1.51, -1.51, -1.49, -1.49,   # Hip Pitches (Fr, Fl, Br, Bl)
@@ -728,7 +731,7 @@ class NXPJaguarControllerNode(Node):
                 self.transition_start_time = now
                 with self.state_lock:
                     self.transition_start_pos = self.joint_pos.copy()
-                    self.transition_target_pos = np.clip(DEFAULT_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                    self.transition_target_pos = np.clip(STAND_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
                     self.cmd_vel[:] = 0.0
                     self.filtered_action[:] = 0.0
                 self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
@@ -845,12 +848,12 @@ class NXPJaguarControllerNode(Node):
             cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 self.state = "STAND_HOLD"
-                target_pos = DEFAULT_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
+                target_pos = STAND_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
                 target_vel = np.zeros(12, dtype=np.float32)
                 self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose (Power ON + IMU Auto-Level)")
         elif self.state == "STAND_HOLD":
             # Hold nominal knees while applying bounded hip/collar leveling.
-            target_pos = DEFAULT_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
+            target_pos = STAND_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
             target_vel = np.zeros(12, dtype=np.float32)
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
@@ -936,7 +939,8 @@ class NXPJaguarControllerNode(Node):
                 ramp = 1.0
 
             applied_action = ramp * self.filtered_action
-            target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * applied_action
+            target_pos = ((1.0 - ramp) * STAND_JOINT_POS
+                          + ramp * DEFAULT_JOINT_POS + ACTION_SCALE * applied_action)
             target_vel = np.zeros(12, dtype=np.float32)
 
             # Impedance tracking gains for RL with smooth damping transition
