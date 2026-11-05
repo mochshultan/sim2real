@@ -49,6 +49,7 @@ jaguar_can_hardware:
 nxp_jaguar_controller:
   ros__parameters:
     # Low-level control is clamped at 13.5 Nm; this is the feedback watchdog.
+    torque_safety_enabled: true  # false: log overtorque only, continue control
     overtorque_threshold: 13.8
     shutdown_duration: 3.0
     shutdown_settle_delay: 0.5

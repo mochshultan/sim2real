@@ -194,6 +194,7 @@ class NXPJaguarControllerNode(Node):
 
         # Declare parameters
         self.declare_parameter("policy_path", "")
+        self.declare_parameter("torque_safety_enabled", True)
         self.declare_parameter("overtorque_threshold", 13.8)
         self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
@@ -247,6 +248,7 @@ class NXPJaguarControllerNode(Node):
         # avoid allowing Torch to consume every control-core thread.
         torch.set_num_threads(max(1, int(os.environ.get("JAGUAR_TORCH_THREADS", "1"))))
 
+        self.torque_safety_enabled = bool(self.get_parameter("torque_safety_enabled").value)
         self.overtorque_threshold = float(self.get_parameter("overtorque_threshold").value)
         self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
         self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
@@ -265,6 +267,11 @@ class NXPJaguarControllerNode(Node):
         self.walk_start_time = 0.0
         self.sitdown_settle_delay = 0.5
         self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
+        if not self.torque_safety_enabled:
+            self.get_logger().warn(
+                "Torque safety OFF: sustained overtorque will only be logged; "
+                "firmware torque limits and other safety checks remain active."
+            )
         self.last_cmd_time = 0.0
 
         # Load Gains
@@ -466,18 +473,24 @@ class NXPJaguarControllerNode(Node):
         return now - since >= 0.1
 
     def _update_overtorque_safety(self, now: float, tau):
-        """Handle sustained torque overloads and return the peak feedback torque."""
+        """Detect sustained overloads; shut down or only log according to config."""
         max_tau = float(np.max(np.abs(tau)))
         if max_tau > self.overtorque_threshold and self.state not in ["STANDBY", "DISABLED"]:
             self.overtorque_counter += 1
             if self.overtorque_counter >= self.torque_overload_cycles:
                 joint_idx = int(np.argmax(np.abs(tau)))
                 joint_name = ISAAC_JOINT_NAMES[joint_idx]
-                self._trigger_safe_shutdown(
-                    now,
+                reason = (
                     f"Over-torque on {joint_name} "
-                    f"({max_tau:.2f} Nm > {self.overtorque_threshold:.2f} Nm)",
+                    f"({max_tau:.2f} Nm > {self.overtorque_threshold:.2f} Nm)"
                 )
+                if self.torque_safety_enabled:
+                    self._trigger_safe_shutdown(now, reason)
+                else:
+                    self.get_logger().warn(
+                        f"{reason}; torque safety OFF, continuing control (log only)",
+                        throttle_duration_sec=1.0,
+                    )
         else:
             self.overtorque_counter = max(0, self.overtorque_counter - 1)
         return max_tau

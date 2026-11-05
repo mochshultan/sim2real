@@ -48,6 +48,43 @@ class LaunchDomainTests(unittest.TestCase):
         self.assertEqual(self.domain(exported="17", override="18"), "18")
 
 
+class LaunchTorqueSafetyTests(unittest.TestCase):
+    def controller_parameters(self, override=None):
+        context = LaunchContext()
+        context.launch_configurations.update(
+            config_file="custom_sim2real.yaml", policy_path="custom_policy.pt")
+        if override is not None:
+            context.launch_configurations["torque_safety_enabled"] = override
+        with patch("launch.logging.get_logger"):
+            actions = module.generate_launch_description().entities
+            argument = next(action for action in actions
+                            if isinstance(action, DeclareLaunchArgument)
+                            and action.name == "torque_safety_enabled")
+            argument.execute(context)
+            controller = next(action for action in actions if isinstance(action, OpaqueFunction))
+            with patch.object(module, "Node") as node:
+                controller.execute(context)
+        parameters = node.call_args.kwargs["parameters"]
+        return evaluate_parameters(context, normalize_parameters(parameters))
+
+    def test_omitted_flag_preserves_yaml_setting(self):
+        parameters = self.controller_parameters()
+        self.assertEqual(parameters[0], Path("custom_sim2real.yaml"))
+        self.assertEqual(parameters[1], {"policy_path": "custom_policy.pt"})
+
+    def test_explicit_flags_override_yaml_with_boolean_values(self):
+        for flag, expected in (("true", True), ("false", False)):
+            with self.subTest(flag=flag):
+                parameters = self.controller_parameters(flag)
+                self.assertEqual(parameters[0], Path("custom_sim2real.yaml"))
+                # ROS applies this dictionary after the file, so it wins.
+                self.assertIs(parameters[1]["torque_safety_enabled"], expected)
+                self.assertEqual(parameters[1]["policy_path"], "custom_policy.pt")
+
+    def test_invalid_flag_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            self.controller_parameters("invalid")
+
 
 if __name__ == "__main__":
     unittest.main()

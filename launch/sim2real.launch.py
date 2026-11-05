@@ -1,10 +1,25 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, SetEnvironmentVariable
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+
+def _launch_controller(context):
+    overrides = {"policy_path": LaunchConfiguration("policy_path")}
+    torque_safety_enabled = LaunchConfiguration("torque_safety_enabled").perform(context)
+    if torque_safety_enabled:
+        overrides["torque_safety_enabled"] = torque_safety_enabled == "true"
+    return [Node(
+        package="jaguar_control",
+        executable="nxp_jaguar_controller.py",
+        name="nxp_jaguar_controller",
+        output="screen",
+        parameters=[LaunchConfiguration("config_file"), overrides],
+    )]
+
 
 def generate_launch_description():
     pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -62,9 +77,14 @@ def generate_launch_description():
         default_value="true",
         description="Clear latched RobStride faults once, before startup enable (C++ hardware only)",
     )
+    torque_safety_enabled_arg = DeclareLaunchArgument(
+        "torque_safety_enabled",
+        default_value="",
+        choices=["", "true", "false"],
+        description="Override overtorque safety: true=SAFE_PARK/E-stop, false=log only; omitted uses YAML",
+    )
 
     config_file = LaunchConfiguration("config_file")
-    policy_path = LaunchConfiguration("policy_path")
     with_imu = LaunchConfiguration("with_imu")
     with_joy = LaunchConfiguration("with_joy")
     with_teleop = LaunchConfiguration("with_teleop")
@@ -141,15 +161,8 @@ def generate_launch_description():
     )
 
     # 4. NXP Jaguar Sim-to-Real RL Controller Node
-    controller_node = Node(
-        package="jaguar_control",
-        executable="nxp_jaguar_controller.py",
-        name="nxp_jaguar_controller",
-        output="screen",
-        parameters=[
-            config_file,
-            {"policy_path": policy_path},
-        ],
+    controller_node = OpaqueFunction(
+        function=_launch_controller,
         condition=IfCondition(with_controller),
     )
 
@@ -167,6 +180,7 @@ def generate_launch_description():
         use_cpp_hardware_arg,
         with_controller_arg,
         startup_clear_faults_arg,
+        torque_safety_enabled_arg,
         imu_node,
         joy_node,
         teleop_node,
