@@ -141,6 +141,21 @@ public:
       std::bind(&RobStrideCanNode::publishDiagnostics, this)
     );
 
+    // DDS writes can block under backpressure. Keep them off the CAN thread
+    // and in their own callback group so command/E-stop callbacks can run.
+    feedback_msg_.name.resize(N_JOINTS);
+    feedback_msg_.position.resize(N_JOINTS);
+    feedback_msg_.velocity.resize(N_JOINTS);
+    feedback_msg_.effort.resize(N_JOINTS);
+    const auto & configs = hw_manager_.getJointConfigs();
+    for (size_t i = 0; i < N_JOINTS; ++i) {
+      feedback_msg_.name[i] = configs[i].name;
+    }
+    feedback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    feedback_timer_ = this->create_wall_timer(
+      std::chrono::nanoseconds(static_cast<int64_t>(1e9 / loop_hz_)),
+      std::bind(&RobStrideCanNode::publishFeedback, this), feedback_group_);
+
     // Start Dedicated Real-Time Thread
     rt_thread_ = std::thread(&RobStrideCanNode::realtimeControlLoop, this);
 
@@ -306,38 +321,11 @@ private:
 
     const long period_ns = static_cast<long>(1e9 / loop_hz_);
 
-    sensor_msgs::msg::JointState js_msg;
-    js_msg.name.resize(N_JOINTS);
-    js_msg.position.resize(N_JOINTS);
-    js_msg.velocity.resize(N_JOINTS);
-    js_msg.effort.resize(N_JOINTS);
-
-    const auto & configs = hw_manager_.getJointConfigs();
-    for (size_t i = 0; i < N_JOINTS; ++i) {
-      js_msg.name[i] = configs[i].name;
-    }
-
     while (running_ && rclcpp::ok()) {
       // 1. Step CAN communication
       hw_manager_.stepCommunicationCycle();
 
-      if (hw_manager_.safeParkRequested()) {
-        std_msgs::msg::Bool request;
-        request.data = true;
-        safe_park_pub_->publish(request);
-      }
-
-      // 2. Publish Joint States
-      auto states = hw_manager_.getAllJointStates();
-      js_msg.header.stamp = this->get_clock()->now();
-      for (size_t i = 0; i < N_JOINTS; ++i) {
-        js_msg.position[i] = states[i].position;
-        js_msg.velocity[i] = states[i].velocity;
-        js_msg.effort[i]   = states[i].effort;
-      }
-      joint_state_pub_->publish(js_msg);
-
-      // 3. Deterministic Sleep & Deadline Overrun Watchdog
+      // 2. Deterministic Sleep & Deadline Overrun Watchdog
       next_period.tv_nsec += period_ns;
       while (next_period.tv_nsec >= 1000000000) {
         next_period.tv_nsec -= 1000000000;
@@ -356,6 +344,23 @@ private:
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_period, nullptr);
       }
     }
+  }
+
+  void publishFeedback()
+  {
+    if (hw_manager_.safeParkRequested()) {
+      std_msgs::msg::Bool request;
+      request.data = true;
+      safe_park_pub_->publish(request);
+    }
+    const auto states = hw_manager_.getAllJointStates();
+    feedback_msg_.header.stamp = this->get_clock()->now();
+    for (size_t i = 0; i < N_JOINTS; ++i) {
+      feedback_msg_.position[i] = states[i].position;
+      feedback_msg_.velocity[i] = states[i].velocity;
+      feedback_msg_.effort[i] = states[i].effort;
+    }
+    joint_state_pub_->publish(feedback_msg_);
   }
 
   void publishDiagnostics()
@@ -417,6 +422,9 @@ private:
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr safe_park_sub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_fault_srv_;
   rclcpp::TimerBase::SharedPtr diag_timer_;
+  rclcpp::CallbackGroup::SharedPtr feedback_group_;
+  rclcpp::TimerBase::SharedPtr feedback_timer_;
+  sensor_msgs::msg::JointState feedback_msg_;
   std::thread rt_thread_;
 };
 
@@ -426,7 +434,9 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<robstride::RobStrideCanNode>();
-  rclcpp::spin(node);
+  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
+  executor.add_node(node);
+  executor.spin();
   node->stop();
   rclcpp::shutdown();
   return 0;
