@@ -247,11 +247,10 @@ class NXPJaguarControllerNode(Node):
         self.walk_start_time = 0.0
         self.sitdown_settle_delay = 0.5
         self.torque_overload_cycles = 5  # 100 ms debounce at 50 Hz
-        if not self.torque_safety_enabled:
-            self.get_logger().warn(
-                "Torque safety OFF: sustained overtorque will only be logged; "
-                "firmware torque limits and other safety checks remain active."
-            )
+        logger = self.get_logger()
+        log_config = logger.info if self.torque_safety_enabled else logger.warn
+        log_config(f"event=CONFIG code=OVERTORQUE enabled={int(self.torque_safety_enabled)} "
+                   f"limit_nm={self.overtorque_threshold:.3f} required_samples={self.torque_overload_cycles}")
         self.last_cmd_time = 0.0
 
         # Load Gains
@@ -314,10 +313,23 @@ class NXPJaguarControllerNode(Node):
             raise RuntimeError(f"Policy contract failure: expected finite (1,12), got {tuple(probe.shape)}")
         self.get_logger().info(f"Policy verified: expects_temporal={self.policy_expects_temporal}, output_shape={tuple(probe.shape)}")
 
+    def _log_safety(self, event: str, reason: str, state=None):
+        fields = tuple(part for part in reason.split()
+                       if part.startswith(("code=", "joint=", "sensor=", "source=")))
+        key = (event, fields or (reason,))
+        if not hasattr(self, "_safety_log_keys"):
+            self._safety_log_keys = set()
+        if key in self._safety_log_keys:
+            return
+        self._safety_log_keys.add(key)
+        message = f"event={event} state={self.state if state is None else state} {reason}"
+        logger = self.get_logger()
+        (logger.error if event == "ESTOP" else logger.warn)(message)
+
     def _trigger_hard_estop(self, reason: str):
+        self._log_safety("ESTOP", reason)
         if self.state == "DISABLED":
             return
-        self.get_logger().error(f"[FAULT] {reason}. Motion inhibited until manual hardware/controller reset.")
         self.state = "DISABLED"
         self.fault_stop_seen = False
         with self.state_lock:
@@ -358,9 +370,10 @@ class NXPJaguarControllerNode(Node):
         self.last_safe_park_request = 0.0
         self.fault_stop_seen = False
         self.state = "STANDBY"
+        self._safety_log_keys = set()
         response.success = True
         response.message = "Controller reset to STANDBY (passive). Re-arm motion manually."
-        self.get_logger().info("[CONTROLLER] Manual fault reset -> STANDBY (passive)")
+        self.get_logger().info("event=RESET_COMPLETE state=STANDBY")
         return response
 
     def _trigger_safe_shutdown(self, now: float, reason: str):
@@ -385,15 +398,14 @@ class NXPJaguarControllerNode(Node):
             if self.overtorque_counter >= self.torque_overload_cycles:
                 joint_idx = int(np.argmax(np.abs(tau)))
                 joint_name = ISAAC_JOINT_NAMES[joint_idx]
-                reason = (
-                    f"Over-torque on {joint_name} "
-                    f"({max_tau:.2f} Nm > {self.overtorque_threshold:.2f} Nm)"
-                )
+                reason = (f"code=OVERTORQUE joint={joint_name} actual_nm={max_tau:.3f} "
+                          f"limit_nm={self.overtorque_threshold:.3f} samples={self.overtorque_counter} "
+                          f"required_samples={self.torque_overload_cycles}")
                 if self.torque_safety_enabled:
                     self._trigger_safe_shutdown(now, reason)
                 else:
                     self.get_logger().warn(
-                        f"{reason}; torque safety OFF, continuing control (log only)",
+                        f"event=WARNING state={self.state} {reason} action=LOG_ONLY",
                         throttle_duration_sec=1.0,
                     )
         else:
@@ -403,20 +415,25 @@ class NXPJaguarControllerNode(Node):
     def _hardware_safe_park_cb(self, msg: Bool):
         if msg.data and self.state not in ["SAFE_PARK", "DISABLED"]:
             self._trigger_safe_shutdown(
-                self.get_clock().now().nanoseconds / 1e9, "Driver motion watchdog requested SAFE_PARK")
+                self.get_clock().now().nanoseconds / 1e9, "code=DRIVER_REQUEST source=hardware_safe_park")
 
     def _request_safe_park(self, now: float, reason: str, automatic=False):
         if self.state == "DISABLED":
             return
         if (not automatic and self.last_safe_park_request > 0.0 and
                 now - self.last_safe_park_request <= self.safe_park_double_press_window):
-            self._trigger_hard_estop("SAFE_PARK pressed twice: hard emergency stop")
+            self._trigger_hard_estop(
+                f"code=PARK_DOUBLE_PRESS interval_s={now - self.last_safe_park_request:.3f} "
+                f"limit_s={self.safe_park_double_press_window:.3f}")
             return
         if not automatic:
             self.last_safe_park_request = now
         if not self._sensors_ready(check_limits=False):
-            self._trigger_hard_estop("SAFE_PARK requested without fresh valid sensors")
+            self._trigger_hard_estop(f"code=PARK_SENSOR_INVALID {reason.replace('code=', 'request_code=', 1)}")
+            for fault in self._sensor_fault_reasons():
+                self._trigger_hard_estop(fault)
             return
+        previous_state = self.state
         with self.state_lock:
             self.state = "SAFE_PARK"
             self.soft_fault_times.clear()
@@ -430,19 +447,16 @@ class NXPJaguarControllerNode(Node):
             self.park_finish_time = 0.0
             self.cmd_vel[:] = 0.0
             self.filtered_action[:] = 0.0
-        self.get_logger().warn(
-            f"[SAFE_PARK] {reason}. First request: moving slowly to 0 rad; "
-            f"press again within {self.safe_park_double_press_window:.1f}s for HARD_ESTOP."
-        )
+        self._log_safety("SAFE_PARK", reason, state=previous_state)
 
     def _safe_stop_cb(self, msg: Bool):
         if msg.data:
             now = self.get_clock().now().nanoseconds / 1e9
-            self._request_safe_park(now, "Safe park requested via topic")
+            self._request_safe_park(now, "code=MANUAL source=safe_stop_topic")
 
     def _estop_cb(self, msg: Bool):
         if msg.data:
-            self._trigger_hard_estop("Emergency stop signal received")
+            self._trigger_hard_estop("code=MANUAL source=emergency_stop_topic")
 
     def _imu_cb(self, msg: Imu):
         q = np.array([msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w])
@@ -450,6 +464,9 @@ class NXPJaguarControllerNode(Node):
         if (not np.all(np.isfinite(q)) or abs(float(q @ q) - 1.0) > 0.1
                 or not np.all(np.isfinite(angular)) or msg.orientation_covariance[0] == -1):
             self.imu_received = False
+            self.imu_fault_detail = (
+                f"quat_norm_sq={float(q @ q):.6f} quat_finite={int(np.all(np.isfinite(q)))} "
+                f"gyro_finite={int(np.all(np.isfinite(angular)))} covariance0={msg.orientation_covariance[0]} norm_tolerance=0.100000")
             return
         with self.state_lock:
             qx = msg.orientation.x
@@ -508,14 +525,23 @@ class NXPJaguarControllerNode(Node):
             self.last_benchmark_cmd_time = time.monotonic()
 
     def _joint_state_cb(self, msg: JointState):
-        if (len(msg.position) != 12 or len(msg.velocity) != 12 or len(msg.effort) != 12
-                or not np.all(np.isfinite([msg.position, msg.velocity, msg.effort]))):
+        if len(msg.position) != 12 or len(msg.velocity) != 12 or len(msg.effort) != 12:
             self.joints_received = False
+            self.joint_fault_detail = (f"reason=dimensions positions={len(msg.position)} "
+                                       f"velocities={len(msg.velocity)} efforts={len(msg.effort)} expected=12")
+            return
+        values = np.asarray([msg.position, msg.velocity, msg.effort])
+        if not np.all(np.isfinite(values)):
+            self.joints_received = False
+            entries = ",".join(f"{('position', 'velocity', 'effort')[field]}:{index}:{values[field, index]}"
+                               for field, index in np.argwhere(~np.isfinite(values)))
+            self.joint_fault_detail = f"reason=nonfinite entries={entries}"
             return
         if msg.name:
             indices = [ROS_NAME_TO_ISAAC_IDX.get(name) for name in msg.name]
             if len(indices) != 12 or None in indices or len(set(indices)) != 12:
                 self.joints_received = False
+                self.joint_fault_detail = f"reason=joint_names names={','.join(msg.name)}"
                 return
         else:
             indices = np.argsort(ROS_TO_ISAAC).tolist()
@@ -578,6 +604,26 @@ class NXPJaguarControllerNode(Node):
         delta_q[8:12] = 0.0
         return delta_q
 
+    def _sensor_fault_reasons(self):
+        now = time.monotonic()
+        reasons = []
+        for sensor, received, stamp, detail in (
+            ("imu", self.imu_received, self.last_imu_time, getattr(self, "imu_fault_detail", "reason=no_valid_sample")),
+            ("joints", self.joints_received, self.last_joints_time, getattr(self, "joint_fault_detail", "reason=no_valid_sample")),
+        ):
+            if not received:
+                reasons.append(f"code=SENSOR_INVALID sensor={sensor} {detail}")
+            if now - stamp > 0.25:
+                reasons.append(f"code=SENSOR_TIMEOUT sensor={sensor} age_s={now - stamp:.3f} limit_s=0.250")
+        for index, position in enumerate(self.joint_pos):
+            if not np.isfinite(position):
+                reasons.append(f"code=POSITION_NONFINITE joint={ISAAC_JOINT_NAMES[index]} actual_rad={position}")
+            elif position < FEEDBACK_LIMITS_LOWER[index] - 0.2 or position > FEEDBACK_LIMITS_UPPER[index] + 0.2:
+                reasons.append(
+                    f"code=POSITION_RANGE joint={ISAAC_JOINT_NAMES[index]} actual_rad={position:.4f} "
+                    f"min_rad={FEEDBACK_LIMITS_LOWER[index] - 0.2:.4f} max_rad={FEEDBACK_LIMITS_UPPER[index] + 0.2:.4f}")
+        return reasons
+
     def _sensors_ready(self, check_limits=True):
         now = time.monotonic()
         return (self.imu_received and self.joints_received
@@ -619,10 +665,10 @@ class NXPJaguarControllerNode(Node):
         pressed = lambda i: (i < len(msg.buttons) and msg.buttons[i] == 1
                              and (i >= len(previous) or previous[i] != 1))
         if pressed(4) or pressed(6):
-            self._trigger_hard_estop("Xbox LB/Back hard emergency stop")
+            self._trigger_hard_estop("code=MANUAL source=xbox_lb_back")
             return
         if pressed(5):
-            self._request_safe_park(now, "Xbox RB safe-park request")
+            self._request_safe_park(now, "code=MANUAL source=xbox_rb")
             return
         if self.state == "DISABLED" or not self._sensors_ready():
             return
@@ -699,7 +745,7 @@ class NXPJaguarControllerNode(Node):
 
         raw_action = actions.squeeze(0).cpu().numpy()
         if raw_action.shape != (12,) or not np.all(np.isfinite(raw_action)):
-            self._trigger_safe_shutdown(now, "Invalid policy output")
+            self._trigger_safe_shutdown(now, f"code=POLICY_OUTPUT shape={'x'.join(map(str, raw_action.shape)) or 'scalar'} expected_shape=12 finite={int(np.all(np.isfinite(raw_action)))}")
             return
         self.obs_builder.update_last_action(raw_action)
 
@@ -750,7 +796,8 @@ class NXPJaguarControllerNode(Node):
 
         if not self._sensors_ready(check_limits=False):
             if self.state not in ["STANDBY", "DISABLED"]:
-                self._trigger_hard_estop("Missing/invalid/stale sensor data or severe position excursion")
+                for fault in self._sensor_fault_reasons():
+                    self._trigger_hard_estop(fault)
             else:
                 self._publish_sensor_wait_status()
             return
@@ -763,7 +810,18 @@ class NXPJaguarControllerNode(Node):
             limit = (np.maximum(POSITION_LIMIT_TOLERANCE, self.park_initial_extra + 0.05)
                      if self.state == "SAFE_PARK" else POSITION_LIMIT_TOLERANCE)
             if self._persistent_fault("position", bool(np.any(extra > limit))):
-                self._trigger_safe_shutdown(now, "Persistent joint feedback position limit violation")
+                faults = []
+                for index in np.flatnonzero(extra > limit):
+                    bound = float(limit[index]) if np.ndim(limit) else float(limit)
+                    faults.append(
+                        f"code=POSITION_LIMIT joint={ISAAC_JOINT_NAMES[index]} actual_rad={self.joint_pos[index]:.4f} "
+                        f"min_rad={ISAAC_LIMITS_LOWER[index]:.4f} max_rad={ISAAC_LIMITS_UPPER[index]:.4f} "
+                        f"excess_rad={extra[index]:.4f} limit_rad={bound:.4f} "
+                        f"duration_s={time.monotonic() - self.soft_fault_times['position']:.3f} debounce_s=0.100")
+                previous_state = self.state
+                self._trigger_safe_shutdown(now, faults[0])
+                for fault in faults[1:]:
+                    self._log_safety("VIOLATION", fault, state=previous_state)
 
         # Command Watchdog: If no /joy or /cmd_vel received within cmd_timeout (0.25s), auto-zero cmd_vel
         if self.last_cmd_time > 0.0 and (now - self.last_cmd_time) > self.cmd_timeout:
@@ -785,7 +843,7 @@ class NXPJaguarControllerNode(Node):
         # Failsafe 2: Tilt Safety Protection (Emergency sit if tilt > 60 deg, gz > -0.5 in active states)
         gz_body = -(1.0 - 2.0 * (quat[0]**2 + quat[1]**2))
         if gz_body > -0.5 and self.state not in ["STANDBY", "DISABLED"]:
-            self._trigger_safe_shutdown(now, f"Critical tilt detected (gz={gz_body:.2f} > -0.5, tilt > 60 deg)")
+            self._trigger_safe_shutdown(now, f"code=TILT gz={gz_body:.4f} limit_gz=-0.5000")
 
         target_pos = None
         target_vel = np.zeros(12, dtype=np.float32)
@@ -843,12 +901,17 @@ class NXPJaguarControllerNode(Node):
                 # Hold zero briefly, then return to passive sensing.
                 if now - self.park_finish_time >= self.shutdown_settle_delay:
                     if np.max(np.abs(pos - SIT_JOINT_POS)) > 0.15:
-                        self._trigger_hard_estop("SAFE_PARK failed to reach sitting pose within 0.15 rad")
+                        index = int(np.argmax(np.abs(pos - SIT_JOINT_POS)))
+                        self._trigger_hard_estop(
+                            f"code=PARK_POSITION joint={ISAAC_JOINT_NAMES[index]} actual_rad={pos[index]:.4f} "
+                            f"target_rad={SIT_JOINT_POS[index]:.4f} error_rad={abs(pos[index] - SIT_JOINT_POS[index]):.4f} "
+                            f"limit_rad=0.1500 elapsed_s={elapsed:.3f}")
                         return
                     self.state = "STANDBY"
                     cmd_kp = [0.0] * 12
                     cmd_kd = [0.0] * 12
-                    self.get_logger().info("[SAFE_PARK] Position 0 rad reached; motors returned to passive mode.")
+                    self.get_logger().info("event=PARK_COMPLETE state=STANDBY")
+                    self._safety_log_keys = set()
 
         # RL
         elif self.state == "WALK":
@@ -873,13 +936,16 @@ class NXPJaguarControllerNode(Node):
                 tracking_err = np.abs(self.joint_pos - target_pos)
                 max_err = float(np.max(tracking_err))
                 if self._persistent_fault("tracking", max_err > 2.0):
-                    fault_idx = int(np.argmax(tracking_err))
-                    self._trigger_safe_shutdown(
-                        now,
-                        f"Critical tracking error on {ISAAC_JOINT_NAMES[fault_idx]}: "
-                        f"actual={self.joint_pos[fault_idx]:+.3f} rad "
-                        f"target={target_pos[fault_idx]:+.3f} rad "
-                        f"error={max_err:.2f} rad > 2.00 rad! Failsafe tripped.")
+                    faults = [
+                        f"code=TRACKING joint={ISAAC_JOINT_NAMES[index]} actual_rad={self.joint_pos[index]:.4f} "
+                        f"target_rad={target_pos[index]:.4f} error_rad={tracking_err[index]:.4f} limit_rad=2.0000 "
+                        f"duration_s={time.monotonic() - self.soft_fault_times['tracking']:.3f} debounce_s=0.100"
+                        for index in np.flatnonzero(tracking_err > 2.0)
+                    ]
+                    previous_state = self.state
+                    self._trigger_safe_shutdown(now, faults[0])
+                    for fault in faults[1:]:
+                        self._log_safety("VIOLATION", fault, state=previous_state)
                     return False
 
             cmd_msg = JointState()
@@ -906,19 +972,17 @@ class NXPJaguarControllerNode(Node):
             self.lag_counter += 1
             if now_sec - self.last_warn_time > 1.0:
                 self.get_logger().warn(
-                    f"[TIMING] Compute lag: {self.compute_latency_ms:.2f} ms | "
-                    f"Frequency: {self.actual_freq:.1f} Hz (Target: 50.0 Hz)"
+                    f"event=TIMING latency_ms={self.compute_latency_ms:.3f} frequency_hz={self.actual_freq:.3f} "
+                    f"count={self.lag_counter}"
                 )
                 self.last_warn_time = now_sec
 
             # Critical Safety Fallback: If severe lag occurs in WALK mode (compute > 45ms or freq < 25Hz for 5 consecutive loops)
             if self.state == "WALK" and (self.compute_latency_ms > 45.0 or self.actual_freq < 25.0):
                 if self.lag_counter >= 5:
-                    self.get_logger().error(
-                        f"[WATCHDOG] Persistent compute lag ({self.compute_latency_ms:.1f} ms, {self.actual_freq:.1f} Hz). "
-                        f"Triggering safe shutdown."
-                    )
-                    self._trigger_safe_shutdown(now_sec, "Persistent compute lag")
+                    self._trigger_safe_shutdown(now_sec,
+                        f"code=COMPUTE_LAG latency_ms={self.compute_latency_ms:.3f} limit_ms=45.000 "
+                        f"frequency_hz={self.actual_freq:.3f} minimum_hz=25.000 count={self.lag_counter} required_count=5")
                     self.lag_counter = 0
         else:
             self.lag_counter = max(0, self.lag_counter - 1)

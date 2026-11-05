@@ -110,8 +110,8 @@ class SafetyTests(unittest.TestCase):
                 self.node._trigger_hard_estop.assert_not_called()
                 message = logger.warn.call_args.args[0]
                 self.assertIn('joint_4', message)
-                self.assertIn('14.10 Nm > 14.00 Nm', message)
-                self.assertIn('log only', message)
+                self.assertIn('actual_nm=14.100 limit_nm=14.000', message)
+                self.assertIn('action=LOG_ONLY', message)
                 self.assertEqual(logger.warn.call_args.kwargs, {'throttle_duration_sec': 1.0})
 
     def test_enabled_overtorque_during_park_still_escalates_to_estop(self):
@@ -151,7 +151,7 @@ class SafetyTests(unittest.TestCase):
         self.node._joy_cb(msg)
 
         self.node._request_safe_park.assert_called_once_with(
-            2.0, 'Xbox RB safe-park request')
+            2.0, 'code=MANUAL source=xbox_rb')
 
     def test_joy_axes_cannot_overwrite_cmd_vel(self):
         self.node.previous_buttons = []
