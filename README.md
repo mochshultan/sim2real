@@ -63,7 +63,7 @@ machine/container on the robot's domain uses the same ROS distribution and
 matching message definitions. Humble/Jazzy/Rolling discovery incompatibilities
 are tracked in [rmw_fastrtps #797](https://github.com/ros2/rmw_fastrtps/issues/797).
 The error alone does not identify why the motors stopped: look for
-`[RobStrideHardwareManager] EMERGENCY STOP:` and controller `[FAULT]` in the full log.
+`event=ESTOP` or `event=SAFE_PARK` and the accompanying `code=...` in the full log.
 
 `sim2real.launch.py` now defaults to DDS domain **1** when `ROS_DOMAIN_ID` is
 unset; it preserves an explicitly exported domain. To isolate from other ROS
@@ -212,6 +212,39 @@ resuming motion. Standby uses zero stiffness and damping.
 watchdog to logging; driver limits and other safeguards remain active.
 Recovery requires manual driver/controller reset, fresh feedback and explicit
 re-arming; see [the recovery procedure](launch/README.md).
+
+## Safety logs
+
+Safety events use short `key=value` fields. `event` identifies the action and
+`code` identifies the cause. Joint, sensor, measured value, threshold and timing
+are included where applicable.
+
+```text
+event=SAFE_PARK state=WALK code=OVERTORQUE joint=Fr_roll_joint actual_nm=14.100 limit_nm=14.000 samples=5 required_samples=5
+[driver] time_ms=1793850000000 event=ESTOP code=FEEDBACK_TIMEOUT joint=BL_collar_joint bus=can1 can_id=4 age_s=0.260000 limit_s=0.250000
+```
+
+Codes include `TRACKING`, `POSITION_LIMIT`, `POSITION_RANGE`, `SENSOR_INVALID`,
+`SENSOR_TIMEOUT`, `FEEDBACK_INVALID`, `FEEDBACK_TIMEOUT`, `MOTOR_FAULT`,
+`MOTOR_ERROR`, `ENCODER_JUMP`, `COMMAND_TIMEOUT`, `CAN_WRITE`, `TILT`,
+`POLICY_OUTPUT`, `COMPUTE_LAG`, `PARK_ACK_TIMEOUT`, `PARK_TIMEOUT`, `PARK_POSITION`
+and `MANUAL`. Several simultaneous joint violations are logged separately.
+Repeated fault events are suppressed within a stop/park episode; a new cause,
+joint, sensor or motor fault bit pattern is still recorded after E-stop.
+Log-only overtorque warnings remain throttled to once per second. Existing
+thresholds, debounce rules and stop actions are unchanged by the log formatting.
+
+Capture both ROS logs and the C++ driver's stderr in one file:
+
+```bash
+set -o pipefail
+ros2 launch jaguar_control sim2real.launch.py torque_safety_enabled:=false \
+  2>&1 | tee "sim2real_$(date +%Y%m%d_%H%M%S).log"
+```
+
+Firmware torque saturation itself is not reported as a fault by this code.
+Motor fault bits are recorded as reported; they are not decoded into assumed
+physical causes.
 
 ## Calibration, diagnostics and offline tools
 

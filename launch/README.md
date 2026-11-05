@@ -49,9 +49,10 @@ group).
 
 ### Recovering a C++ CAN driver fault
 
-The driver logs `FEEDBACK_FAULT` with the raw motor error bits, encoder positions,
-allowed jump, feedback interval, velocity, torque, and temperature. A type-21
-report is logged as `MOTOR_FAULT` with its raw fault/warning words. Keep the robot
+The driver logs `event=ESTOP` with `code=MOTOR_ERROR` or `code=ENCODER_JUMP`,
+including raw error bits, encoder positions, allowed jump, interval, velocity,
+torque and temperature. A type-21 report uses `code=MOTOR_FAULT` with raw
+fault/warning words. Keep the robot
 supported and remove the underlying cause before resetting; fault clearing is
 not a substitute for inspecting a jam, hot motor, low supply voltage, or bad encoder.
 
