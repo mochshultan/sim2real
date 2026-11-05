@@ -13,6 +13,12 @@
 1.0. Controller, Xbox, keyboard and mux declare these same parameters. Per-node
 blocks configure the driver, controller, joy source and mux timeouts.
 
+`jaguar_unified_teleop.ros__parameters.linear_speed_base` sets the Xbox planar
+speed with RT released (0.7 m/s). `linear_speed_boost` sets the full-RT speed
+(1.0 m/s). Intermediate RT positions interpolate between these values. The
+combined X/Y magnitude follows this envelope, including diagonal input. The
+shared per-axis limits remain hard caps; `max_wz` stays 1.0 rad/s.
+
 Launch passes `config_file` to nodes. Explicit ROS parameter overrides take
 precedence over defaults. Standalone Python tools load the packaged default
 YAML through `project_paths.py`; installed scripts resolve package share.

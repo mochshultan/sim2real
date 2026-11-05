@@ -176,6 +176,28 @@ including stick release to zero, on the next mux cycle (20 ms). Reversal stops
 the old direction immediately and accelerates the new direction from zero.
 The planar acceleration limit applies to the combined X/Y change.
 
+The combined X/Y speed is limited to **0.7 m/s** with RT released. RT raises
+that limit proportionally: `0.7 + 0.3 * RT` m/s, up to **1.0 m/s** at full
+press. Yaw stays limited to **1.0 rad/s**. Releasing the stick returns its
+command to zero immediately on the next input/mux cycle.
+
+| Xbox control | Action |
+| --- | --- |
+| Left stick Y / X | Forward/backward / lateral movement |
+| Right stick X | Yaw |
+| Start / Menu | From STAND_HOLD: enable policy WALK; from WALK: stop policy and smoothly return to STAND_HOLD |
+| A | Stand up |
+| X | Sit down |
+| Y | Zero velocity command |
+| RT | Proportional linear speed boost, 0.7–1.0 m/s |
+| RB | Safe park |
+| LB / Back | Hard E-stop |
+| B, LT, D-pad, LS/RS click, Xbox/Guide, right stick Y | Unassigned |
+
+Start acts once per press. Entering WALK still requires valid feedback and
+upright IMU orientation. Returning from WALK uses the configured stand
+transition duration; policy inference stops immediately.
+
 Start terminal keyboard control separately:
 
 ```bash

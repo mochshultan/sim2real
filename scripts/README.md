@@ -145,3 +145,22 @@ ONNX export also needs the ONNX dependencies used by PyTorch.
 Run installed tools as `ros2 run jaguar_control <executable>`. Gamepad input
 reads the user calibration first, then `config/gamepad_calibration.json` from
 package share. Restart the input node after saving calibration.
+
+### Xbox controls
+
+The direct reader and ROS `joy_node` input use the same Bluetooth/USB mapping.
+Bluetooth trigger axes are RT=4 (`ABS_GAS`) and LT=5 (`ABS_BRAKE`); USB xpad uses
+LT=2 and RT=5. `/joy_raw` and `/joy_remote` expect `joy_node` axis signs, with
+triggers +1 when released and -1 when pressed. Button count selects the layout:
+15 or more for Bluetooth, otherwise USB/xpad.
+
+Start/Menu toggles WALK from STAND_HOLD and smoothly returns to stand from
+WALK. A stands, X sits, Y zeroes velocity, RB requests safe park, and LB/Back
+requests hard E-stop. B is unassigned. LT, D-pad, stick clicks, Guide and right
+stick Y have no robot action. The diagnostic and teleop UI print the full layout.
+
+RT interpolates the combined X/Y speed limit from 0.7 to 1.0 m/s; yaw stays
+1.0 rad/s. Configure the two linear speeds under `jaguar_unified_teleop` in
+`config/sim2real.yaml`. `/joy` carries canonical mode pulses: index 0 stands,
+1 enters policy for keyboard/benchmark callers, 2 sits, and 7 toggles policy.
+Physical B does not emit index 1. Safety buttons take priority over mode requests.

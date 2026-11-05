@@ -30,6 +30,26 @@ JSIOCGBUTTONS = 0x80016a12
 DEADZONE_DEFAULT = 0.10
 MAX_EVENTS_PER_BATCH = 64
 
+# Shared by the standalone diagnostic and ROS teleop display.
+XBOX_CONTROL_LAYOUT = (
+    ("Left stick Y", "Maju / mundur"),
+    ("Left stick X", "Geser kiri / kanan"),
+    ("Right stick X", "Putar yaw (maks. 1.0 rad/s)"),
+    ("Start / Menu", "Toggle policy WALK / stand (mulai dari STAND_HOLD)"),
+    ("A", "Berdiri"),
+    ("X", "Duduk"),
+    ("Y", "Nolkan perintah kecepatan"),
+    ("RT", "Boost linear proporsional: 0.7 -> 1.0 m/s"),
+    ("RB", "Safe park"),
+    ("LB / Back", "Hard E-stop"),
+    ("B / LT", "Tidak digunakan"),
+    ("D-pad", "Tidak digunakan"),
+    ("LS click / RS click", "Tidak digunakan"),
+    ("Xbox / Guide", "Tidak digunakan"),
+    ("Right stick Y", "Tidak digunakan"),
+)
+
+
 def load_gamepad_calibration() -> Optional[Dict[str, Any]]:
     calibration_file = gamepad_calibration_file()
     if calibration_file.is_file():
@@ -454,12 +474,9 @@ def main():
             print(f"   {state.get_active_buttons_str()}")
             print("-" * 76)
             print(" 📋 PANDUAN PENGUJIAN TOMBOL:")
-            print("   [A] : Stand Up (Berdiri)")
-            print("   [B] : Walk (Jalan)")
-            print("   [X] : Sit Down (Duduk ke 0 rad)")
-            print("   [Y] : Stop Kecepatan / Kp Tuning")
-            print("   [LB]/[Back] : Stop Darurat / Mode Pasif")
-            print("   [RB] : Kp (+2.0)")
+            for control, action in XBOX_CONTROL_LAYOUT:
+                print(f"   {control:<20} {action}")
+            print(f"   Batas linear aktif: {linear_speed_limit(state.rt):.2f} m/s (gabungan X/Y)")
             print("=" * 76)
             print(" Tekan [Ctrl+C] untuk keluar.")
             time.sleep(0.08)

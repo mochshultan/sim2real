@@ -40,7 +40,7 @@ flowchart TD
 | `scripts/parameters.py` | Python hardware map, calibration and nominal poses | Explicit motor IDs/directions/offsets; gain/rate defaults read from `sim2real.yaml` | Used by fallback driver, controller defaults and manual tools |
 | `scripts/motion_limits.py` | Declare/validate body-command bounds | `/**` block in `sim2real.yaml`, then ROS parameter overrides | Shared by controller, Xbox, keyboard and mux |
 | `scripts/project_paths.py` | Resolve source, installed and user assets | Package share via ament; XDG config directory | Shared asset lookup, without duplicated workspace paths |
-| `scripts/keyboard_teleop.py` | Normalize Xbox/local/remote input and mode pulses | Shared motion limits; `keyboard_enabled:=false` in normal launch | `/cmd_vel/xbox` and `/joy` |
+| `scripts/keyboard_teleop.py` | Normalize Xbox/local/remote input and mode pulses | Shared motion limits and `jaguar_unified_teleop` base/boost speeds; `keyboard_enabled:=false` in normal launch | `/cmd_vel/xbox` and `/joy` |
 | `scripts/gamepad_reader.py` | Read and normalize Linux joystick input | User calibration first, factory `config/gamepad_calibration.json` second | Imported by Xbox and calibration tools |
 | `scripts/calibrate_xbox.py` | Measure and save controller calibration | Writes `${XDG_CONFIG_HOME:-~/.config}/jaguar_control/gamepad_calibration.json` | Reader uses saved profile after restart |
 | `scripts/jaguar_cmd_vel_mux.py` | Choose fresh source and limit Xbox acceleration | Shared limits and `jaguar_cmd_vel_mux` timeouts in `sim2real.yaml` | Xbox priority, keyboard fallback, otherwise zero |
@@ -261,7 +261,8 @@ sim2real/
 │   ├── test_parallel_link_mapping.py
 │   ├── test_policy_observation.py
 │   ├── test_project_assets.py
-│   └── test_serial_parser.c
+│   ├── test_serial_parser.c
+│   └── test_xbox_controls.py
 └── urdf/
     ├── README.md
     └── nxp_jaguar.urdf

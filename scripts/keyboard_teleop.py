@@ -29,7 +29,7 @@ from sensor_msgs.msg import Joy, Imu
 from std_msgs.msg import Bool, String
 
 from gamepad_reader import (LinuxGamepadReader, XboxState, linear_speed_limit,
-                            update_gamepad_state)
+                            update_gamepad_state, XBOX_CONTROL_LAYOUT)
 from project_paths import load_default_config
 from motion_limits import declare_motion_limits
 
@@ -74,6 +74,7 @@ class UnifiedTeleopNode(Node):
         self.linear_speed_boost = float(self.get_parameter("linear_speed_boost").value)
         linear_speed_limit(0.0, self.linear_speed_base, self.linear_speed_boost)
         self.linear_limit = self.linear_speed_base
+        self.lt = self.rt = 0.0
 
         # Publishers
         # Teleop velocity uses /cmd_vel. /joy carries mode pulses only.
@@ -193,9 +194,12 @@ class UnifiedTeleopNode(Node):
                 self.xbox_active = True
                 self.vx, self.vy, self.wz = state.vx, state.vy, state.wz
                 self.linear_limit = linear_speed_limit(state.rt, self.linear_speed_base, self.linear_speed_boost)
+                self.lt, self.rt = state.lt, state.rt
             elif self.input_source == "gamepad":
                 self.xbox_active = False
                 self.vx = self.vy = self.wz = 0.0
+                self.lt = self.rt = 0.0
+                self.linear_limit = self.linear_speed_base
 
             # 2. Button Edge Triggers (0 -> 1)
             # Button A: STANDUP
@@ -256,9 +260,13 @@ class UnifiedTeleopNode(Node):
             if self.input_source in ("remote", "raw") and time.monotonic() - self.last_remote_input > 0.25:
                 self.xbox_active = False
                 self.vx = self.vy = self.wz = 0.0
+                self.lt = self.rt = 0.0
+                self.linear_limit = self.linear_speed_base
             if self.input_source == "gamepad" and not self.gamepad_reader.is_connected():
                 self.xbox_active = False
                 self.vx = self.vy = self.wz = 0.0
+                self.lt = self.rt = 0.0
+                self.linear_limit = self.linear_speed_base
             vx, vy, wz = self.vx, self.vy, self.wz
             btn0 = 1 if self.btn_standup_pulse else 0
             btn1 = 1 if self.btn_walk_pulse else 0
@@ -400,16 +408,16 @@ class UnifiedTeleopNode(Node):
             output.append(f" Perintah Terakhir   : {self.last_action}")
             output.append(f"{C_BOLD}{C_WHITE}------------------------------------------------------------------------{C_RESET}")
             output.append(f"{C_BOLD} Target Kecepatan Aktif (/cmd_vel):{C_RESET}")
-            output.append(f"   ▶ Vx  (Maju/Mundur)  : {C_BOLD}{self.vx:+5.2f} m/s{C_RESET}  [-{self.max_vx:.1f} .. +{self.max_vx:.1f}]")
-            output.append(f"   ▶ Vy  (Geser Kiri/Kn): {C_BOLD}{self.vy:+5.2f} m/s{C_RESET}  [-{self.max_vy:.1f} .. +{self.max_vy:.1f}]")
+            output.append(f"   ▶ Vx  (Maju/Mundur)  : {C_BOLD}{self.vx:+5.2f} m/s{C_RESET}  [-{min(self.max_vx, self.linear_limit):.2f} .. +{min(self.max_vx, self.linear_limit):.2f}]")
+            output.append(f"   ▶ Vy  (Geser Kiri/Kn): {C_BOLD}{self.vy:+5.2f} m/s{C_RESET}  [-{min(self.max_vy, self.linear_limit):.2f} .. +{min(self.max_vy, self.linear_limit):.2f}]")
             output.append(f"   ▶ Wz  (Putar Yaw)    : {C_BOLD}{self.wz:+5.2f} rad/s{C_RESET} [-{self.max_wz:.1f} .. +{self.max_wz:.1f}]")
             output.append(f"{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
             output.append(f"{C_BOLD}{C_YELLOW} PANDUAN KONTROL (STIK XBOX BLUETOOTH & KEYBOARD SSH):{C_RESET}")
-            output.append(f"  {C_BOLD}[Xbox X] / [1]{C_RESET} Duduk / Standby   {C_BOLD}[Xbox A] / [2]{C_RESET} Berdiri     {C_BOLD}[Xbox B] / [3]{C_RESET} Jalan (RL)")
-            output.append(f"  {C_BOLD}[LeftStick Y] / [W/S]{C_RESET} Maju/Mundur     {C_BOLD}[LeftStick X] / [A/D]{C_RESET} Geser Samping")
-            output.append(f"  {C_BOLD}[RightStick X] / [Q/E]{C_RESET} Putar (Yaw)")
-            output.append(f"  {C_BOLD}[Xbox Y] / [X]{C_RESET} Stop Kecepatan (V=0)")
-            output.append(f"  {C_BOLD}[Xbox RB] / [SPACE]{C_RESET} SAFE PARK ke 0 rad    {C_BOLD}[Xbox LB] / [Back]{C_RESET} HARD E-STOP")
+            output.append(f"  LT: {self.lt:.0%} | RT: {self.rt:.0%} | Batas linear gabungan X/Y: {self.linear_limit:.2f} m/s")
+            for control, action in XBOX_CONTROL_LAYOUT:
+                output.append(f"  {control:<20} {action}")
+            if self.keyboard_enabled:
+                output.append("  Keyboard: 1=duduk, 2=berdiri, 3=policy, WASD=linear, QE=yaw, X=nol, SPACE=safe park")
             output.append(f"{C_BOLD}{C_WHITE}========================================================================{C_RESET}")
         sys.stdout.write("\n".join(output) + "\n")
         sys.stdout.flush()
