@@ -15,9 +15,9 @@ iteration 29996 from the Isaac Lab run
 `nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-22_01-40-39_stand021-kp45kd45-stand10pct-cmd5s-fourfeet-coxa-clear8cm-ori002-torque95of145-w001-resume19997-10kit`.
 This continues checkpoint 19997 for another 10k iterations.
 
-The source checkpoint and named export are
-`models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt` and
-`models/policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt`.
+The source checkpoint is
+`models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt`.
+Its runtime actor is `models/policy.pt`, the only retained actor export.
 The checkpoint SHA-256 is
 `4544c25e7602a294b8ed6df58e98532c3a1a08b066741b4eab56e386b5e56311`;
 the policy SHA-256 is
@@ -143,7 +143,7 @@ python3 -m pytest tests -q
 ```
 
 Runtime installation includes the default policy and its deployment manifest.
-The matching source checkpoint, named export and training YAML snapshots stay
+The matching source checkpoint and training YAML snapshots stay
 in source for reproducibility. Old model variants have been removed.
 `build/`, `install/`, `log/`, virtual environments and Python caches are local
 outputs excluded from Git.

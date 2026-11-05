@@ -2,6 +2,7 @@
 
 import ast
 import hashlib
+import json
 from pathlib import Path
 import unittest
 from types import SimpleNamespace
@@ -24,13 +25,17 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_and_archived_policy_are_jaguar_29996_export(self):
+    def test_default_policy_and_checkpoint_are_jaguar_29996_export(self):
         default_policy = ROOT / "models/policy.pt"
-        archived_policy = ROOT / "models/policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
         checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
 
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
-        self.assertEqual(_sha256(archived_policy), POLICY_SHA256)
+        self.assertEqual(sorted(path.name for path in (ROOT / "models").glob("policy*.pt")),
+                         ["policy.pt"])
+        manifest = json.loads((ROOT / "models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json").read_text())
+        self.assertEqual(manifest["policy_file"], default_policy.name)
+        self.assertEqual(manifest["policy_sha256"], POLICY_SHA256)
+        self.assertEqual(manifest["checkpoint_sha256"], CHECKPOINT_SHA256)
         self.assertEqual(_sha256(checkpoint), CHECKPOINT_SHA256)
 
     def test_launch_and_controller_use_deterministic_default_policy(self):
