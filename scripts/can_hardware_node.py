@@ -103,7 +103,7 @@ class CanHardwareDriverNode(Node):
                 or len(msg.effort) not in (0, 12, 24, 36)
                 or (msg.name and (len(names) != 12 or None in names or len(set(names)) != 12))
                 or not all(math.isfinite(x) for x in list(msg.position) + list(msg.velocity) + list(msg.effort))):
-            self._trip_fault("Malformed joint command")
+            self._trip_fault(f"code=COMMAND_INVALID positions={len(msg.position)} velocities={len(msg.velocity)} efforts={len(msg.effort)}")
             return
         with self.cmd.lock:
             if self.estopped:
@@ -158,7 +158,7 @@ class CanHardwareDriverNode(Node):
 
     def _estop_cb(self, msg):
         if msg.data:
-            self._trip_fault("Emergency stop requested")
+            self._trip_fault("code=MANUAL source=emergency_stop_topic")
 
     def _trip_fault(self, reason):
         self.estopped = True
@@ -167,20 +167,35 @@ class CanHardwareDriverNode(Node):
                 motor.fault_reason = reason
         with self.cmd.lock:
             self.cmd.enabled = False
-        self.get_logger().error(reason)
+            key = tuple(part for part in reason.split() if part.startswith(("code=", "joint="))) or (reason,)
+            if not hasattr(self, "_fault_log_keys"):
+                self._fault_log_keys = set()
+            should_log = key not in self._fault_log_keys
+            self._fault_log_keys.add(key)
+        if should_log:
+            self.get_logger().error(f"event=ESTOP {reason}")
 
     def _poll_motor(self, i):
         with self.cmd.lock:
             motor = self.motors[i]
             if self.cmd.enabled and not self.estopped:
-                if (time.monotonic() - self.cmd.last_update > 0.1 or
-                        not all(m is not None and m.motion_ready() for m in self.motors)):
-                    self._trip_fault("Command timeout or missing motor feedback")
+                age = time.monotonic() - self.cmd.last_update
+                timeout = age > 0.1
+                unready = None
+                if not timeout:
+                    unready = next(((index, candidate) for index, candidate in enumerate(self.motors)
+                                    if candidate is None or not candidate.motion_ready()), None)
+                if timeout:
+                    self._trip_fault(f"code=COMMAND_TIMEOUT age_s={age:.3f} limit_s=0.100")
+                elif unready is not None:
+                    index, candidate = unready
+                    detail = candidate.fault_reason if candidate is not None else "not_initialized"
+                    self._trip_fault(f"code=FEEDBACK_INVALID joint={P.JOINT_NAME[index]} reason={detail!r}")
                 else:
                     result = motor.send_control_command(self.cmd.pos[i], self.cmd.vel[i],
                         self.cmd.kp[i], self.cmd.kd[i], self.cmd.tau[i], timeout=15)
                     if not motor.motion_ready():
-                        self._trip_fault(motor.fault_reason or "Motor feedback lost")
+                        self._trip_fault(f"code=FEEDBACK_INVALID joint={P.JOINT_NAME[i]} reason={motor.fault_reason!r}")
                     return result
             return motor.send_control_command(0, 0, 0, 0, 0, timeout=10)
 
@@ -276,10 +291,10 @@ class CanHardwareDriverNode(Node):
                             self.state.temp[i] = tem
 
                     if tem is not None and tem > 75.0:
-                        self._trip_fault(f"Motor overtemperature: {tem:.1f}C")
+                        self._trip_fault(f"code=TEMPERATURE joint={P.JOINT_NAME[i]} actual_c={tem:.1f} limit_c=75.0")
 
                 except Exception as e:
-                    self._trip_fault(f"CAN worker error: {e}")
+                    self._trip_fault(f"code=CAN_WORKER joint={P.JOINT_NAME[i]} bus={bus_name} error={str(e)!r}")
                     with self.state.lock:
                         self.state.errors[i] += 1
 

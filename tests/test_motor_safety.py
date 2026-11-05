@@ -5,12 +5,15 @@ import struct
 import sys
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from types import SimpleNamespace, MethodType
+import threading
 
 import can
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from robstride_motor_lib import RobStrideMotorController
+from can_hardware_node import CanHardwareDriverNode
 
 
 def feedback(position=0.0, motor_id=1, mode=2, host=254, flags=0):
@@ -115,6 +118,38 @@ class MotorTests(unittest.TestCase):
     def test_enable_has_eight_bytes(self):
         self.motor.enable_motor()
         self.assertEqual(self.bus.sent[-1].dlc, 8)
+
+
+class FallbackFaultLogTests(unittest.TestCase):
+    def node(self, stale=False):
+        motors = [SimpleNamespace(motion_ready=Mock(return_value=True), fault_reason=None,
+                                  send_control_command=Mock(return_value=(None,) * 5)) for _ in range(12)]
+        node = SimpleNamespace(motors=motors, estopped=False, get_logger=Mock(),
+                               cmd=SimpleNamespace(lock=threading.RLock(), enabled=True,
+                                                   last_update=9.0 if stale else 9.99))
+        node._trip_fault = MethodType(CanHardwareDriverNode._trip_fault, node)
+        return node
+
+    def test_timeout_logs_age_and_threshold_and_sends_passive_command(self):
+        node = self.node(stale=True)
+        with patch("can_hardware_node.time.monotonic", return_value=10.0):
+            CanHardwareDriverNode._poll_motor(node, 0)
+        node.get_logger.return_value.error.assert_called_once_with(
+            "event=ESTOP code=COMMAND_TIMEOUT age_s=1.000 limit_s=0.100")
+        node.motors[0].send_control_command.assert_called_once_with(0, 0, 0, 0, 0, timeout=10)
+        self.assertFalse(node.cmd.enabled)
+
+    def test_missing_feedback_identifies_joint_and_preserves_distinct_causes(self):
+        node = self.node()
+        node.motors[5].motion_ready.return_value = False
+        node.motors[5].fault_reason = "stale feedback"
+        with patch("can_hardware_node.time.monotonic", return_value=10.0):
+            CanHardwareDriverNode._poll_motor(node, 0)
+        message = node.get_logger.return_value.error.call_args.args[0]
+        self.assertIn("code=FEEDBACK_INVALID joint=BR_knee_joint", message)
+        node._trip_fault("code=COMMAND_TIMEOUT age_s=0.110 limit_s=0.100")
+        node._trip_fault("code=COMMAND_TIMEOUT age_s=0.120 limit_s=0.100")
+        self.assertEqual(node.get_logger.return_value.error.call_count, 2)
 
 
 if __name__ == "__main__":
