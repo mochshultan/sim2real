@@ -42,388 +42,184 @@ training snapshots are in `models/adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_202
 The export accepts `(batch, 5, 45)` and returns `(batch, 12)`. Its velocity
 estimator is `225 -> 128 -> 64 -> 3`; the actor is
 `48 -> 512 -> 256 -> 128 -> 12`, with embedded observation normalization.
-configuration.
 
 ## Overview
 
-The `cpp` branch executes low-level actuator communication through a native Linux SocketCAN driver node (`robstride_can_node`) running under a real-time `SCHED_FIFO` priority 80 thread. The node operates deterministically at 200 Hz, coordinating 12 RobStride RS00 Quasi-Direct Drive (QDD) actuators with sub-millisecond transmission latency.
+The standing target is coxa `0.0` rad on all legs, front hip/knee `-1.51/+1.22` rad,
+and rear hip/knee `-1.49/+1.20` rad, defined by `STAND_ANGLE` in
+`scripts/parameters.py`. The controller uses it for
+`STANDUP` and `STAND_HOLD`, with bounded IMU leveling trim when enabled. Walking
+retains the trained policy reference pose and blends to it during the walk ramp.
 
-## Table of Contents
-1. [System Architecture](#1-system-architecture)
-2. [C++ Driver Modules](#2-c-driver-modules)
-3. [RL Policy Observation Space (45-D x 5 history)](#3-rl-policy-observation-space-45-d-x-5-history)
-4. [Joint Index Remapping (Isaac Lab vs. Hardware)](#4-joint-index-remapping-isaac-lab-vs-hardware)
-5. [Actuator CAN Bus and Node ID Mapping](#5-actuator-can-bus-and-node-id-mapping)
-6. [Actuator Parameters and PD Impedance Gains](#6-actuator-parameters-and-pd-impedance-gains)
-7. [Teleoperation Interface](#7-teleoperation-interface)
-8. [Hardware Bringup Procedure](#8-hardware-bringup-procedure)
-9. [Diagnostic and Calibration Utilities](#9-diagnostic-and-calibration-utilities)
-10. [Safety Systems and Failsafes](#10-safety-systems-and-failsafes)
-11. [MuJoCo Sim-to-Sim Validation](#11-mujoco-sim-to-sim-validation)
-12. [Kinematic and Reward Formulation Notes](#12-kinematic-and-reward-formulation-notes)
+The `cpp` branch executes low-level actuator communication through a native Linux SocketCAN driver node (`robstride_can_node`) running under a real-time `SCHED_FIFO` priority 80 thread. The node targets 200 Hz and coordinates 12 RobStride RS00 actuators; timing depends on the host and bus load.
 
-## 1. System Architecture
+### DDS buffer errors and unexpected motor stop
 
-```
-[ HIGH-LEVEL: RL Policy ]
-      │  Model: AdaBoot-Ideal TorchScript JIT (`policy.pt`) from Isaac Lab
-      │  Rate: 50 Hz (dt = 0.02 s) | Input: 5x45 Observation History | Output: 12-D Target Δq
-      ▼
-[ MID-LEVEL: ROS 2 Controller Node (`scripts/nxp_jaguar_controller.py`) ]
-      │  • Subscriptions: IMU (`/imu/data`, `/Imu_data`), Joy/Teleop (`/joy`, `/cmd_vel`), Joint States (`/joint_states`)
-      │  • Finite State Machine: STANDBY ──(Btn A)──> STANDUP ──(Btn B)──> WALK ──(Btn X)──> E-STOP
-      │  • Remapping: Isaac Order (Roll->Hip->Knee) ⇄ ROS Hardware Order (BL->BR->FL->FR)
-      │  • Target Position: q_des = q_nominal + 0.25 * action
-      │  • Publication: `/joint_commands` (sensor_msgs/JointState; position + velocity + Kp/Kd)
-      ▼
-[ LOW-LEVEL: Real-Time C++ CAN Node (`src/robstride_can_node.cpp`) ]
-      │  • Dual SocketCAN Threads (`can0` and `can1`) via `robstride_can_bus.hpp`
-      │  • Real-Time Scheduler: Linux `SCHED_FIFO` (Priority 80)
-      │  • Protocol: RobStride RS00 bit-packed frames (`robstride_protocol.hpp`)
-      │  • Deterministic Loop Rate: 200 Hz (dt = 0.005 s)
-      │  • Feedback Publication: `/joint_states` (sensor_msgs/JointState)
-      ▼
-[ HARDWARE: 12x RobStride RS00 Actuators and Hiwonder 9-DOF IMU ]
-```
+Repeated `sequence size exceeds remaining buffer` from several unrelated nodes
+can indicate incompatible DDS discovery or message traffic. Check that every
+machine/container on the robot's domain uses the same ROS distribution and
+matching message definitions. Humble/Jazzy/Rolling discovery incompatibilities
+are tracked in [rmw_fastrtps #797](https://github.com/ros2/rmw_fastrtps/issues/797).
+The error alone does not identify why the motors stopped: look for
+`[RobStrideHardwareManager] EMERGENCY STOP:` and controller `[FAULT]` in the full log.
 
-## 2. C++ Driver Modules
+`sim2real.launch.py` now defaults to DDS domain **1** when `ROS_DOMAIN_ID` is
+unset; it preserves an explicitly exported domain. To isolate from other ROS
+installations on domain 0, stop the old launch and use an unused domain:
 
-C++ source headers reside in [`include/jaguar_control/`](file:///home/erc/sim2real/include/jaguar_control/) and executable implementations in [`src/`](file:///home/erc/sim2real/src/):
-
-| File | Primary Interface | Description |
-| :--- | :--- | :--- |
-| **`robstride_protocol.hpp`** | `RobStrideProtocol` | Encodes floating-point targets ($q, \dot{q}, K_p, K_d, \tau_{\text{ff}}$) into 16-bit packed payloads and parses 29-bit CAN arbitration responses. |
-| **`robstride_can_bus.hpp`** | `RobStrideCANBus` | Manages non-blocking POSIX SocketCAN raw sockets (`AF_CAN`, `SOCK_RAW`) with hardware frame filters. |
-| **`robstride_hardware_manager.hpp`** | `RobStrideHardwareManager` | Coordinates dual CAN channels (`can0` right 6 motors, `can1` left 6 motors), generates quintic startup trajectories, interpolates setpoints, and compensates encoder zero offsets. |
-| **`robstride_can_node.cpp`** | `RobStrideCANNode` | ROS 2 wrapper thread running under `SCHED_FIFO` at 200 Hz, bridging ROS topics to the low-level hardware manager. |
-
-## 3. RL Policy Observation Space (45-D x 5 history)
-
-The actor policy ingests a 5-step history of 45-dimensional observations at 50 Hz:
-
-| Index Range | State Variable | Dimension | Unit | Description |
-| :---: | :--- | :---: | :---: | :--- |
-| `[0 : 3]` | `base_ang_vel` | 3 | $\text{rad/s}$ | Base angular velocity in body frame $[\omega_x, \omega_y, \omega_z]$ |
-| `[3 : 6]` | `projected_gravity` | 3 | unit | Projected gravity vector $[g_x, g_y, g_z]$ ($[0, 0, -1]$ upright) |
-| `[6 : 9]` | `velocity_commands` | 3 | $\text{m/s, rad/s}$ | Commanded planar velocity $[v_x^{\text{cmd}}, v_y^{\text{cmd}}, \omega_z^{\text{cmd}}]$ |
-| `[9 : 21]` | `joint_pos_rel` | 12 | $\text{rad}$ | Joint position relative to nominal: $(q_i - q_{0, i})$ |
-| `[21 : 33]` | `joint_vel` | 12 | $\text{rad/s}$ | Joint angular velocity $\dot{q}_i$ |
-| `[33 : 45]` | `actions` | 12 | $\text{rad}$ | Previous policy output $a_{t-1}$ |
-
-$$\text{Total Observation Dimension} = 3 + 3 + 3 + 12 + 12 + 12 = 45$$
-
-## 4. Joint Index Remapping (Isaac Lab vs. Hardware)
-
-- **Hardware CAN Driver**: Grouped leg-by-leg (`BL`, `BR`, `FL`, `FR`).
-- **Isaac Lab Policy**: Grouped joint-by-joint (Rolls, Hips, Knees).
-
-```
-[Hardware CAN Driver Order (C++ / ROS)]      [Isaac Lab Policy Order]
-Grouped by LEG (BL, BR, FL, FR)              Grouped by JOINT TYPE (Rolls, Hips, Knees)
-───────────────────────────────────────      ──────────────────────────────────────────
- 0: BL_collar_joint                           0: Fr_roll_joint   (Front Right Roll)
- 1: BL_hip_joint                              1: Fl_roll_joint   (Front Left Roll)
- 2: BL_knee_joint                             2: Br_roll_joint   (Back Right Roll)
- 3: BR_collar_joint                           3: Bl_roll_joint   (Back Left Roll)
- 4: BR_hip_joint                              4: Fr_hip_pitch    (Front Right Hip)
- 5: BR_knee_joint                             5: Fl_hip_pitch    (Front Left Hip)
- 6: FL_collar_joint                           6: Br_hip_pitch    (Back Right Hip)
- 7: FL_hip_joint                              7: Bl_hip_pitch    (Back Left Hip)
- 8: FL_knee_joint                             8: Fr_knee_joint   (Front Right Knee)
- 9: FR_collar_joint                           9: Fl_knee_joint   (Front Left Knee)
-10: FR_hip_joint                             10: Br_knee_joint   (Back Right Knee)
-11: FR_knee_joint                            11: Bl_knee_joint   (Back Left Knee)
-```
-
-Permutation arrays in `scripts/nxp_jaguar_controller.py`:
-```python
-ROS_TO_ISAAC = [9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2]
-ISAAC_TO_ROS = [3, 7, 11, 2, 6, 10, 1, 5, 9, 0, 4, 8]
-```
-
-## 5. Actuator CAN Bus and Node ID Mapping
-
-| Isaac Index | Isaac Joint Name | Nominal Angle ($q_0$) | ROS Index | ROS Joint Name (`parameters.py`) | CAN ID | Bus | Quadrant |
-| :---: | :--- | :---: | :---: | :--- | :---: | :---: | :---: |
-| **0** | `Fr_roll_joint` | $0.0\text{ rad}$ | **9** | `FR_collar_joint` | **1** | `can0` | Front Right |
-| **1** | `Fl_roll_joint` | $0.0\text{ rad}$ | **6** | `FL_collar_joint` | **1** | `can1` | Front Left |
-| **2** | `Br_roll_joint` | $0.0\text{ rad}$ | **3** | `BR_collar_joint` | **4** | `can0` | Rear Right |
-| **3** | `Bl_roll_joint` | $0.0\text{ rad}$ | **0** | `BL_collar_joint` | **4** | `can1` | Rear Left |
-| **4** | `Fr_hip_pitch_joint` | $-1.51\text{ rad}$ | **10** | `FR_hip_joint` | **2** | `can0` | Front Right |
-| **5** | `Fl_hip_pitch_joint` | $-1.51\text{ rad}$ | **7** | `FL_hip_joint` | **2** | `can1` | Front Left |
-| **6** | `Br_hip_pitch_joint` | $-1.49\text{ rad}$ | **4** | `BR_hip_joint` | **5** | `can0` | Rear Right |
-| **7** | `Bl_hip_pitch_joint` | $-1.49\text{ rad}$ | **1** | `BL_hip_joint` | **5** | `can1` | Rear Left |
-| **8** | `Fr_knee_joint` | $+1.22\text{ rad}$ | **11** | `FR_knee_joint` | **3** | `can0` | Front Right |
-| **9** | `Fl_knee_joint` | $+1.22\text{ rad}$ | **8** | `FL_knee_joint` | **3** | `can1` | Front Left |
-| **10** | `Br_knee_joint` | $+1.20\text{ rad}$ | **5** | `BR_knee_joint` | **6** | `can0` | Rear Right |
-| **11** | `Bl_knee_joint` | $+1.20\text{ rad}$ | **2** | `BL_knee_joint` | **6** | `can1` | Rear Left |
-
-## 6. Actuator Parameters and PD Impedance Gains
-
-- **Policy Evaluation Rate**: 50 Hz ($\Delta t = 0.02\text{ s}$)
-- **Low-Level Hardware Rate**: 200 Hz ($\Delta t = 0.005\text{ s}$)
-- **Real-Time Scheduling**: Linux `SCHED_FIFO`, Priority 80
-- **Action Scaling**: 0.25 ($q_{\text{des}} = q_0 + 0.25 \times a_{\text{policy}}$)
-- **RobStride actuator model**: 12x RS00 QDD motors using MIT impedance control
-
-| Joint group | Isaac Lab training actuator | Training $K_p$ / $K_d$ | Training limits | Deploy $K_p$ / $K_d$ |
-| :--- | :--- | :---: | :--- | :---: |
-| Roll/collar | `IdealPDActuator` | 45.0 / 4.5 | 14 Nm, 20 rad/s | 45.0 / 4.5 |
-| Hip pitch | `IdealPDActuator` | 45.0 / 4.5 | 14 Nm, 20 rad/s | 45.0 / 4.5 |
-| Knee | `RemotizedPDActuator` | 45.0 / 4.5 | 14 Nm, 20 rad/s; 1:1 knee lookup | 45.0 / 4.5 |
-
-Training randomizes Kp and Kd independently by a uniform factor of `0.9–1.1`
-(Kp `40.5–49.5`, Kd `4.05–4.95`). Motor strength is also randomized by
-`0.9–1.1`; the randomized effort is capped at `13.5 Nm`. The action system
-delay is `0–15 ms` at a 20 ms control period, and armature is `0.01`.
-
-Deployment safety limits are different from the simulator's nominal limit:
-normal control and the startup firmware torque cap are `13.5 Nm`. CAN torque
-encoding uses the CyberGear RS00 range of `[-14, 14] Nm`, and the controller
-watchdog reacts to sustained feedback above `13.8 Nm`. Normal walk
-and sit/stand transition gains use Kp `45.0` and Kd `4.5`, matching the trained
-nominal actuator gains.
-Emergency safe-park remains Kp `14.0` and Kd `0.5`; standby remains zero torque
-(Kp/Kd `0/0`).
-
-## 7. Teleoperation Interface
-
-### A. Keyboard Interface (`scripts/keyboard_teleop.py`)
-
-Run the keyboard teleoperation node:
 ```bash
-ros2 run jaguar_control keyboard_teleop.py
+export ROS_DOMAIN_ID=1
+ros2 launch jaguar_control sim2real.launch.py domain_id:=1
 ```
 
-| Key | Mode / Command | Action |
-| :---: | :--- | :--- |
-| `1` | `STANDBY` | Drives all joints to zero position ($0.0\text{ rad}$) and clears velocity targets. |
-| `2` | `STANDUP` | Executes a 2-second quintic S-curve trajectory to nominal stance angles $q_0$. |
-| `3` | `WALK` | Activates 50 Hz neural network policy inference. |
-| `W` | Surge Forward ($+v_x$) | Increments forward velocity by $+0.1\text{ m/s}$ (max $+1.0\text{ m/s}$). |
-| `S` | Surge Backward ($-v_x$) | Increments backward velocity by $-0.1\text{ m/s}$ (max $-1.0\text{ m/s}$). |
-| `A` | Sway Left ($+v_y$) | Increments lateral velocity by $+0.1\text{ m/s}$ (max $+1.0\text{ m/s}$). |
-| `D` | Sway Right ($-v_y$) | Increments lateral velocity by $-0.1\text{ m/s}$ (max $-1.0\text{ m/s}$). |
-| `Q` | Yaw Left ($+\omega_z$) | Increments counterclockwise yaw by $+0.2\text{ rad/s}$ (max $+1.0\text{ rad/s}$). |
-| `E` | Yaw Right ($-\omega_z$) | Increments clockwise yaw by $-0.2\text{ rad/s}$ (max $-1.0\text{ rad/s}$). |
-| `X` | Brake | Sets planar command velocities to zero while keeping policy active. |
-| `SPACE` | Emergency Stop | Cuts motor commands and commands transition to `STANDBY`. |
+Export the same `ROS_DOMAIN_ID` in every keyboard, remote joystick, RViz and
+diagnostic terminal before starting those programs. Other ROS distributions
+and unrelated robots should use a different domain. If CLI discovery looks
+stale, run `ros2 daemon stop` in that terminal before retrying. For a robot
+whose ROS nodes all run on one computer, `export ROS_LOCALHOST_ONLY=1` before
+launch additionally restricts discovery to that computer; this prevents remote
+ROS teleop/RViz connections.
 
-### B. Gamepad Interface (`/dev/input/js0`)
+DDS feedback publication runs outside the CAN thread, in a separate executor
+callback group, so a blocked feedback publisher does not block CAN cycles or
+command callbacks. The 100 ms command watchdog and stale-feedback E-stop remain
+enabled. Communication loss can still trigger a motor stop; do not increase
+watchdog limits to hide DDS errors. Validate with the robot supported before
+trying WALK again.
 
-- `A` / `X` (Cross): Stance transition (`STANDUP`)
-- `B` / `Circle`: Locomotion mode (`WALK`)
-- `X` / `Square`: Passive rest (`STANDBY`)
-- Left Analog Stick (Vertical / Horizontal): Planar linear velocity ($v_x, v_y$)
-- Right Analog Stick (Horizontal): Yaw rate ($\omega_z$)
+## Runtime and configuration
 
-## 8. Hardware Bringup Procedure
-
-> [!IMPORTANT]
-> 1. Suspend the chassis on a gantry until all four feet clear the floor before powering actuators.
-> 2. Connect the 24V supply and verify the hardware emergency stop switch.
-
-### Initial Build
-```bash
-cd /home/erc/sim2real
-colcon build --packages-select jaguar_control --symlink-install
-source install/setup.bash
+```text
+Xbox -> keyboard_teleop -> /cmd_vel/xbox ----\
+                                             mux -> /cmd_vel -> RL controller
+Keyboard -> keyboard_cmd_vel -> /cmd_vel/keyboard -/                 |
+IMU + /joint_states ---------------------------------------------->|
+                                                                  v
+                                                        /joint_commands
+                                                                  |
+                                                        robstride_can_node
+                                                                  |
+                                                               CAN motors
 ```
 
-### Multi-Terminal Bringup
+The serial IMU publishes `/Imu_data`; the controller also accepts `/imu/data`.
+The driver returns `/joint_states`. Mode buttons are separate `/joy` pulses.
+`/joint_commands` uses `JointState.effort` for 12 Kp followed by 12 Kd values,
+not measured torque.
 
-Launch nodes in separate terminal sessions in order:
+| Component | Configuration / assets |
+| --- | --- |
+| Controller, Xbox, keyboard and mux | [`config/sim2real.yaml`](config/sim2real.yaml) |
+| CAN packet encoding / RS00 ranges | [`config/cybergear_motor_params.yaml`](config/cybergear_motor_params.yaml) |
+| Python motor mapping, offsets and standing pose | [`scripts/parameters.py`](scripts/parameters.py) |
+| C++ motor mapping and offsets | `setupDefaultJointConfigs()` in [`robstride_hardware_manager.hpp`](include/jaguar_control/robstride_hardware_manager.hpp) |
+| Policy observation scales/history | [`scripts/policy_observation.py`](scripts/policy_observation.py), pinned to the training contract |
+| Xbox factory calibration | [`config/gamepad_calibration.json`](config/gamepad_calibration.json) |
+| Xbox user calibration | `${XDG_CONFIG_HOME:-~/.config}/jaguar_control/gamepad_calibration.json` |
+| Robot display | [`urdf/nxp_jaguar.urdf`](urdf/nxp_jaguar.urdf), `meshes/`, `config/jaguar_display.rviz` |
 
-#### Terminal 1: CAN Network Setup (1 Mbps)
+The complete tree, module responsibilities and configuration precedence are in
+[the repository map](docs/repository_structure.md). Python and C++ motor maps
+remain explicit in their respective languages; update both when recalibrating.
+Their offset conventions differ in sign and are checked by regression tests.
+
+## Build and offline verification
+
+Use the system Python with ROS 2 Jazzy, NumPy, PyYAML, pytest and CPU PyTorch.
+PyTorch is an additional Python dependency; see [the environment notes](docs/upgrade_jazzy.md).
+
 ```bash
-cd /home/erc/sim2real
+source scripts/build.sh
+colcon test --base-paths . serial_imu --packages-select jaguar_control serial_imu
+colcon test-result --verbose
+```
+
+The CMake test suite registers CAN protocol, motion safety, serial parser and
+all Python tests. Tests do not open CAN buses or command motors. You can also
+run Python tests directly after sourcing Jazzy:
+
+```bash
+python3 -m pytest tests -q
+```
+
+Runtime installation includes the default policy and its deployment manifest.
+The matching source checkpoint, named export and training YAML snapshots stay
+in source for reproducibility. Old model variants have been removed.
+`build/`, `install/`, `log/`, virtual environments and Python caches are local
+outputs excluded from Git.
+
+## Bringup
+
+Support the robot and verify the physical stop before powering actuators.
+Configure CAN interfaces, then start the stack:
+
+```bash
 sudo ./scripts/bringup_canbus.sh
-```
-
-#### Terminal 2: Serial IMU Node
-```bash
-cd /home/erc/sim2real
-./scripts/bringup_imu.sh
-```
-
-#### Terminal 3: Real-Time C++ CAN Node (200 Hz)
-```bash
-cd /home/erc/sim2real
-source ~/sim2real/scripts/source_ros.sh
+source scripts/source_ros.sh
 source install/setup.bash
-ros2 run jaguar_control robstride_can_node
-```
-
-#### Terminal 4: Sensor Diagnostics Dashboard
-```bash
-cd /home/erc/sim2real
-source ~/sim2real/scripts/source_ros.sh
-python3 scripts/check_states.py
-```
-
-#### Terminal 5: Sim-to-Real RL Controller Node
-```bash
-cd /home/erc/sim2real
-source ~/sim2real/scripts/source_ros.sh
-source install/setup.bash
-ros2 run jaguar_control nxp_jaguar_controller.py
-```
-
-#### Terminal 6: Teleoperation Hub
-```bash
-cd /home/erc/sim2real
-source ~/sim2real/scripts/source_ros.sh
-source install/setup.bash
-ros2 run jaguar_control keyboard_teleop.py
-```
-
-Execution sequence:
-1. Press **2**: Robot transitions to nominal stance (`STANDUP`).
-2. Press **3**: Robot enables RL locomotion policy (`WALK`).
-3. Steer with **W / S / A / D / Q / E**.
-4. Press **1** to sit down (`STANDBY`), or **SPACE** for Emergency Stop.
-
-### Monolithic Bringup (ROS 2 Launch)
-
-```bash
-# 1. Bring up CAN interfaces:
-sudo /home/erc/sim2real/scripts/bringup_canbus.sh
-
-# 2. Launch full stack:
-source ~/sim2real/scripts/source_ros.sh
-source /home/erc/sim2real/install/setup.bash
 ros2 launch jaguar_control sim2real.launch.py
 ```
 
-The launch file starts the teleop hub on the robot PC for direct Xbox input.
-For interactive keyboard control, disable the launch-managed instance and run
-the hub in a separate robot-PC terminal:
+The launch starts IMU, C++ hardware, Xbox input, mux and controller. The
+controller starts in passive `STANDBY`; launch does not auto-stand or auto-walk.
+Set `use_cpp_hardware:=false` only when the Python fallback is required.
+See [launch arguments and fault recovery](launch/README.md).
+
+## Xbox and keyboard
+
+Xbox has priority while its heartbeat is fresh (default 0.30 s). Left stick
+controls X/Y and right stick controls yaw. Xbox acceleration is limited to
+1 m/s² and 1 rad/s² by default. Deceleration follows the input immediately,
+including stick release to zero, on the next mux cycle (20 ms). Reversal stops
+the old direction immediately and accelerates the new direction from zero.
+The planar acceleration limit applies to the combined X/Y change.
+
+Start terminal keyboard control separately:
 
 ```bash
-ros2 launch jaguar_control sim2real.launch.py with_teleop:=false
-# In another terminal on the robot PC:
-ros2 run jaguar_control keyboard_teleop.py
+ros2 run jaguar_control keyboard_cmd_vel.py
 ```
 
-The hub reads `/dev/input/js*` directly, so the separate `joy_node` remains
-disabled by default. Velocity uses `/cmd_vel`; mode-button pulses use `/joy`.
+Hold W/A/S/D and Q/E; P/O adjusts the target. SPACE requests safe park.
+The keyboard source refuses input while a local joystick is connected.
+See [the script guide](scripts/README.md) for mode controls and utilities.
 
-## 9. Diagnostic and Calibration Utilities
-
-> [!NOTE]
-> See [ZERO_CALIBRATION_GUIDE.md](file:///home/erc/sim2real/ZERO_CALIBRATION_GUIDE.md) for encoder offset calibration on the 12 actuators.
-
-- **CAN ID Discovery**:
-  ```bash
-  python3 scripts/scan_robostride_ids.py
-  ```
-- **Mechanical Zero Calibration**:
-  Place legs in the Relax Pose, then run:
-  ```bash
-  python3 scripts/set_robostride_zero.py
-  ```
-- **Sit-Stand Trajectory Validation**:
-  ```bash
-  python3 scripts/test_sit_stand.py
-  ```
-- **Passive Joint Encoder Readout**:
-  ```bash
-  python3 scripts/check_joints.py
-  ```
-
-## 10. Safety Systems and Failsafes
-
-1. **Orientation Watchdog (Tilt Protection)**: If projected gravity $g_z > -0.5$ (tilt angle $> 60^\circ$), the controller disables locomotion and returns to `STANDBY`.
-2. **Communication Watchdog**: If IMU or CAN communication delays exceed 0.1 s, the node shuts off motor torques.
-3. **Thermal Protection**: Actuator diagnostic routines issue warnings when motor temperature exceeds $75^\circ\text{C}$.
-
-## 11. MuJoCo Sim-to-Sim Validation
-
-Validate the RL locomotion policy in MuJoCo:
-```bash
-python3 sim2sim/sim2sim_mujoco.py --terrain flat
-python3 sim2sim/sim2sim_mujoco.py --terrain rough
-```
-
-Keyboard mapping in MuJoCo:
-- `1`: Standby (zero angles)
-- `2`: Stand Up (quintic trajectory)
-- `3`: Walk (RL policy active)
-- `W / S / A / D / Q / E`: Planar velocity commands
-
-## 12. Kinematic and Reward Formulation Notes
-
-### 1. True Foot Tip Clearance Kinematics
-The URDF `tibia_link` origin frame resides at the proximal knee joint ($Z \approx 0.44\text{ m}$). Measuring clearance from the link origin fails to reflect physical ground clearance at the foot pad.
-
-The distal contact point is computed from the lowest mesh vertex in `Fr_tibia_pitch.STL`:
-$$\mathbf{p}_{\text{tip\_local}} = [+\mathbf{0.087\text{ m}}, \mathbf{0.0\text{ m}}, -\mathbf{0.1634\text{ m}}]$$
-
-The reward function `foot_clearance_dreamwaq` maps this offset to the world frame using the tibia link rotation matrix $\mathbf{R}_{\text{tibia}}(q)$:
-$$\mathbf{p}_{\text{foot\_tip, world}} = \mathbf{p}_{\text{tibia, world}} + \mathbf{R}_{\text{tibia}}(\mathbf{p}_{\text{tip\_local}})$$
-
-This formulation enforces physical foot clearance during the swing phase.
-
-### 2. Base Height Ground Clearance
-When the chassis collapses to the floor ($\approx 10\text{ cm}$), the entire shank rests horizontally. Contact sensors trigger across the shank surface, creating a false stance height estimation ($\approx 23\text{ cm}$).
-
-The reward `base_height_l2_safe` calculates true vertical clearance between the base origin and the ground plane ($Z_{\text{root}} - Z_{\text{ground}}$), anchoring stance height at **0.21 m**.
-
-### 3. Stand-Still Joint Deviation Penalty
-When planar velocity commands drop below threshold ($\|\mathbf{v}_{\text{cmd}}\| < 0.1\text{ m/s}$), the `stand_still` reward penalizes joint deviations from nominal stance $q_0$ (front hip/knee `-1.51/1.22 rad`, rear hip/knee `-1.49/1.20 rad`, rolls `0.0 rad`). This prevents standing drift and limit-cycle oscillations while stationary.
-
-### 4. Unitree A1-Style Analytical Spherical Foot Contact Modeling
-Previously, NXP Jaguar modeled foot ground interaction using the convex-hull approximation of the entire tibia CAD mesh (`physics:approximation = "convexHull"`). In high-frequency physics engines (PhysX), polygonal mesh contacts suffer from:
-1. **Discontinuous Normal Vectors & Force Spikes**: As the shank rotates during stance, the contact point abruptly jumps between mesh facets and vertices ("popping"), causing high impulsive torque chatter in the actuators.
-2. **Erratic Contact Sensor Triggers**: Polygonal chatter creates high-frequency false positives/negatives in PhysX `contact_forces`, corrupting the `feet_air_time` reward and stance phase estimation.
-3. **High Computational Overhead**: Iterative GJK/EPA mesh collision detection is computationally heavier and susceptible to numerical penetration compared to analytical shapes.
-
-#### Architecture Adopted from Unitree A1 (`a1.urdf`):
-Following the industry-standard quadruped design (Unitree A1/Go1/Go2, ANYmal, Boston Dynamics Spot), contact modeling is decoupled into:
-- **Shank Bone Collision**: A slender primitive box (`<box size="0.02 0.02 0.12"/>`) along the tibia bone. This prevents the shank from clipping through obstacles while maintaining a clearance of $> 4.3\text{ cm}$ above the ground plane during normal gait.
-- **Dedicated Foot Sphere Contact**: An explicit rigid link attached via a fixed joint (`dont_collapse="true"`) at the distal foot pad, with collision geometry defined as a **pure primitive sphere of radius $R = 0.01894\text{ m}$ (18.94 mm radius, 37.88 mm diameter)**:
-  - **FR / BR**: $\mathbf{p}_{\text{foot}} = [+0.1035\text{ m}, -0.0175\text{ m}, -0.1445\text{ m}]$, with sphere bottom patch at $Z = -0.16344\text{ m}$ (exactly $0.0\text{ mm}$ gap, perfectly flush with the metal shank).
-  - **FL / BL**: $\mathbf{p}_{\text{foot}} = [+0.1035\text{ m}, +0.0175\text{ m}, -0.1445\text{ m}]$, with sphere bottom patch at $Z = -0.16344\text{ m}$ (exactly $0.0\text{ mm}$ gap, perfectly flush with the metal shank).
-  - **Flush Tangency (Gap = 0 mm)**: Protrusion is reduced to exactly $0.0\text{ mm}$ ($0.0000\text{ m}$), making the lowest tangent point of the analytical sphere contact surface coincide perfectly with the flat bottom face of the tibia foot pad ($Z = -0.16344\text{ m}$), delivering seamless continuous contact kinematics with zero artificial height bulge.
-  - **MuJoCo & IsaacLab Full Parity**: Dedicated `<geom name="*_foot" type="sphere" ...>` elements are defined identically across both IsaacLab (`resources/nxp_jaguar.usd`) and MuJoCo (`models/nxp_jaguar.xml`), ensuring the black spherical feet render and simulate identically in both environments.
-
-#### Physical Advantages:
-- **Smooth Rolling Contact**: Exact analytical sphere normals ($\mathbf{n} = (\mathbf{x}_{\text{sphere}} - \mathbf{x}_{\text{ground}}) / R$) eliminate contact chatter across arbitrary foot roll and pitch angles.
-- **Clean Contact Force Sensing**: Contact sensors target `SceneEntityCfg("contact_forces", body_names=".*_foot")` in IsaacLab and `geom name="*_foot"` in MuJoCo, delivering clean, continuous normal force profiles for gait phase detection and `feet_air_time` rewards.
-- **Zero Height Bias**: Gap of $0.0\text{ mm}$ aligns analytical ground contact height directly with the CAD tibia frame, avoiding any height offsets between raw kinematics and simulation contact solvers.
-- **$O(1)$ Solver Execution**: Analytical sphere-to-plane collision tests drastically increase simulation throughput and numerical stability in both PhysX and MuJoCo.
-
-### 5. Velocity Tracking Error L2 Penalties (Anti-Stall, Anti-Stuck & Yaw Drift Control)
-In standard exponential velocity tracking rewards ($r = w \exp(-\|\mathbf{v}_{\text{cmd}} - \mathbf{v}\|^2 / \sigma^2)$), when the robot encounters an obstacle or steep incline and becomes stuck ($\mathbf{v} \approx \mathbf{0}$), or refuses to turn ($\omega_z \approx 0$), the reward merely drops to near zero ($\approx 0.02$). Without an explicit penalty, the policy can find a degenerate passive local optimum: resting motionlessly against obstacles or resisting steering commands to avoid joint power and acceleration penalties.
-
-#### a. Linear Velocity Tracking Error L2 Penalty (`track_lin_vel_xy_l2`):
-Introduces an explicit quadratic penalty on linear velocity tracking error in the robot base frame:
-$$r_{\text{track\_lin\_l2}} = -w_{\text{lin\_l2}} \cdot \sum_{i \in \{x, y\}} (v_{\text{cmd}, i} - v_{\text{actual}, i})^2$$
-With $w_{\text{lin\_l2}} = -1.0$, a stalled robot commanded at $1.0\text{ m/s}$ incurs a continuous negative penalty of $-1.0$ per timestep (accumulating $-1000$ per episode). This creates an unyielding gradient compelling the policy to step actively, overcome obstacles, and never remain passively stuck.
-
-#### b. Angular Velocity (Yaw) Tracking Error L2 Penalty (`track_ang_vel_z_l2`):
-Introduces an explicit quadratic penalty on angular velocity $Z$ (yaw) tracking error in the robot base frame:
-$$r_{\text{track\_ang\_l2}} = -w_{\text{ang\_l2}} \cdot (\omega_{\text{cmd}, z} - \omega_{\text{actual}, z})^2$$
-With $w_{\text{ang\_l2}} = -0.5$, this term penalizes:
-1. **Yaw Stall**: Resisting turning commands or failing to pivot around $Z$ when steering is requested.
-2. **Uncommanded Yaw Drift**: Spinning out, twisting, or drifting off heading when commanded to walk straight or stand still ($\omega_{\text{cmd}, z} = 0$).
-Together, these terms maintain precise heading and drive execution across challenging rough terrains and obstacles.
-
-## Standalone CAN driver using the CyberGear protocol
-
-The native `robstride_can_node` uses packet encoding and feedback decoding copied
-from the pinned Pion CyberGear driver core. It runs directly as a ROS node without
-`controller_manager`; see [the migration and IMU comparison](docs/cybergear_driver_and_imu.md)
-for provenance, parameters, interfaces, and remaining validation.
+Calibrate Xbox without editing installed package files:
 
 ```bash
-source ~/sim2real/scripts/source_ros.sh
-cd /path/to/jaguar_workspace
-colcon build --packages-select jaguar_control --symlink-install
-source install/setup.bash
-ros2 launch jaguar_control robstride_standalone.launch.py
+ros2 run jaguar_control calibrate_xbox.py
 ```
 
-The launch starts only the CAN hardware node, which configures and enables motors
-on `can0` and `can1`. It does not launch the RL policy or the IMU. Use the existing
-`sim2real.launch.py` for the complete deployment stack.
+The generated user profile overrides the factory JSON after input-node restart.
+
+## Safety and recovery
+
+Normal control torque is capped at 13.5 Nm. The controller's configurable
+feedback threshold defaults to 13.8 Nm with five-cycle debounce. Recoverable
+faults request `SAFE_PARK`; failed parking or unusable feedback escalates to
+an E-stop. Sensor freshness, position/tracking limits and timing checks remain
+active. Tilt protection requests safe shutdown rather than automatically
+resuming motion. Standby uses zero stiffness and damping.
+
+`torque_safety_enabled:=false` changes only the controller feedback overtorque
+watchdog to logging; driver limits and other safeguards remain active.
+Recovery requires manual driver/controller reset, fresh feedback and explicit
+re-arming; see [the recovery procedure](launch/README.md).
+
+## Calibration, diagnostics and offline tools
+
+Calibration and direct motor tools are manual entry points and are not started
+by normal bringup. Their roles and commands are listed in
+[`scripts/README.md`](scripts/README.md).
+
+- [PACE collection](docs/pace_system_identification.md) and
+  [validation](docs/pace_calibration_validation.md) retain their offline tools
+  and guarded active chirp workflow.
+- `export_adaboot_policy.py` and `export_adaptive_policy.py` require explicit
+  model input paths. Replacing the default policy requires `--set-default`.
+- `record_sim2real_benchmark.py` and `monitor_joints.py` provide manual telemetry.
+- [CAN driver provenance and IMU details](docs/cybergear_driver_and_imu.md).
+- [Training kinematics/reward notes](docs/training_notes.md).
+
+This repository deploys ROS 2 control. ROS 1 nodes/launches and the incomplete
+MuJoCo launch have been removed; simulation belongs to the training workspace.

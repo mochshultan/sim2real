@@ -7,7 +7,6 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 | Launch File | Description | Command |
 | :--- | :--- | :--- |
 | [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, RobStride C++ CAN node (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
-| [`sim2sim_mujoco.launch.py`](./sim2sim_mujoco.launch.py) | Starts the MuJoCo simulation with keyboard teleoperation. | `ros2 launch jaguar_control sim2sim_mujoco.launch.py terrain:=rough` |
 
 ### Arguments for `sim2real.launch.py`
 
@@ -79,21 +78,17 @@ returns the controller to passive `STANDBY`, not walking. The hardware reset pat
 is available only with `use_cpp_hardware:=true`; it has not been validated on a
 physical robot.
 
-## 2. Sensors and Perception
+## 2. Standalone driver and display
 
-| Launch File | Description |
-| :--- | :--- |
-| [`fast_lio.launch`](./fast_lio.launch) | Starts FAST-LIO LiDAR-inertial odometry, point cloud filter, and elevation mapping. |
-| [`livox.launch`](./livox.launch) | Starts the Livox LiDAR driver. |
-| [`msg_MID360.launch`](./msg_MID360.launch) | Starts Livox MID-360 LiDAR driver with custom packet format. |
-| [`gnss.launch`](./gnss.launch) | Starts RTK-GNSS serial receiver node. |
-| [`simple_grid.launch`](./simple_grid.launch) | Starts elevation grid mapping. |
+| Launch | Purpose | Configuration |
+| --- | --- | --- |
+| `robstride_standalone.launch.py` | Start only the C++ driver, with startup fault clearing disabled by default | `config_file` defaults to `sim2real.yaml`; `motor_params_file` to `cybergear_motor_params.yaml` |
+| `display.launch.py` | Start robot_state_publisher and RViz 2 | `model` defaults to `urdf/nxp_jaguar.urdf`; `rviz_config` to `config/jaguar_display.rviz` |
 
-## 3. Visualization and Logging
+Display launch reads the selected `model` argument at execution time. The URDF
+uses `package://jaguar_control/meshes/...` references so the same assets work
+from source and package installation. Joint states must come from a driver or
+another publisher.
 
-| Launch File | Description |
-| :--- | :--- |
-| [`display.launch`](./display.launch) | Starts `robot_state_publisher` and RViz for URDF model inspection. |
-| [`display_livox.launch`](./display_livox.launch) | Opens RViz with Livox point cloud displays. |
-| [`rosbag_recorder.launch`](./rosbag_recorder.launch) | Records topics (`/joint_states`, `/Imu_data`, `/cmd_vel`, `/livox/lidar`). |
-| [`rosbag_display.launch`](./rosbag_display.launch) | Replays recorded rosbags in RViz. |
+The IMU package also provides `serial_imu/imu_spec_msg.launch.py` for standalone
+serial diagnostics. Legacy ROS 1 and incomplete simulator launches were removed.

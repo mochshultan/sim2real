@@ -44,7 +44,7 @@ connected.
 
 | Script | Type | Description |
 | :--- | :---: | :--- |
-| [`calibrate_sit_zero.py`](./calibrate_sit_zero.py) | Interactive Tool | Calibrates hip and knee angles in steps of 0.05 rad and saves offsets with `[S]`. |
+| [`calibrate_sit_zero.py`](./calibrate_sit_zero.py) | Interactive Tool | Calibrates hip and knee angles in steps of 0.05 rad and prints offsets for manual review with `[S]`. |
 | [`calibrate_stand_pose.py`](./calibrate_stand_pose.py) | Interactive Tool | Tunes standing joint angles in steps of 0.05 rad and prints posture values on exit with `[S]`. |
 | [`calibrate_parallel_link.py`](./calibrate_parallel_link.py) | Interactive Tool | Holds one suspended leg with low-gain impedance control and independently tests hip motion and the 1:1 knee parallelogram transmission. |
 | [`test_sit_stand.py`](./test_sit_stand.py) | Interactive Tool | Tests sit (0 rad) and stand transitions with S-curve cosine trajectories via keyboard or gamepad. |
@@ -62,7 +62,7 @@ connected.
 | [`bringup_canbus.sh`](./bringup_canbus.sh) | Sets up `can0` and `can1` SocketCAN interfaces at 1 Mbps with queue length 1000. |
 | [`bringup_imu.sh`](./bringup_imu.sh) | Sets `/dev/ttyUSB0` permissions and starts the `serial_imu talker` node. |
 | [`plot_torques.sh`](./plot_torques.sh) | Opens `rqt_plot` with 12 RobStride motor channels. |
-| [`stop_all.sh`](./stop_all.sh) | Stops robot processes, ROS 2 daemons, and CAN interfaces. |
+| [`stop_all.sh`](./stop_all.sh) | Requests emergency stop, sends SIGINT to owning processes, and waits for cleanup; CAN interfaces stay up. |
 | [`wifi_switch.sh`](./wifi_switch.sh) | Saves a static IPv4 configuration for `erc_5G` and switches between `erc_5G` and `ntnu_guest` using NetworkManager. |
 
 ### Pindah Wi-Fi dengan IP statis
@@ -116,13 +116,32 @@ kembali memakai alamat pada jaringan tujuan.
 | [`pace/analyze_pace_replay.py`](./pace/analyze_pace_replay.py) | Offline analysis | Reports per-joint position and velocity RMSE from a saved PACE replay. |
 | [`pace/run_jaguar_chirp.py`](./pace/run_jaguar_chirp.py) | Guarded active test | Opt-in FR three-joint chirp with separate ascending fit and descending validation profiles, timestamped command CSV, and JSON metadata. Both are limited to +/-0.03 rad on a fully suspended robot with a 3 Nm driver torque cap. |
 
-## 6. Sensor Transforms and Math
+## 6. Shared modules and offline tools
 
-| Script | Description |
-| :--- | :--- |
-| [`livox_cloud_transform.py`](./livox_cloud_transform.py) | Converts Livox PointCloud messages to `sensor_msgs/PointCloud2`. |
-| [`livox_imu_transform.py`](./livox_imu_transform.py) | Applies pitch and roll mounting corrections to Livox IMU data. |
-| [`livox_odom_transform.py`](./livox_odom_transform.py) | Publishes static transform from `/odom` to `/camera_init`. |
-| [`jaguar_utils.py`](./jaguar_utils.py) | Utilities for URDF parsing, TorchScript policy loading, and interpolation. |
-| [`isaacgym_torch_utils.py`](./isaacgym_torch_utils.py) | Quaternion and vector math routines. |
-| [`legged_gym_math.py`](./legged_gym_math.py) | Yaw transformations and angle wrapping routines. |
+| File | Responsibility | Configuration / input |
+| --- | --- | --- |
+| `policy_observation.py` | Build 45-D observations and time-major history; no ROS/CAN dependency | Nominal pose supplied by controller; training scales fixed in code |
+| `project_paths.py` | Locate package assets in source/install and user calibration | Package share and XDG config directory |
+| `motion_limits.py` | Declare and validate shared ROS velocity/acceleration parameters | `config/sim2real.yaml`, ROS overrides |
+| `joint_layout.py` | Shared ROS/Isaac joint names, aliases and permutations | Fixed hardware/policy ordering |
+| `parallel_link_mapping.py` | Motor/virtual joint conversion for linkage calibration | Explicit function arguments |
+| `export_adaboot_policy.py` | Export estimator/actor TorchScript policy | Required `--checkpoint`; optional `--models-dir`, `--tag`, `--set-default` |
+| `export_adaptive_policy.py` | Export baseline TorchScript/ONNX | Required `--checkpoint`; optional `--raw-policy`; replacement requires `--set-default` |
+| `pace/run_jaguar_pace_calibration.py` | Orchestrate external PACE fitting and validation | CLI paths to Isaac Lab, PACE, bags and command CSVs |
+
+Export and PACE offline tools run from source with `python3 scripts/...`; they
+are not installed as robot runtime nodes. Model export requires CPU PyTorch;
+ONNX export also needs the ONNX dependencies used by PyTorch.
+
+## 7. Manual diagnostics and Xbox calibration
+
+| Installed executable | Purpose |
+| --- | --- |
+| `jaguar_cmd_vel_mux.py` | Select fresh Xbox/keyboard input and limit Xbox acceleration; deceleration is immediate |
+| `calibrate_xbox.py` | Write a user calibration profile in the XDG config directory |
+| `monitor_joints.py` | Monitor joint telemetry and jumps without publishing motor commands |
+| `record_sim2real_benchmark.py` | Record benchmark telemetry; inspect CLI options before enabling command overrides |
+
+Run installed tools as `ros2 run jaguar_control <executable>`. Gamepad input
+reads the user calibration first, then `config/gamepad_calibration.json` from
+package share. Restart the input node after saving calibration.
