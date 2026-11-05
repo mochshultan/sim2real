@@ -9,6 +9,7 @@ Supports:
 """
 
 import os
+import math
 import sys
 import time
 import glob
@@ -82,16 +83,21 @@ class XboxState:
 
     def compute_velocities(
         self,
-        max_vx: float = 1.5,
-        max_vy: float = 1.5,
-        max_wz: float = 1.2,
+        max_vx: float = 1.0,
+        max_vy: float = 1.0,
+        max_wz: float = 1.0,
         deadzone: float = DEADZONE_DEFAULT,
         calibration: Optional[Dict[str, Any]] = None,
+        linear_speed_base: float = 0.7,
+        linear_speed_boost: float = 1.0,
     ):
         """Computes robot command velocities with auto-calibrated zero-offset and deadzone."""
         calib = calibration
 
         def process_axis(raw_val: float, axis_name: str) -> float:
+            if not math.isfinite(raw_val):
+                return 0.0
+            raw_val = max(-1.0, min(1.0, raw_val))
             if calib and "axes" in calib and axis_name in calib["axes"]:
                 c = calib["axes"][axis_name]
                 center = c.get("center_offset", 0.0)
@@ -112,9 +118,13 @@ class XboxState:
         # Right Stick X -> Yaw Wz (Left is +Wz, Right is -Wz in ROS standard)
         rx = process_axis(-self.rx, "rx")
 
-        self.vx = round(float(ly * max_vx), 2)
-        self.vy = round(float(lx * max_vy), 2)
-        self.wz = round(float(rx * max_wz), 2)
+        speed_limit = linear_speed_limit(self.rt, linear_speed_base, linear_speed_boost)
+        vx = ly * min(max_vx, speed_limit)
+        vy = lx * min(max_vy, speed_limit)
+        scale = min(1.0, speed_limit / max(math.hypot(vx, vy), 1e-12))
+        self.vx = float(vx * scale)
+        self.vy = float(vy * scale)
+        self.wz = float(rx * max_wz)
 
     def get_active_buttons_str(self) -> str:
         """Returns readable string of currently pressed buttons."""
@@ -144,6 +154,83 @@ class XboxState:
         return new_s
 
 
+def linear_speed_limit(rt: float, base: float = 0.7, boost: float = 1.0) -> float:
+    """Interpolate the planar speed envelope from a normalized RT value."""
+    if not (math.isfinite(base) and math.isfinite(boost) and 0.0 < base <= boost):
+        raise ValueError("Require finite linear speeds: 0 < base <= boost")
+    trigger = max(0.0, min(1.0, rt)) if math.isfinite(rt) else 0.0
+    return base + (boost - base) * trigger
+
+
+def update_gamepad_state(state, raw_axes, raw_buttons, is_bt):
+    """Decode Linux joystick axes/buttons; ROS joy_node axes need sign inversion first."""
+    if is_bt:
+        # Linux Bluetooth Xbox Mapping (15-button layout)
+        state.btn_a = raw_buttons[0] if len(raw_buttons) > 0 else 0
+        state.btn_b = raw_buttons[1] if len(raw_buttons) > 1 else 0
+        state.btn_x = raw_buttons[3] if len(raw_buttons) > 3 else (raw_buttons[2] if len(raw_buttons) > 2 else 0)
+        state.btn_y = raw_buttons[4] if len(raw_buttons) > 4 else (raw_buttons[3] if len(raw_buttons) > 3 else 0)
+        state.btn_lb = raw_buttons[6] if len(raw_buttons) > 6 else 0
+        state.btn_rb = raw_buttons[7] if len(raw_buttons) > 7 else 0
+        state.btn_back = raw_buttons[10] if len(raw_buttons) > 10 else 0
+        state.btn_start = raw_buttons[11] if len(raw_buttons) > 11 else 0
+        state.btn_guide = raw_buttons[12] if len(raw_buttons) > 12 else 0
+        state.btn_thumb_l = raw_buttons[13] if len(raw_buttons) > 13 else 0
+        state.btn_thumb_r = raw_buttons[14] if len(raw_buttons) > 14 else 0
+
+        # Axes for Bluetooth: 0:LX, 1:LY, 2:RX (ABS_Z), 3:RY (ABS_RZ), 4:RT (ABS_GAS), 5:LT (ABS_BRAKE), 6:DpadX, 7:DpadY
+        state.lx = raw_axes[0] if len(raw_axes) > 0 else 0.0
+        state.ly = -raw_axes[1] if len(raw_axes) > 1 else 0.0  # Up is +
+        state.rx = raw_axes[2] if len(raw_axes) > 2 else 0.0
+        state.ry = -raw_axes[3] if len(raw_axes) > 3 else 0.0  # Up is +
+
+        # Triggers: -1.0 (released) .. +1.0 (pressed) -> map to 0.0 .. 1.0
+        if len(raw_axes) > 4:
+            state.rt = min(1.0, max(0.0, (raw_axes[4] + 1.0) / 2.0))
+        if len(raw_axes) > 5:
+            state.lt = min(1.0, max(0.0, (raw_axes[5] + 1.0) / 2.0))
+
+        # D-Pad from Hat axes
+        if len(raw_axes) > 6:
+            state.dpad_left = 1 if raw_axes[6] < -0.5 else 0
+            state.dpad_right = 1 if raw_axes[6] > 0.5 else 0
+        if len(raw_axes) > 7:
+            state.dpad_up = 1 if raw_axes[7] < -0.5 else 0
+            state.dpad_down = 1 if raw_axes[7] > 0.5 else 0
+
+    else:
+        # Linux USB xpad Mapping (11-button layout)
+        state.btn_a = raw_buttons[0] if len(raw_buttons) > 0 else 0
+        state.btn_b = raw_buttons[1] if len(raw_buttons) > 1 else 0
+        state.btn_x = raw_buttons[2] if len(raw_buttons) > 2 else 0
+        state.btn_y = raw_buttons[3] if len(raw_buttons) > 3 else 0
+        state.btn_lb = raw_buttons[4] if len(raw_buttons) > 4 else 0
+        state.btn_rb = raw_buttons[5] if len(raw_buttons) > 5 else 0
+        state.btn_back = raw_buttons[6] if len(raw_buttons) > 6 else 0
+        state.btn_start = raw_buttons[7] if len(raw_buttons) > 7 else 0
+        state.btn_guide = raw_buttons[8] if len(raw_buttons) > 8 else 0
+        state.btn_thumb_l = raw_buttons[9] if len(raw_buttons) > 9 else 0
+        state.btn_thumb_r = raw_buttons[10] if len(raw_buttons) > 10 else 0
+
+        # Axes for USB xpad: 0:LX, 1:LY, 2:LT, 3:RX, 4:RY, 5:RT, 6:DpadX, 7:DpadY
+        state.lx = raw_axes[0] if len(raw_axes) > 0 else 0.0
+        state.ly = -raw_axes[1] if len(raw_axes) > 1 else 0.0
+        state.rx = raw_axes[3] if len(raw_axes) > 3 else 0.0
+        state.ry = -raw_axes[4] if len(raw_axes) > 4 else 0.0
+
+        if len(raw_axes) > 2:
+            state.lt = min(1.0, max(0.0, (raw_axes[2] + 1.0) / 2.0))
+        if len(raw_axes) > 5:
+            state.rt = min(1.0, max(0.0, (raw_axes[5] + 1.0) / 2.0))
+
+        if len(raw_axes) > 6:
+            state.dpad_left = 1 if raw_axes[6] < -0.5 else 0
+            state.dpad_right = 1 if raw_axes[6] > 0.5 else 0
+        if len(raw_axes) > 7:
+            state.dpad_up = 1 if raw_axes[7] < -0.5 else 0
+            state.dpad_down = 1 if raw_axes[7] > 0.5 else 0
+
+
 class LinuxGamepadReader:
     """
     Robust Linux Gamepad Reader with auto-discovery, auto-reconnect,
@@ -154,10 +241,15 @@ class LinuxGamepadReader:
         self,
         callback: Optional[Callable[[XboxState, Dict[str, Any]], None]] = None,
         deadzone: float = DEADZONE_DEFAULT,
-        max_vx: float = 1.5,
-        max_vy: float = 1.5,
-        max_wz: float = 1.2,
+        max_vx: float = 1.0,
+        max_vy: float = 1.0,
+        max_wz: float = 1.0,
+        linear_speed_base: float = 0.7,
+        linear_speed_boost: float = 1.0,
     ):
+        linear_speed_limit(0.0, linear_speed_base, linear_speed_boost)
+        self.linear_speed_base = linear_speed_base
+        self.linear_speed_boost = linear_speed_boost
         self.callback = callback
         self.deadzone = deadzone
         self.max_vx = max_vx
@@ -226,6 +318,9 @@ class LinuxGamepadReader:
                 map_type_str = f"Bluetooth ({num_buttons}-btn)" if is_bt_map else f"USB/xpad ({num_buttons}-btn)"
 
                 raw_axes = [0.0] * max(8, num_axes)
+                # Unknown trigger positions must mean released, never half boost.
+                for trigger_axis in ((4, 5) if is_bt_map else (2, 5)):
+                    raw_axes[trigger_axis] = -1.0
                 raw_buttons = [0] * max(16, num_buttons)
 
                 with self.lock:
@@ -279,6 +374,7 @@ class LinuxGamepadReader:
                     self.state.connected = False
                     self.state.name = "Terputus"
                     self.state.lx = self.state.ly = self.state.rx = 0.0
+                    self.state.lt = self.state.rt = 0.0
                     self.state.vx = self.state.vy = self.state.wz = 0.0
                 if self.callback:
                     self.callback(self.state, {})
@@ -290,71 +386,7 @@ class LinuxGamepadReader:
         with self.lock:
             self.state.last_update_time = time.time()
 
-            if is_bt:
-                # Linux Bluetooth Xbox Mapping (15-button layout)
-                self.state.btn_a = raw_buttons[0] if len(raw_buttons) > 0 else 0
-                self.state.btn_b = raw_buttons[1] if len(raw_buttons) > 1 else 0
-                self.state.btn_x = raw_buttons[3] if len(raw_buttons) > 3 else (raw_buttons[2] if len(raw_buttons) > 2 else 0)
-                self.state.btn_y = raw_buttons[4] if len(raw_buttons) > 4 else (raw_buttons[3] if len(raw_buttons) > 3 else 0)
-                self.state.btn_lb = raw_buttons[6] if len(raw_buttons) > 6 else 0
-                self.state.btn_rb = raw_buttons[7] if len(raw_buttons) > 7 else 0
-                self.state.btn_back = raw_buttons[10] if len(raw_buttons) > 10 else 0
-                self.state.btn_start = raw_buttons[11] if len(raw_buttons) > 11 else 0
-                self.state.btn_guide = raw_buttons[12] if len(raw_buttons) > 12 else 0
-                self.state.btn_thumb_l = raw_buttons[13] if len(raw_buttons) > 13 else 0
-                self.state.btn_thumb_r = raw_buttons[14] if len(raw_buttons) > 14 else 0
-
-                # Axes for Bluetooth: 0:LX, 1:LY, 2:RX (ABS_Z), 3:RY (ABS_RZ), 4:RT (ABS_GAS), 5:LT (ABS_BRAKE), 6:DpadX, 7:DpadY
-                self.state.lx = raw_axes[0] if len(raw_axes) > 0 else 0.0
-                self.state.ly = -raw_axes[1] if len(raw_axes) > 1 else 0.0  # Up is +
-                self.state.rx = raw_axes[2] if len(raw_axes) > 2 else 0.0
-                self.state.ry = -raw_axes[3] if len(raw_axes) > 3 else 0.0  # Up is +
-
-                # Triggers: -1.0 (released) .. +1.0 (pressed) -> map to 0.0 .. 1.0
-                if len(raw_axes) > 4:
-                    self.state.rt = min(1.0, max(0.0, (raw_axes[4] + 1.0) / 2.0))
-                if len(raw_axes) > 5:
-                    self.state.lt = min(1.0, max(0.0, (raw_axes[5] + 1.0) / 2.0))
-
-                # D-Pad from Hat axes
-                if len(raw_axes) > 6:
-                    self.state.dpad_left = 1 if raw_axes[6] < -0.5 else 0
-                    self.state.dpad_right = 1 if raw_axes[6] > 0.5 else 0
-                if len(raw_axes) > 7:
-                    self.state.dpad_up = 1 if raw_axes[7] < -0.5 else 0
-                    self.state.dpad_down = 1 if raw_axes[7] > 0.5 else 0
-
-            else:
-                # Linux USB xpad Mapping (11-button layout)
-                self.state.btn_a = raw_buttons[0] if len(raw_buttons) > 0 else 0
-                self.state.btn_b = raw_buttons[1] if len(raw_buttons) > 1 else 0
-                self.state.btn_x = raw_buttons[2] if len(raw_buttons) > 2 else 0
-                self.state.btn_y = raw_buttons[3] if len(raw_buttons) > 3 else 0
-                self.state.btn_lb = raw_buttons[4] if len(raw_buttons) > 4 else 0
-                self.state.btn_rb = raw_buttons[5] if len(raw_buttons) > 5 else 0
-                self.state.btn_back = raw_buttons[6] if len(raw_buttons) > 6 else 0
-                self.state.btn_start = raw_buttons[7] if len(raw_buttons) > 7 else 0
-                self.state.btn_guide = raw_buttons[8] if len(raw_buttons) > 8 else 0
-                self.state.btn_thumb_l = raw_buttons[9] if len(raw_buttons) > 9 else 0
-                self.state.btn_thumb_r = raw_buttons[10] if len(raw_buttons) > 10 else 0
-
-                # Axes for USB xpad: 0:LX, 1:LY, 2:LT, 3:RX, 4:RY, 5:RT, 6:DpadX, 7:DpadY
-                self.state.lx = raw_axes[0] if len(raw_axes) > 0 else 0.0
-                self.state.ly = -raw_axes[1] if len(raw_axes) > 1 else 0.0
-                self.state.rx = raw_axes[3] if len(raw_axes) > 3 else 0.0
-                self.state.ry = -raw_axes[4] if len(raw_axes) > 4 else 0.0
-
-                if len(raw_axes) > 2:
-                    self.state.lt = max(0.0, (raw_axes[2] + 1.0) / 2.0)
-                if len(raw_axes) > 5:
-                    self.state.rt = max(0.0, (raw_axes[5] + 1.0) / 2.0)
-
-                if len(raw_axes) > 6:
-                    self.state.dpad_left = 1 if raw_axes[6] < -0.5 else 0
-                    self.state.dpad_right = 1 if raw_axes[6] > 0.5 else 0
-                if len(raw_axes) > 7:
-                    self.state.dpad_up = 1 if raw_axes[7] < -0.5 else 0
-                    self.state.dpad_down = 1 if raw_axes[7] > 0.5 else 0
+            update_gamepad_state(self.state, raw_axes, raw_buttons, is_bt)
 
             # Compute velocities
             self.state.compute_velocities(
@@ -363,6 +395,8 @@ class LinuxGamepadReader:
                 max_wz=self.max_wz,
                 deadzone=self.deadzone,
                 calibration=self.calibration,
+                linear_speed_base=self.linear_speed_base,
+                linear_speed_boost=self.linear_speed_boost,
             )
 
             # Detect rising edges (button presses 0 -> 1)

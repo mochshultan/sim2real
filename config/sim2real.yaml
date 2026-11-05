@@ -19,6 +19,11 @@ joy_node:
     linear_accel_limit: 1.0  # m/s^2; Xbox deceleration is immediate
     angular_accel_limit: 1.0  # rad/s^2; Xbox deceleration is immediate
 
+jaguar_unified_teleop:
+  ros__parameters:
+    linear_speed_base: 0.7  # m/s, combined X/Y speed with RT released
+    linear_speed_boost: 1.0  # m/s, combined X/Y speed with RT fully pressed
+
 jaguar_cmd_vel_mux:
   ros__parameters:
     xbox_timeout: 0.30

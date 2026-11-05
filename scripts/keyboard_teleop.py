@@ -28,7 +28,9 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy, Imu
 from std_msgs.msg import Bool, String
 
-from gamepad_reader import LinuxGamepadReader, XboxState
+from gamepad_reader import (LinuxGamepadReader, XboxState, linear_speed_limit,
+                            update_gamepad_state)
+from project_paths import load_default_config
 from motion_limits import declare_motion_limits
 
 # ANSI Colors
@@ -64,6 +66,14 @@ class UnifiedTeleopNode(Node):
         self.max_vx = limits["max_vx"]
         self.max_vy = limits["max_vy"]
         self.max_wz = limits["max_wz"]
+
+        defaults = load_default_config()["jaguar_unified_teleop"]["ros__parameters"]
+        for name in ("linear_speed_base", "linear_speed_boost"):
+            self.declare_parameter(name, defaults[name])
+        self.linear_speed_base = float(self.get_parameter("linear_speed_base").value)
+        self.linear_speed_boost = float(self.get_parameter("linear_speed_boost").value)
+        linear_speed_limit(0.0, self.linear_speed_base, self.linear_speed_boost)
+        self.linear_limit = self.linear_speed_base
 
         # Publishers
         # Teleop velocity uses /cmd_vel. /joy carries mode pulses only.
@@ -112,6 +122,8 @@ class UnifiedTeleopNode(Node):
             max_vx=self.max_vx,
             max_vy=self.max_vy,
             max_wz=self.max_wz,
+            linear_speed_base=self.linear_speed_base,
+            linear_speed_boost=self.linear_speed_boost,
         )
 
         # Match the policy/controller loop so fresh stick events reach it within one cycle.
@@ -152,39 +164,26 @@ class UnifiedTeleopNode(Node):
         if source == "raw" and self.gamepad_reader.is_connected():
             return
 
+        # joy_node negates Linux axes (including triggers). Decode through the
+        # same Bluetooth/USB mapping used by the direct reader.
+        state = XboxState()
+        state.connected = True
+        is_bt = len(msg.buttons) >= 15
+        update_gamepad_state(state, [-float(axis) for axis in msg.axes], msg.buttons, is_bt)
+        state.compute_velocities(
+            max_vx=self.max_vx, max_vy=self.max_vy, max_wz=self.max_wz,
+            deadzone=DEADZONE, linear_speed_base=self.linear_speed_base,
+            linear_speed_boost=self.linear_speed_boost,
+        )
         with self.lock:
-            previous = self.previous_ros_buttons[source]
-            current = list(msg.buttons)
-            self.previous_ros_buttons[source] = current
-            pressed = lambda i: (i < len(current) and current[i] == 1
-                                 and (i >= len(previous) or previous[i] != 1))
-
-            if len(msg.axes) >= 2:
-                ly = msg.axes[1] if len(msg.axes) > 1 else 0.0
-                lx = msg.axes[0] if len(msg.axes) > 0 else 0.0
-                rx = msg.axes[3] if len(msg.axes) > 3 else (msg.axes[2] if len(msg.axes) > 2 else 0.0)
-
-                self.input_source = source
-                self.xbox_active = True
-                self.last_remote_input = time.monotonic()
-                self.vx = round(float(np.clip(ly * self.max_vx, -self.max_vx, self.max_vx)), 2) if np.isfinite(ly) and abs(ly) >= DEADZONE else 0.0
-                self.vy = round(float(np.clip(-lx * self.max_vy, -self.max_vy, self.max_vy)), 2) if np.isfinite(lx) and abs(lx) >= DEADZONE else 0.0
-                self.wz = round(float(np.clip(-rx * self.max_wz, -self.max_wz, self.max_wz)), 2) if np.isfinite(rx) and abs(rx) >= DEADZONE else 0.0
-
-            if pressed(0):
-                self.current_state = "BERDIRI / STANDUP"
-                self.btn_standup_pulse = True
-                self.last_action = f"{C_CYAN}[ROS Joy A] Transisi ke BERDIRI (STANDUP){C_RESET}"
-            elif pressed(11 if len(current) >= 15 else 7):
-                self.btn_policy_toggle_pulse = True
-                self.last_action = "[ROS Joy Start] Toggle policy / stand requested"
-            elif pressed(2):
-                self.current_state = "DUDUK / STANDBY"
-                self.btn_sit_pulse = True
-                self.vx = 0.0
-                self.vy = 0.0
-                self.wz = 0.0
-                self.last_action = f"{C_YELLOW}[ROS Joy X] Transisi ke DUDUK (STANDBY){C_RESET}"
+            previous = XboxState()
+            update_gamepad_state(previous, [], self.previous_ros_buttons[source], is_bt)
+            self.previous_ros_buttons[source] = list(msg.buttons)
+            edges = {name: True for name in vars(state)
+                     if name.startswith("btn_") and getattr(state, name) and not getattr(previous, name)}
+            self._on_gamepad_event(state, edges)
+            self.input_source = source
+            self.last_remote_input = time.monotonic()
 
     def _on_gamepad_event(self, state: XboxState, edges: Dict[str, Any]):
         """Triggered on any analog or digital event from LinuxGamepadReader."""
@@ -193,6 +192,7 @@ class UnifiedTeleopNode(Node):
                 self.input_source = "gamepad"
                 self.xbox_active = True
                 self.vx, self.vy, self.wz = state.vx, state.vy, state.wz
+                self.linear_limit = linear_speed_limit(state.rt, self.linear_speed_base, self.linear_speed_boost)
             elif self.input_source == "gamepad":
                 self.xbox_active = False
                 self.vx = self.vy = self.wz = 0.0
