@@ -1,7 +1,7 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.actions import DeclareLaunchArgument, LogInfo, SetEnvironmentVariable
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -12,6 +12,11 @@ def generate_launch_description():
     default_config = os.path.join(pkg_dir, "config", "sim2real.yaml")
 
     # Launch arguments
+    domain_id_arg = DeclareLaunchArgument(
+        "domain_id",
+        default_value=EnvironmentVariable("ROS_DOMAIN_ID", default_value="1"),
+        description="Dedicated robot DDS domain; use the same ID in every teleop/CLI terminal",
+    )
     config_file_arg = DeclareLaunchArgument(
         "config_file",
         default_value=default_config,
@@ -149,6 +154,10 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        domain_id_arg,
+        SetEnvironmentVariable("ROS_DOMAIN_ID", LaunchConfiguration("domain_id")),
+        LogInfo(msg=["Jaguar DDS domain: ", LaunchConfiguration("domain_id"),
+                     "; all remote nodes and CLI terminals must use this domain and matching ROS distro."]),
         config_file_arg,
         policy_path_arg,
         with_imu_arg,
