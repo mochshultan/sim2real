@@ -77,7 +77,7 @@ flowchart TD
 - Removed the ROS 1 controller dependency chain, ROS 1 launches/transforms,
   unused message definition, duplicate runtime YAMLs, incomplete simulator
   entry point, old backup script, old models and duplicate mesh/URDF copies.
-- Retained the active policy, matching source checkpoint,
+- Retained the active policy, its identical named identity export, matching source checkpoint,
   deployment manifest, training snapshots and recorded experiment data.
 - Extracted observation/history into a ROS-independent module. Controller
   methods now separate parameter setup, policy verification, trajectory
@@ -85,17 +85,18 @@ flowchart TD
 - Centralized Python joint-order definitions and source/install asset lookup.
 - Installed runtime scripts separately from importable modules. Added missing
   manual diagnostics/calibration entry points and installed factory calibration.
-- Runtime installation includes only the default policy and deployment manifest,
+- Runtime installation includes the default policy, its named identity export and deployment manifest,
   avoiding training checkpoints in the installed package.
 - Registered Python, CAN, motion-safety and C serial-parser tests with CTest.
   Native assertion tests remain enabled in optimized builds.
 - Fixed display model overrides, updated RViz plugin names for ROS 2, and used
   one canonical URDF with package-resolved mesh references. Unused Gazebo/ros2_control blocks with external hardcoded paths were removed from the display URDF.
 
-The cleanup removed 136 old files (including 100 files under `models/`, 12
+The cleanup removed 135 old files (including 99 files under `models/`, 12
 configuration files, 10 launch files, eight scripts/backups, four unused foot-pad meshes and two message files).
-The duplicate named actor export was removed after the `new` branch snapshot;
-`models/policy.pt` retains its exact bytes and its manifest names that file.
+The named actor export is retained beside `models/policy.pt` as its identity
+pair. The manifest records `policy_file` and `identity_policy_file`, and a
+regression test requires both files to match the pinned policy SHA-256.
 The moved calibration profile and canonical URDF are retained at their new
 paths. A local recovery copy and the pre-cleanup working diff are in
 `/tmp/sim2real-cleanup-backup-20261105/`; this temporary directory is not a
@@ -184,7 +185,8 @@ sim2real/
 │   │   └── env.yaml
 │   ├── deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json
 │   ├── model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt
-│   └── policy.pt
+│   ├── policy.pt
+│   └── policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt
 ├── package.xml
 ├── scripts/
 │   ├── README.md

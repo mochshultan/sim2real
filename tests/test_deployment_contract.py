@@ -25,15 +25,19 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_policy_and_checkpoint_are_jaguar_29996_export(self):
+    def test_default_and_identity_policy_match_jaguar_29996_checkpoint(self):
         default_policy = ROOT / "models/policy.pt"
         checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
 
+        identity_policy = ROOT / "models" / "policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
+
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
+        self.assertEqual(_sha256(identity_policy), POLICY_SHA256)
         self.assertEqual(sorted(path.name for path in (ROOT / "models").glob("policy*.pt")),
-                         ["policy.pt"])
+                         ["policy.pt", identity_policy.name])
         manifest = json.loads((ROOT / "models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json").read_text())
         self.assertEqual(manifest["policy_file"], default_policy.name)
+        self.assertEqual(manifest["identity_policy_file"], identity_policy.name)
         self.assertEqual(manifest["policy_sha256"], POLICY_SHA256)
         self.assertEqual(manifest["checkpoint_sha256"], CHECKPOINT_SHA256)
         self.assertEqual(_sha256(checkpoint), CHECKPOINT_SHA256)

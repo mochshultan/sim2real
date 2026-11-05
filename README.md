@@ -17,7 +17,9 @@ This continues checkpoint 19997 for another 10k iterations.
 
 The source checkpoint is
 `models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt`.
-Its runtime actor is `models/policy.pt`, the only retained actor export.
+Its runtime actor is `models/policy.pt`. The identical named export
+`models/policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt`
+is retained as its identity pair. Both files must keep the same SHA-256.
 The checkpoint SHA-256 is
 `4544c25e7602a294b8ed6df58e98532c3a1a08b066741b4eab56e386b5e56311`;
 the policy SHA-256 is
@@ -142,7 +144,7 @@ run Python tests directly after sourcing Jazzy:
 python3 -m pytest tests -q
 ```
 
-Runtime installation includes the default policy and its deployment manifest.
+Runtime installation includes the default policy, its named identity pair and deployment manifest.
 The matching source checkpoint and training YAML snapshots stay
 in source for reproducibility. Old model variants have been removed.
 `build/`, `install/`, `log/`, virtual environments and Python caches are local
