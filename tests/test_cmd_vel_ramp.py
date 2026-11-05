@@ -50,11 +50,38 @@ class RampTests(unittest.TestCase):
         self.assertAlmostEqual(math.hypot(cmd.linear.x, cmd.linear.y), 0.01)
         self.assertAlmostEqual(cmd.angular.z, -0.02)
 
-    def test_release_and_reversal_are_smoothed(self):
+    def test_release_stops_all_axes_immediately(self):
         self.node.smoothed_xbox.linear.x = 0.5
-        self.assertAlmostEqual(self.tick(10.02).linear.x, 0.49)
+        self.node.smoothed_xbox.linear.y = -0.4
+        self.node.smoothed_xbox.angular.z = 0.8
+        cmd = self.tick(10.02)
+        self.assertEqual((cmd.linear.x, cmd.linear.y, cmd.angular.z), (0.0, 0.0, 0.0))
+
+    def test_partial_release_follows_target_immediately(self):
+        self.node.smoothed_xbox.linear.x = 0.8
+        self.node.smoothed_xbox.linear.y = -0.6
+        self.node.smoothed_xbox.angular.z = -0.7
+        self.node.xbox_cmd.linear.x = 0.3
+        self.node.xbox_cmd.linear.y = -0.2
+        self.node.xbox_cmd.angular.z = -0.1
+        cmd = self.tick(10.02)
+        self.assertEqual((cmd.linear.x, cmd.linear.y, cmd.angular.z), (0.3, -0.2, -0.1))
+
+    def test_reversal_accelerates_from_zero(self):
+        self.node.smoothed_xbox.linear.x = 0.5
         self.node.xbox_cmd.linear.x = -1.0
-        self.assertAlmostEqual(self.tick(10.04).linear.x, 0.48)
+        self.node.smoothed_xbox.angular.z = -0.5
+        self.node.xbox_cmd.angular.z = 1.0
+        cmd = self.tick(10.02)
+        self.assertAlmostEqual(cmd.linear.x, -0.01)
+        self.assertAlmostEqual(cmd.angular.z, 0.02)
+
+    def test_axis_release_does_not_wait_for_other_axis_acceleration(self):
+        self.node.smoothed_xbox.linear.x = 0.5
+        self.node.xbox_cmd.linear.y = 1.0
+        cmd = self.tick(10.02)
+        self.assertEqual(cmd.linear.x, 0.0)
+        self.assertAlmostEqual(cmd.linear.y, 0.01)
 
     def test_timeout_stops_immediately_and_reconnect_starts_from_zero(self):
         self.node.smoothed_xbox.linear.x = 0.8

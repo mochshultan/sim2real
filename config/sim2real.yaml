@@ -16,8 +16,8 @@ joy_node:
     max_vx: 1.0  # m/s, forward/backward (per axis)
     max_vy: 1.0  # m/s, sideways (per axis)
     max_wz: 1.0  # rad/s, yaw
-    linear_accel_limit: 1.0  # m/s^2
-    angular_accel_limit: 1.0  # rad/s^2
+    linear_accel_limit: 1.0  # m/s^2; Xbox deceleration is immediate
+    angular_accel_limit: 1.0  # rad/s^2; Xbox deceleration is immediate
 
 jaguar_cmd_vel_mux:
   ros__parameters:

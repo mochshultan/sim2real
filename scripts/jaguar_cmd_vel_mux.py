@@ -69,6 +69,19 @@ class JaguarCmdVelMux(Node):
         self.last_publish_time = now
         if self.xbox_stamp > 0.0 and now - self.xbox_stamp <= self.xbox_timeout:
             cmd = Twist()
+            # Deceleration is immediate on each axis. On reversal, stop the old
+            # direction first, then apply the acceleration limit from zero.
+            for current, target, axis in (
+                (self.smoothed_xbox.linear, self.xbox_cmd.linear, "x"),
+                (self.smoothed_xbox.linear, self.xbox_cmd.linear, "y"),
+                (self.smoothed_xbox.angular, self.xbox_cmd.angular, "z"),
+            ):
+                previous = getattr(current, axis)
+                requested = getattr(target, axis)
+                if previous * requested < 0.0:
+                    setattr(current, axis, 0.0)
+                elif abs(requested) < abs(previous):
+                    setattr(current, axis, requested)
             dx = self.xbox_cmd.linear.x - self.smoothed_xbox.linear.x
             dy = self.xbox_cmd.linear.y - self.smoothed_xbox.linear.y
             distance = math.hypot(dx, dy)
