@@ -9,3 +9,7 @@ STL surface meshes and inertial properties for the NXP Jaguar quadruped.
 - `Fl_hip_pitch.STL`, `Fr_hip_pitch.STL`, `Bl_hip_pitch.STL`, `Br_hip_pitch.STL`: Thigh pitch links.
 - `Fl_tibia_pitch.STL`, `Fr_tibia_pitch.STL`, `Bl_tibia_pitch.STL`, `Br_tibia_pitch.STL`: Calf tibia links with contact pads.
 - `inertia.txt`: Measured mass, center of mass, and 3x3 inertia tensors for each link.
+
+The display URDF references these 13 link meshes. Feet use primitive collision
+boxes in the URDF; unused standalone foot-pad meshes were removed. The CAD
+reference drawing is [design.jpg](../imgs/design.jpg).
