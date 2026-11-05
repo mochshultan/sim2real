@@ -11,6 +11,8 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <set>
+#include <sstream>
 
 #include "jaguar_control/robstride_protocol.hpp"
 #include "jaguar_control/robstride_can_bus.hpp"
@@ -160,7 +162,7 @@ public:
         auto * bus = cfg.bus_name == "can0" ? bus_can0_.get() : bus_can1_.get();
         if (!bus || !bus->sendFrame(buildStopMotorFrame(cfg.can_id, 0xFE, true))) {
           startup_clearing_ = false;
-          std::cerr << "[RobStrideHardwareManager] Startup fault-clear CAN write failed on " << cfg.name << std::endl;
+          logSafetyEvent("STARTUP_FAILED", "CAN_WRITE", "bus=" + cfg.bus_name + " can_id=" + std::to_string(cfg.can_id), cfg.name);
           disableAllMotors();
           return false;
         }
@@ -189,6 +191,8 @@ public:
         buildEnableMotorFrame(cfg.can_id)};
       for (const auto & frame : sequence) {
         if (!bus->sendFrame(frame)) {
+          logSafetyEvent("STARTUP_FAILED", "CAN_WRITE", "bus=" + cfg.bus_name +
+            " can_id=" + std::to_string(cfg.can_id) + " frame_type=" + std::to_string((frame.can_id >> 24) & 0x1F), cfg.name);
           disableAllMotors();
           return false;
         }
@@ -232,7 +236,10 @@ public:
       if (!std::isfinite(cmd.position) || !std::isfinite(cmd.velocity) ||
           !std::isfinite(cmd.kp) || !std::isfinite(cmd.kd) || !std::isfinite(cmd.effort) ||
           cmd.kp < 0 || cmd.kd < 0) {
-        triggerEmergencyStop("Invalid joint command");
+        triggerEmergencyStop("COMMAND_INVALID",
+          "position_rad=" + std::to_string(cmd.position) + " velocity_rad_s=" + std::to_string(cmd.velocity) +
+          " kp=" + std::to_string(cmd.kp) + " kd=" + std::to_string(cmd.kd) +
+          " effort_nm=" + std::to_string(cmd.effort), cfg.name);
         return false;
       }
       active |= cmd.kp != 0 || cmd.kd != 0 || cmd.effort != 0;
@@ -254,6 +261,7 @@ public:
   void setSafeParkActive(bool active)
   {
     std::lock_guard<std::mutex> lock(cmd_mutex_);
+    if (!active && safe_park_active_ && !emergency_stopped_) clearSafetyLog();
     if (active && !safe_park_active_) {
       soft_fault_since_ = {};
       safe_park_started_ = std::chrono::steady_clock::now();
@@ -267,12 +275,39 @@ public:
     is_passive_mode_ = passive;
   }
 
-  void triggerEmergencyStop(const std::string & reason)
+  void logSafetyEvent(const std::string & event, const std::string & code,
+                      const std::string & details = "", const std::string & joint = "")
   {
-    if (!emergency_stopped_.exchange(true) || reset_in_progress_) {
-      std::cerr << "[RobStrideHardwareManager] EMERGENCY STOP: " << reason << std::endl;
+    std::lock_guard<std::mutex> lock(safety_log_mutex_);
+    std::string key = event + ":" + code + ":" + joint;
+    if (code == "MOTOR_FAULT" || code == "MOTOR_ERROR") {
+      std::istringstream fields(details);
+      for (std::string field; fields >> field;) {
+        if (field.rfind("fault=", 0) == 0 || field.rfind("warning=", 0) == 0 ||
+            field.rfind("error_bits=", 0) == 0) key += ":" + field;
+      }
     }
+    if (!logged_safety_events_.insert(key).second) return;
+    const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
+    std::cerr << "[driver] time_ms=" << timestamp << " event=" << event << " code=" << code;
+    if (!joint.empty()) std::cerr << " joint=" << joint;
+    if (!details.empty()) std::cerr << " " << details;
+    std::cerr << std::endl;
+  }
+
+  void clearSafetyLog()
+  {
+    std::lock_guard<std::mutex> lock(safety_log_mutex_);
+    logged_safety_events_.clear();
+  }
+
+  void triggerEmergencyStop(const std::string & code, const std::string & details = "",
+                            const std::string & joint = "")
+  {
+    emergency_stopped_ = true;
     reset_in_progress_ = false;
+    logSafetyEvent("ESTOP", code, details, joint);
     // Only the communication thread (or shutdown after join) writes to CAN.
   }
 
@@ -322,7 +357,8 @@ public:
 
     bool timeout = (cmd_age_sec > watchdog_timeout_sec_);
     if (timeout && !is_passive_mode_) {
-      triggerEmergencyStop("Command watchdog expired");
+      triggerEmergencyStop("COMMAND_TIMEOUT", "age_s=" + std::to_string(cmd_age_sec) +
+        " limit_s=" + std::to_string(watchdog_timeout_sec_));
     }
 
     checkMotionSafety(now);
@@ -359,7 +395,8 @@ public:
             cfg.motor_params
           );
         }
-        if (!bus->sendFrame(frame)) triggerEmergencyStop("CAN write failed");
+        if (!bus->sendFrame(frame)) triggerEmergencyStop("CAN_WRITE", "bus=" + cfg.bus_name +
+          " can_id=" + std::to_string(cfg.can_id), cfg.name);
       }
     }
 
@@ -373,26 +410,43 @@ public:
     if (is_passive_mode_ || emergency_stopped_) { soft_fault_since_ = {}; return; }
     if (safe_park_requested_ &&
         std::chrono::duration<double>(now - park_request_time_).count() > 0.25) {
-      triggerEmergencyStop("SAFE_PARK controller acknowledgement timed out");
+      triggerEmergencyStop("PARK_ACK_TIMEOUT", "elapsed_s=" +
+        std::to_string(std::chrono::duration<double>(now - park_request_time_).count()) + " limit_s=0.250");
       return;
     }
     if (safe_park_active_ &&
         std::chrono::duration<double>(now - safe_park_started_).count() > 10.0) {
-      triggerEmergencyStop("SAFE_PARK completion timed out");
+      triggerEmergencyStop("PARK_TIMEOUT", "elapsed_s=" +
+        std::to_string(std::chrono::duration<double>(now - safe_park_started_).count()) + " limit_s=10.000");
       return;
     }
     std::lock_guard<std::mutex> lock_state(state_mutex_);
-    bool soft_fault = false;
-    std::string reason;
+    struct MotionFault { std::string code, details, joint; };
+    std::vector<MotionFault> faults;
     for (size_t i = 0; i < N_JOINTS; ++i) {
       const auto & state = states_[i];
       const auto & cfg = joint_configs_[i];
       const double age = std::chrono::duration<double>(now - state.last_feedback_time).count();
       const double extra = std::max({cfg.pos_min - state.position,
                                     state.position - cfg.pos_max, 0.0});
-      if (!state.feedback_valid || age > feedback_timeout_sec_ ||
-          !std::isfinite(state.position) || extra > POSITION_LIMIT_TOLERANCE + 0.2) {
-        triggerEmergencyStop("Invalid/stale feedback or severe position excursion on " + cfg.name);
+      const auto context = [&cfg] { return "bus=" + cfg.bus_name + " can_id=" + std::to_string(cfg.can_id); };
+      if (!state.feedback_valid) {
+        triggerEmergencyStop("FEEDBACK_INVALID", context() + " age_s=" + std::to_string(age), cfg.name);
+        return;
+      }
+      if (age > feedback_timeout_sec_) {
+        triggerEmergencyStop("FEEDBACK_TIMEOUT", context() + " age_s=" + std::to_string(age) +
+          " limit_s=" + std::to_string(feedback_timeout_sec_), cfg.name);
+        return;
+      }
+      if (!std::isfinite(state.position)) {
+        triggerEmergencyStop("POSITION_NONFINITE", context() + " actual_rad=" + std::to_string(state.position), cfg.name);
+        return;
+      }
+      if (extra > POSITION_LIMIT_TOLERANCE + 0.2) {
+        triggerEmergencyStop("POSITION_RANGE", context() + " actual_rad=" + std::to_string(state.position) +
+          " min_rad=" + std::to_string(cfg.pos_min) + " max_rad=" + std::to_string(cfg.pos_max) +
+          " excess_rad=" + std::to_string(extra) + " limit_rad=" + std::to_string(POSITION_LIMIT_TOLERANCE + 0.2), cfg.name);
         return;
       }
       const double error = std::abs(state.position - commands_[i].position);
@@ -400,10 +454,15 @@ public:
       const double limit = safe_park_active_ ?
         std::max(POSITION_LIMIT_TOLERANCE, park_initial_extra_[i] + 0.05) :
         POSITION_LIMIT_TOLERANCE;
-      if (extra > limit || error > 2.0) {
-        soft_fault = true;
-        reason = cfg.name + " tracking=" + std::to_string(error) +
-          " rad (limit=2.00), position excess=" + std::to_string(extra);
+      if (error > 2.0) {
+        faults.push_back({"TRACKING", "actual_rad=" + std::to_string(state.position) +
+          " target_rad=" + std::to_string(commands_[i].position) + " error_rad=" + std::to_string(error) +
+          " limit_rad=2.000", cfg.name});
+      }
+      if (extra > limit) {
+        faults.push_back({"POSITION_LIMIT", "actual_rad=" + std::to_string(state.position) +
+          " min_rad=" + std::to_string(cfg.pos_min) + " max_rad=" + std::to_string(cfg.pos_max) +
+          " excess_rad=" + std::to_string(extra) + " limit_rad=" + std::to_string(limit), cfg.name});
       }
       if (!safe_park_active_) {
         park_hold_pos_[i] = state.position;
@@ -411,15 +470,19 @@ public:
       }
     }
     if (safe_park_requested_) return;
-    if (!soft_fault) { soft_fault_since_ = {}; return; }
+    if (faults.empty()) { soft_fault_since_ = {}; return; }
     if (soft_fault_since_ == std::chrono::steady_clock::time_point{}) soft_fault_since_ = now;
     if (std::chrono::duration<double>(now - soft_fault_since_).count() < 0.1) return;
-    if (safe_park_active_) {
-      triggerEmergencyStop("Fault during SAFE_PARK: " + reason);
-    } else {
+    const auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - soft_fault_since_).count();
+    if (!safe_park_active_) {
       park_request_time_ = now;
       safe_park_requested_ = true;
-      std::cerr << "[RobStrideHardwareManager] SAFE_PARK requested: " << reason << std::endl;
+    }
+    for (const auto & fault : faults) {
+      const std::string details = fault.details + " duration_ms=" + std::to_string(duration_ms) +
+        " debounce_ms=100 park_active=" + std::to_string(safe_park_active_);
+      if (safe_park_active_) triggerEmergencyStop(fault.code, details, fault.joint);
+      else logSafetyEvent("SAFE_PARK", fault.code, details, fault.joint);
     }
   }
 
@@ -460,11 +523,12 @@ public:
               warning |= static_cast<uint32_t>(frame.data[4 + byte]) << (8 * byte);
             }
           }
-          std::cerr << "[RobStrideHardwareManager] MOTOR_FAULT " << cfg.name
-                    << " bus=" << bus_name << " id=" << static_cast<int>(cfg.can_id)
-                    << " fault=0x" << std::hex << fault << " warning=0x" << warning
-                    << std::dec << " dlc=" << static_cast<int>(frame.can_dlc) << std::endl;
-          if (!startup_clearing_) triggerEmergencyStop("Motor fault frame from " + cfg.name);
+          std::ostringstream details;
+          details << "bus=" << bus_name << " can_id=" << static_cast<int>(cfg.can_id)
+                  << " fault=0x" << std::hex << fault << " warning=0x" << warning
+                  << std::dec << " dlc=" << static_cast<int>(frame.can_dlc);
+          if (startup_clearing_) logSafetyEvent("STARTUP_FAULT", "MOTOR_FAULT", details.str(), cfg.name);
+          else triggerEmergencyStop("MOTOR_FAULT", details.str(), cfg.name);
           std::lock_guard<std::mutex> lock(state_mutex_);
           states_[i].feedback_valid = false;
           break;
@@ -479,19 +543,21 @@ public:
           const bool encoder_jump = states_[i].feedback_valid && dt >= 0 &&
             dt <= feedback_timeout_sec_ && jump > allowed_jump;
           if (fb.error || encoder_jump) {
-            std::cerr << "[RobStrideHardwareManager] FEEDBACK_FAULT " << cfg.name
-                      << " bus=" << bus_name << " id=" << static_cast<int>(cfg.can_id)
-                      << " motor_error_bits=0x" << std::hex << ((raw_id >> 16) & 0x3F)
-                      << std::dec << " encoder_jump=" << encoder_jump
-                      << " previous_valid=" << states_[i].feedback_valid
-                      << " previous_rad=" << states_[i].position
-                      << " current_rad=" << position << " delta_rad=" << jump
-                      << " allowed_rad=" << allowed_jump << " dt_s=" << dt
-                      << " velocity_rad_s=" << fb.velocity
-                      << " torque_nm=" << fb.torque << " temperature_c=" << fb.temperature
-                      << std::endl;
+            std::ostringstream details;
+            details << "bus=" << bus_name << " can_id=" << static_cast<int>(cfg.can_id)
+                    << " error_bits=0x" << std::hex << ((raw_id >> 16) & 0x3F) << std::dec
+                    << " previous_valid=" << states_[i].feedback_valid
+                    << " previous_rad=" << states_[i].position << " actual_rad=" << position
+                    << " jump_rad=" << jump << " limit_rad=" << allowed_jump << " dt_s=" << dt
+                    << " velocity_rad_s=" << fb.velocity << " torque_nm=" << fb.torque
+                    << " temperature_c=" << fb.temperature;
+            for (const auto & fault : {std::make_pair(fb.error, "MOTOR_ERROR"),
+                                       std::make_pair(encoder_jump, "ENCODER_JUMP")}) {
+              if (!fault.first) continue;
+              if (startup_clearing_) logSafetyEvent("STARTUP_FAULT", fault.second, details.str(), cfg.name);
+              else triggerEmergencyStop(fault.second, details.str(), cfg.name);
+            }
             states_[i].feedback_valid = false;
-            if (!startup_clearing_) triggerEmergencyStop("Invalid encoder or motor fault on " + cfg.name);
             break;
           }
           states_[i].position = position;
@@ -551,6 +617,7 @@ public:
 private:
   void startFaultReset(const std::chrono::steady_clock::time_point & now)
   {
+    clearSafetyLog();
     is_passive_mode_ = true;
     safe_park_requested_ = false;
     safe_park_active_ = false;
@@ -563,7 +630,7 @@ private:
     for (const auto & cfg : joint_configs_) {
       auto * bus = cfg.bus_name == "can0" ? bus_can0_.get() : bus_can1_.get();
       if (!bus || !bus->sendFrame(buildStopMotorFrame(cfg.can_id, 0xFE, true))) {
-        std::cerr << "[RobStrideHardwareManager] Fault reset failed: CAN write on " << cfg.name << std::endl;
+        logSafetyEvent("RESET_FAILED", "CAN_WRITE", "bus=" + cfg.bus_name + " can_id=" + std::to_string(cfg.can_id), cfg.name);
         disableAllMotors();
         return;
       }
@@ -571,14 +638,14 @@ private:
     reset_started_ = now;
     reset_enable_sent_ = false;
     reset_in_progress_ = true;
-    std::cerr << "[RobStrideHardwareManager] Fault reset requested; waiting for fresh fault-free feedback from all motors" << std::endl;
+    logSafetyEvent("RESET_STARTED", "MANUAL");
   }
 
   void verifyFaultReset(const std::chrono::steady_clock::time_point & now)
   {
     if (now - reset_started_ > std::chrono::seconds(2)) {
       reset_in_progress_ = false;
-      std::cerr << "[RobStrideHardwareManager] Fault reset failed: feedback timeout; motors remain stopped" << std::endl;
+      logSafetyEvent("RESET_FAILED", "FEEDBACK_TIMEOUT", "elapsed_s=" + std::to_string(std::chrono::duration<double>(now - reset_started_).count()) + " limit_s=2.000");
       return;
     }
     if (!reset_enable_sent_) {
@@ -587,7 +654,7 @@ private:
         auto * bus = cfg.bus_name == "can0" ? bus_can0_.get() : bus_can1_.get();
         if (!bus || !bus->sendFrame(buildMitControlFrame(cfg.can_id, 0, 0, 0, 0, 0, cfg.motor_params)) ||
             !bus->sendFrame(buildEnableMotorFrame(cfg.can_id))) {
-          triggerEmergencyStop("Fault reset CAN write failed on " + cfg.name);
+          triggerEmergencyStop("RESET_CAN_WRITE", "bus=" + cfg.bus_name + " can_id=" + std::to_string(cfg.can_id), cfg.name);
           return;
         }
       }
@@ -613,7 +680,7 @@ private:
     reset_in_progress_ = false;
     last_command_time_ = now;
     emergency_stopped_ = false;
-    std::cerr << "[RobStrideHardwareManager] Fault reset complete; motors passive, controller reset required before motion" << std::endl;
+    logSafetyEvent("RESET_COMPLETE", "MANUAL", "state=PASSIVE_ZERO_TORQUE");
   }
 
   std::vector<JointConfig> joint_configs_;
@@ -625,6 +692,8 @@ private:
 
   std::mutex cmd_mutex_;
   std::mutex state_mutex_;
+  std::mutex safety_log_mutex_;
+  std::set<std::string> logged_safety_events_;
 
   std::atomic<bool> initialized_;
   std::atomic<bool> emergency_stopped_;

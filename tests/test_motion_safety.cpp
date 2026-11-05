@@ -32,6 +32,8 @@ void command(RobStrideHardwareManager & manager, double knee)
 
 int main()
 {
+  std::ostringstream captured;
+  auto * previous_log = std::cerr.rdbuf(captured.rdbuf());
   const auto now = Clock::now();
   const auto ms = [](int n) { return std::chrono::milliseconds(n); };
   RobStrideHardwareManager limits;
@@ -103,4 +105,43 @@ int main()
   feedback(stale, now);
   stale.checkMotionSafety(now + ms(251));
   assert(stale.isEmergencyStopped());
+
+  RobStrideHardwareManager missing;
+  command(missing, 0.0);
+  missing.checkMotionSafety(now);
+  assert(missing.isEmergencyStopped());
+
+  RobStrideHardwareManager multiple;
+  std::vector<JointCommand> targets(N_JOINTS);
+  for (auto & target : targets) target.kp = 14.0;
+  targets[2].position = targets[11].position = 2.2;
+  assert(multiple.setJointCommands(targets));
+  feedback(multiple, now);
+  multiple.checkMotionSafety(now);
+  feedback(multiple, now + ms(110));
+  multiple.checkMotionSafety(now + ms(110));
+  assert(multiple.safeParkRequested());
+
+  RobStrideHardwareManager distinct;
+  distinct.triggerEmergencyStop("COMMAND_TIMEOUT", "age_s=0.110 limit_s=0.100");
+  distinct.triggerEmergencyStop("COMMAND_TIMEOUT", "age_s=0.120 limit_s=0.100");
+  distinct.triggerEmergencyStop("CAN_WRITE", "bus=can0 can_id=1", "FR_collar_joint");
+  distinct.triggerEmergencyStop("MOTOR_FAULT", "fault=0x1 warning=0x0", "FR_collar_joint");
+  distinct.triggerEmergencyStop("MOTOR_FAULT", "fault=0x2 warning=0x0", "FR_collar_joint");
+  std::cerr.rdbuf(previous_log);
+
+  const auto logs = captured.str();
+  assert(logs.find("event=SAFE_PARK code=TRACKING joint=FR_knee_joint actual_rad=") != std::string::npos);
+  assert(logs.find("event=SAFE_PARK code=TRACKING joint=BL_knee_joint actual_rad=") != std::string::npos);
+  assert(logs.find("error_rad=") != std::string::npos && logs.find("debounce_ms=100") != std::string::npos);
+  assert(logs.find("event=SAFE_PARK code=POSITION_LIMIT joint=BL_collar_joint") != std::string::npos);
+  assert(logs.find("event=ESTOP code=POSITION_RANGE joint=BL_collar_joint") != std::string::npos);
+  assert(logs.find("event=ESTOP code=FEEDBACK_TIMEOUT joint=BL_collar_joint") != std::string::npos);
+  assert(logs.find("event=ESTOP code=FEEDBACK_INVALID joint=BL_collar_joint") != std::string::npos);
+  assert(logs.find("event=ESTOP code=PARK_ACK_TIMEOUT elapsed_s=") != std::string::npos);
+  const auto command_fault = logs.find("event=ESTOP code=COMMAND_TIMEOUT");
+  assert(command_fault != std::string::npos);
+  assert(logs.find("event=ESTOP code=COMMAND_TIMEOUT", command_fault + 1) == std::string::npos);
+  assert(logs.find("event=ESTOP code=CAN_WRITE joint=FR_collar_joint") != std::string::npos);
+  assert(logs.find("fault=0x1") != std::string::npos && logs.find("fault=0x2") != std::string::npos);
 }

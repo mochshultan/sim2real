@@ -81,8 +81,8 @@ public:
     if (!hw_manager_.setControlTorqueLimit(control_torque_limit_nm_)) {
       throw std::invalid_argument("control_torque_limit_nm must be in (0, 14.0] Nm");
     }
-    RCLCPP_INFO(this->get_logger(), "Control torque cap: %.2f Nm (firmware ceiling %.2f Nm)",
-      control_torque_limit_nm_, motor_params.firmware_torque_limit);
+    RCLCPP_INFO(this->get_logger(), "event=CONFIG code=TORQUE_LIMIT control_nm=%.3f firmware_limit_nm=%.3f",
+      control_torque_limit_nm_, std::min(control_torque_limit_nm_, motor_params.firmware_torque_limit));
 
     buildNameMapping();
 
@@ -217,7 +217,10 @@ private:
         (!msg->name.empty() && msg->name.size() != N_JOINTS) ||
         (!msg->velocity.empty() && msg->velocity.size() != N_JOINTS) ||
         (effort_size != 0 && effort_size != 12 && effort_size != 24 && effort_size != 36)) {
-      hw_manager_.triggerEmergencyStop("Malformed JointState command dimensions");
+      hw_manager_.triggerEmergencyStop("COMMAND_DIMENSIONS",
+        "source=joint_states names=" + std::to_string(msg->name.size()) +
+        " positions=" + std::to_string(msg->position.size()) + " velocities=" + std::to_string(msg->velocity.size()) +
+        " efforts=" + std::to_string(effort_size));
       return;
     }
     std::vector<JointCommand> commands(N_JOINTS);
@@ -227,7 +230,7 @@ private:
       for (size_t i = 0; i < msg->name.size(); ++i) {
         auto it = name_to_index_.find(msg->name[i]);
         if (it == name_to_index_.end() || seen[it->second]) {
-          hw_manager_.triggerEmergencyStop("Unknown or repeated joint name");
+          hw_manager_.triggerEmergencyStop("COMMAND_JOINT", "name=" + msg->name[i] + " index=" + std::to_string(i));
           return;
         }
         if (it != name_to_index_.end()) {
@@ -275,7 +278,7 @@ private:
   void onMitCommand(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
     if (msg->data.size() != 60 && msg->data.size() != 36) {
-      hw_manager_.triggerEmergencyStop("Malformed MIT command dimensions");
+      hw_manager_.triggerEmergencyStop("COMMAND_DIMENSIONS", "source=mit actual=" + std::to_string(msg->data.size()) + " expected=36,60");
       return;
     }
     std::vector<JointCommand> commands(N_JOINTS);
@@ -310,7 +313,7 @@ private:
   void onEmergencyStop(const std_msgs::msg::Bool::SharedPtr msg)
   {
     if (msg->data) {
-      hw_manager_.triggerEmergencyStop("Manual E-Stop Topic Triggered");
+      hw_manager_.triggerEmergencyStop("MANUAL", "source=emergency_stop_topic");
     }
   }
 
@@ -377,7 +380,7 @@ private:
 
     if (overrun_count_ > 0) {
       RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-        "⚠️ [CAN Real-Time Overrun] Loop missed 200 Hz deadline %lu times! Check CPU load.", overrun_count_.load());
+        "event=TIMING code=CAN_DEADLINE missed_cycles=%lu target_hz=%d", overrun_count_.load(), loop_hz_);
     }
 
     std_msgs::msg::String status_msg;
