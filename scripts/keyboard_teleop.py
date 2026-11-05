@@ -100,6 +100,7 @@ class UnifiedTeleopNode(Node):
         self.btn_standup_pulse = False
         self.btn_walk_pulse = False
         self.btn_sit_pulse = False
+        self.btn_policy_toggle_pulse = False
 
         self.lock = threading.RLock()
         self.running = True
@@ -122,6 +123,8 @@ class UnifiedTeleopNode(Node):
     def _status_cb(self, msg: String):
         with self.lock:
             self.controller_feedback = msg.data
+            if msg.data.startswith("State: "):
+                self.current_state = msg.data.split("|", 1)[0].removeprefix("State: ").strip()
 
     def _imu_cb(self, msg: Imu):
         qx = msg.orientation.x
@@ -172,10 +175,9 @@ class UnifiedTeleopNode(Node):
                 self.current_state = "BERDIRI / STANDUP"
                 self.btn_standup_pulse = True
                 self.last_action = f"{C_CYAN}[ROS Joy A] Transisi ke BERDIRI (STANDUP){C_RESET}"
-            elif pressed(1):
-                self.current_state = "JALAN / WALK (RL)"
-                self.btn_walk_pulse = True
-                self.last_action = f"{C_GREEN}[ROS Joy B] Mode JALAN Aktif (RL Policy PPO){C_RESET}"
+            elif pressed(11 if len(current) >= 15 else 7):
+                self.btn_policy_toggle_pulse = True
+                self.last_action = "[ROS Joy Start] Toggle policy / stand requested"
             elif pressed(2):
                 self.current_state = "DUDUK / STANDBY"
                 self.btn_sit_pulse = True
@@ -202,11 +204,10 @@ class UnifiedTeleopNode(Node):
                 self.btn_standup_pulse = True
                 self.last_action = f"{C_CYAN}[Xbox A] Transisi ke BERDIRI (STANDUP){C_RESET}"
 
-            # Button B: WALK (RL)
-            if "btn_b" in edges:
-                self.current_state = "JALAN / WALK (RL)"
-                self.btn_walk_pulse = True
-                self.last_action = f"{C_GREEN}[Xbox B] Mode JALAN Aktif (RL Policy PPO){C_RESET}"
+            # The controller decides the toggle from its actual mode.
+            if "btn_start" in edges:
+                self.btn_policy_toggle_pulse = True
+                self.last_action = "[Xbox Start] Toggle policy / stand requested"
 
             # Button X: SIT (STANDBY)
             if "btn_x" in edges:
@@ -233,11 +234,14 @@ class UnifiedTeleopNode(Node):
                 self.btn_standup_pulse = False
                 self.btn_walk_pulse = False
                 self.btn_sit_pulse = False
+                self.btn_policy_toggle_pulse = False
                 estop_msg = Bool()
                 estop_msg.data = True
                 self.estop_pub.publish(estop_msg)
                 self.last_action = f"{C_RED}[Xbox LB/Back] HARD E-STOP: semua motor dihentikan.{C_RESET}"
             elif "btn_rb" in edges:
+                self.btn_standup_pulse = self.btn_walk_pulse = self.btn_sit_pulse = False
+                self.btn_policy_toggle_pulse = False
                 self.current_state = "SAFE PARK"
                 self.vx = 0.0
                 self.vy = 0.0
@@ -259,6 +263,8 @@ class UnifiedTeleopNode(Node):
             btn0 = 1 if self.btn_standup_pulse else 0
             btn1 = 1 if self.btn_walk_pulse else 0
             btn2 = 1 if self.btn_sit_pulse else 0
+            btn7 = 1 if self.btn_policy_toggle_pulse else 0
+            self.btn_policy_toggle_pulse = False
             self.btn_standup_pulse = False
             self.btn_walk_pulse = False
             self.btn_sit_pulse = False
@@ -277,7 +283,7 @@ class UnifiedTeleopNode(Node):
 
         joy = Joy()
         joy.header.stamp = self.get_clock().now().to_msg()
-        joy.buttons = [btn0, btn1, btn2, 0, 0, 0, 0, 0]
+        joy.buttons = [btn0, btn1, btn2, 0, 0, 0, 0, btn7]
         joy.axes = []
         self.joy_pub.publish(joy)
 
@@ -334,6 +340,7 @@ class UnifiedTeleopNode(Node):
                 self.btn_standup_pulse = False
                 self.btn_walk_pulse = False
                 self.btn_sit_pulse = False
+                self.btn_policy_toggle_pulse = False
                 safe_msg = Bool()
                 safe_msg.data = True
                 self.safe_stop_pub.publish(safe_msg)

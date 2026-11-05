@@ -18,7 +18,7 @@ namespace = dict(np=np, time=time, Bool=Mock, Joy=Mock, String=Mock,
                  ISAAC_JOINT_NAMES=[f'joint_{i}' for i in range(12)],
                  ISAAC_LIMITS_LOWER=np.full(12, -0.5), ISAAC_LIMITS_UPPER=np.full(12, 0.5),
                  FEEDBACK_LIMITS_LOWER=np.full(12, -0.7), FEEDBACK_LIMITS_UPPER=np.full(12, 0.7),
-                 SIT_JOINT_POS=np.zeros(12), DEFAULT_JOINT_POS=np.zeros(12),
+                 SIT_JOINT_POS=np.zeros(12), STAND_JOINT_POS=np.full(12, 0.25), DEFAULT_JOINT_POS=np.zeros(12),
                  JaguarObservationBuilder=Mock,
                  threading=threading)
 exec(compile(ast.Module(body=[cls], type_ignores=[]), '<controller safety methods>', 'exec'), namespace)
@@ -152,6 +152,61 @@ class SafetyTests(unittest.TestCase):
 
         self.node._request_safe_park.assert_called_once_with(
             2.0, 'code=MANUAL source=xbox_rb')
+
+    def prepare_mode_control(self, state="STAND_HOLD"):
+        node = self.node
+        node.state = state
+        node.previous_buttons = []
+        node.get_clock = Mock()
+        node.get_clock.return_value.now.return_value.nanoseconds = 2_000_000_000
+        node.state_lock = threading.Lock()
+        node.joint_pos = np.zeros(12)
+        node.joint_vel = np.zeros(12)
+        node.cmd_vel = np.ones(3)
+        node.filtered_action = np.ones(12)
+        node.body_quat = [0, 0, 0, 1]
+        node.body_ang_vel = np.zeros(3)
+        node.obs_builder = Mock()
+        node.action_ema_alpha = 0.0
+        node.walk_ramp_duration = 0.8
+        node.transition_duration = 4.0
+        for gain in ("rl_kp_roll", "rl_kd_roll", "rl_kp_pitch", "rl_kd_pitch", "rl_kp_knee", "rl_kd_knee"):
+            setattr(node, gain, 1.0)
+        return node
+
+    def test_start_enters_policy_and_second_press_returns_to_stand(self):
+        node = self.prepare_mode_control()
+        start = Mock(buttons=[0] * 7 + [1])
+        released = Mock(buttons=[0] * 8)
+        node._joy_cb(start)
+        self.assertEqual(node.state, "WALK")
+        node.obs_builder.reset_history.assert_called_once()
+        node._joy_cb(start)  # Holding Start must not toggle again.
+        self.assertEqual(node.state, "WALK")
+        node._joy_cb(released)
+        node._joy_cb(start)
+        self.assertEqual(node.state, "STANDUP")
+        np.testing.assert_allclose(node.transition_start_pos, node.joint_pos)
+        np.testing.assert_allclose(node.transition_target_pos, 0.25)
+        np.testing.assert_allclose(node.cmd_vel, 0)
+        np.testing.assert_allclose(node.filtered_action, 0)
+
+    def test_start_cannot_bypass_mode_preflight_or_safety(self):
+        for state in ("STANDBY", "SITDOWN", "SAFE_PARK", "DISABLED", "STANDUP"):
+            node = self.prepare_mode_control(state)
+            node._joy_cb(Mock(buttons=[0] * 7 + [1]))
+            self.assertEqual(node.state, state)
+        node = self.prepare_mode_control()
+        node.body_quat = [1, 0, 0, 0]
+        node._joy_cb(Mock(buttons=[0] * 7 + [1]))
+        self.assertEqual(node.state, "STAND_HOLD")
+        for safety_button in (4, 5, 6):
+            node = self.prepare_mode_control()
+            buttons = [0] * 7 + [1]
+            buttons[safety_button] = 1
+            node._joy_cb(Mock(buttons=buttons))
+            self.assertEqual(node.state, "STAND_HOLD")
+            self.assertTrue(node._trigger_hard_estop.called or node._request_safe_park.called)
 
     def test_joy_axes_cannot_overwrite_cmd_vel(self):
         self.node.previous_buttons = []

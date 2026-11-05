@@ -672,6 +672,16 @@ class NXPJaguarControllerNode(Node):
             return
         if self.state == "DISABLED" or not self._sensors_ready():
             return
+        if pressed(7) and self.state == "WALK":
+            self.state = "STANDUP"
+            self.transition_start_time = now
+            with self.state_lock:
+                self.transition_start_pos = self.joint_pos.copy()
+                self.transition_target_pos = np.clip(STAND_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                self.cmd_vel[:] = 0.0
+                self.filtered_action[:] = 0.0
+            self.get_logger().info("event=MODE_CHANGE source=start from=WALK to=STANDUP target=STAND_HOLD")
+            return
         if len(msg.buttons) > 1:
             # Button 0 (X / Cross / Key '2'): Stand Up (Berdiri)
             if pressed(0) and self.state in ["STARTUP_SIT", "STANDBY", "SIT_HOLD"]:
@@ -683,8 +693,8 @@ class NXPJaguarControllerNode(Node):
                     self.cmd_vel[:] = 0.0
                     self.filtered_action[:] = 0.0
                 self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
-            # Button 1 (Circle / B / Key '3'): Start RL Walking (Jalan RL)
-            elif pressed(1) and self.state == "STAND_HOLD":
+            # Start toggles policy; legacy button 1 / keyboard '3' enters WALK.
+            elif (pressed(1) or pressed(7)) and self.state == "STAND_HOLD":
                 # Pre-flight safety check: verify projected gravity before enabling WALK
                 bx, by, bz, bw = self.body_quat
                 gz = -(1.0 - 2.0 * (bx * bx + by * by))
