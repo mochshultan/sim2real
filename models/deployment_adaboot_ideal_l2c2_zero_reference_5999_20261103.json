@@ -1,0 +1,39 @@
+{
+  "training_run": "/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_adaboot_ideal_l2c2_zero_reference/2026-11-03_21-57-17_jaguar-kp45kd45-zero-scale025-ema0002-6144env-fresh6k-20261103T183206",
+  "checkpoint_iteration": 5999,
+  "checkpoint_file": "model_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt",
+  "policy_file": "policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt",
+  "checkpoint_sha256": "686d47aee0f210950fd7c46bdc22356e35f3739319579b4456f9d3efec0e84c1",
+  "policy_sha256": "c197bea9d3b00f9bcfb25f1078d5efbf866b4180b6c9ea4057a2ef942688ef16",
+  "training_env_sha256": "88a7490c849f2b25f638cab637368f23a6007cb84f3af164c0c224e6f1683111",
+  "training_agent_sha256": "ec60f9f3fc380847fe162d5ba7db38a326c5eb817beec68a4bf6d9b6f70ac81b",
+  "policy_reference": "zero",
+  "nominal_joint_pos_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "action_scale": 0.25,
+  "training_nominal_kp": 45.0,
+  "training_nominal_kd": 4.5,
+  "input_shape": [
+    "batch",
+    5,
+    45
+  ],
+  "output_shape": [
+    "batch",
+    12
+  ],
+  "validation": "CPU parity against checkpoint weights and original export, batches 1/16/64; no live hardware motion",
+  "max_abs_diff": 0.0
+}

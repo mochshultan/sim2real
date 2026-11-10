@@ -7,11 +7,13 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 | Launch File | Description | Command |
 | :--- | :--- | :--- |
 | [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, RobStride C++ CAN node (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
+| [`sim2real_zero.launch.py`](./sim2real_zero.launch.py) | Uses the same stack with Jaguar model 5999 and zero-reference observations/actions. | `ros2 launch jaguar_control sim2real_zero.launch.py` |
 | [`sim2sim_mujoco.launch.py`](./sim2sim_mujoco.launch.py) | Starts the MuJoCo simulation with keyboard teleoperation. | `ros2 launch jaguar_control sim2sim_mujoco.launch.py terrain:=rough` |
 
 ### Arguments for `sim2real.launch.py`
 
 - `policy_path` (default: `models/policy.pt`): Path to TorchScript policy model.
+- `policy_reference` (default: `nominal`): Coordinate frame for both observations and action targets. Use the zero launcher to select the matching policy and `zero` reference together.
 - `with_imu` (default: `true`): Launch serial IMU node.
 - `with_teleop` (default: `true`): Launch the Xbox input source. Xbox has priority while its heartbeat is active.
 - `with_joy` (default: `false`): Launch optional ROS 2 `joy_node`, remapped to `/joy_raw` for the teleop hub.

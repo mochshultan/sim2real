@@ -70,15 +70,13 @@ STANDBY_ANGLE = [
 # Relax Pose Joint Angles (Equal to calibrated motor offsets; raw motor reading = 0.0 rad)
 RELAX_ANGLE = MOTOR_OFFSET_ANGLE.copy()
 
-# Nominal Standing Default Joint Angles in ROS Joint Order (BL, BR, FL, FR)
-# Matches Isaac Lab q0 (nxp_jaguar.py):
-#   BL & BR (Back Legs):  Roll: 0.0, Hip: -1.49, Knee: +1.20
-#   FL & FR (Front Legs): Roll: 0.0, Hip: -1.51, Knee: +1.22
+# Runtime standing target in ROS joint order (BL, BR, FL, FR).
+# Tuned standing pose, separate from each checkpoint's observation/action reference.
 DEFAULT_ANGLE = [
-     0.0, -1.49,  1.20,  # BL
-     0.0, -1.49,  1.20,  # BR
-     0.0, -1.51,  1.22,  # FL
-     0.0, -1.51,  1.22,  # FR
+     0.0, -1.59, 1.38,  # BL
+     0.0, -1.59, 1.38,  # BR
+     0.0, -1.59, 1.40,  # FL
+     0.0, -1.59, 1.40,  # FR
 ]
 
 import os

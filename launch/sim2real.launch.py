@@ -22,6 +22,12 @@ def generate_launch_description():
         default_value=default_policy,
         description="Path to TorchScript policy; defaults to models/policy.pt",
     )
+    policy_reference_arg = DeclareLaunchArgument(
+        "policy_reference",
+        default_value="nominal",
+        choices=["nominal", "zero"],
+        description="Joint reference for both policy observations and position targets",
+    )
     with_imu_arg = DeclareLaunchArgument(
         "with_imu",
         default_value="true",
@@ -143,7 +149,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             config_file,
-            {"policy_path": policy_path},
+            {"policy_path": policy_path, "policy_reference": LaunchConfiguration("policy_reference")},
         ],
         condition=IfCondition(with_controller),
     )
@@ -151,6 +157,7 @@ def generate_launch_description():
     return LaunchDescription([
         config_file_arg,
         policy_path_arg,
+        policy_reference_arg,
         with_imu_arg,
         with_joy_arg,
         with_teleop_arg,

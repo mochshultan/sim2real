@@ -1,0 +1,76 @@
+seed: 42
+device: cuda:0
+num_steps_per_env: 48
+max_iterations: 6000
+empirical_normalization: {}
+obs_groups:
+  actor:
+  - policy
+  - base_lin_vel_target
+  critic:
+  - critic
+clip_actions: null
+check_for_nan: true
+save_interval: 100
+experiment_name: nxp_jaguar_adaboot_ideal_l2c2_zero_reference
+run_name: jaguar-kp45kd45-zero-scale025-ema0002-6144env-fresh6k-20261103T183206
+logger: tensorboard
+neptune_project: isaaclab
+wandb_project: isaaclab
+resume: false
+load_run: .*
+load_checkpoint: model_.*.pt
+class_name: OnPolicyRunner
+actor:
+  class_name: isaaclab_tasks.manager_based.locomotion.velocity.config.nxp_jaguar_baseline_tibia_adaboot.velocity_estimator:VelocityEstimatorActor
+  hidden_dims:
+  - 512
+  - 256
+  - 128
+  activation: elu
+  obs_normalization: true
+  distribution_cfg:
+    class_name: GaussianDistribution
+    init_std: 1.0
+    std_type: scalar
+critic:
+  class_name: MLPModel
+  hidden_dims:
+  - 512
+  - 256
+  - 128
+  activation: elu
+  obs_normalization: true
+  distribution_cfg: null
+algorithm:
+  class_name: isaaclab_tasks.manager_based.locomotion.velocity.config.nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2.l2c2_adaboot_ppo:IdealAdaBootL2C2PPO
+  num_learning_epochs: 5
+  num_mini_batches: 4
+  learning_rate: 0.001
+  schedule: adaptive
+  gamma: 0.99
+  lam: 0.95
+  entropy_coef: 0.005
+  desired_kl: 0.01
+  max_grad_norm: 1.0
+  optimizer: adam
+  value_loss_coef: 1.0
+  use_clipped_value_loss: true
+  clip_param: 0.2
+  normalize_advantage_per_mini_batch: false
+  share_cnn_encoders: false
+  rnd_cfg: null
+  symmetry_cfg: null
+  estimator_loss_coef: 1.0
+  l2c2_lambda_min: 0.01
+  l2c2_lambda_max: 1.0
+  l2c2_sigma: 1.0
+  l2c2_beta: 0.1
+policy: {}
+entropy_adaptive: true
+entropy_coef_initial: 0.01
+entropy_coef_final: 0.001
+entropy_success_ema_alpha: 0.002
+entropy_success_metric: Metrics/success_rate
+reset_action_std_on_resume: true
+resume_action_std: 1.0

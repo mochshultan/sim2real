@@ -52,12 +52,15 @@ SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 # Isaac order: [0..3 Rolls (FR, FL, BR, BL), 4..7 Hips (FR, FL, BR, BL), 8..11 Knees (FR, FL, BR, BL)]
 RELAX_JOINT_POS = np.array([P.MOTOR_OFFSET_ANGLE[ROS_TO_ISAAC[i]] for i in range(12)], dtype=np.float32)
 
-# Default Standing Pose synchronized with Isaac Lab NXP Jaguar
+# Observation/action reference of the deployed Jaguar model_29996 checkpoint.
 DEFAULT_JOINT_POS = np.array([
     0.0,   0.0,   0.0,   0.0,    # Rolls (Fr, Fl, Br, Bl)
    -1.51, -1.51, -1.49, -1.49,   # Hip Pitches (Fr, Fl, Br, Bl)
     1.22,  1.22,  1.20,  1.20,   # Knees (Fr, Fl, Br, Bl)
 ], dtype=np.float32)
+
+# Runtime standing pose in Isaac order; mechanical encoder calibration stays separate.
+STAND_JOINT_POS = np.asarray(P.DEFAULT_ANGLE, dtype=np.float32)[ROS_TO_ISAAC]
 
 # Hard Physical Limits in Isaac Lab Joint Order: 4 Rolls (Fr, Fl, Br, Bl), 4 Hips, 4 Knees
 ISAAC_LIMITS_LOWER = np.array([
@@ -130,7 +133,12 @@ ROS_NAME_TO_ISAAC_IDX = {
 }
 
 class JaguarObservationBuilder:
-    def __init__(self, history_len: int = 5):
+    def __init__(self, history_len: int = 5, joint_reference: np.ndarray | None = None):
+        self.joint_reference = np.array(
+            DEFAULT_JOINT_POS if joint_reference is None else joint_reference, dtype=np.float32, copy=True
+        )
+        if self.joint_reference.shape != (12,) or not np.isfinite(self.joint_reference).all():
+            raise ValueError("Joint reference must contain 12 finite positions [rad]")
         self.history_len = history_len
         self.obs_dim = 45
         self.last_action = np.zeros(12, dtype=np.float32)
@@ -158,7 +166,7 @@ class JaguarObservationBuilder:
         gy = -2.0 * (qy * qz + qw * qx)
         gz = -(1.0 - 2.0 * (qx * qx + qy * qy))
 
-        rel_joint_pos = joint_pos - DEFAULT_JOINT_POS
+        rel_joint_pos = joint_pos - self.joint_reference
 
         obs_45d = np.concatenate([
             ang_vel * 0.25,              # DreamWaQ angular velocity scale
@@ -171,6 +179,10 @@ class JaguarObservationBuilder:
         ], axis=0).astype(np.float32)
 
         return obs_45d
+
+    def build_joint_target(self, action: np.ndarray) -> np.ndarray:
+        """Convert policy actions to joint position targets [rad]."""
+        return self.joint_reference + ACTION_SCALE * action
 
     def update_and_get_history(self, obs_45d: np.ndarray) -> torch.Tensor:
         # Shift history left and insert newest observation at the end
@@ -192,6 +204,7 @@ class NXPJaguarControllerNode(Node):
 
         # Declare parameters
         self.declare_parameter("policy_path", "")
+        self.declare_parameter("policy_reference", "nominal")
         self.declare_parameter("overtorque_threshold", 13.8)
         self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
@@ -226,7 +239,12 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("imu_roll_tolerance", 0.12)
         self.declare_parameter("imu_tilt_deadband", 0.02)
 
+        policy_reference = self.get_parameter("policy_reference").value
+        if policy_reference not in ("nominal", "zero"):
+            raise ValueError("policy_reference must be 'nominal' or 'zero'")
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
+        if policy_reference == "zero" and not policy_param:
+            raise ValueError("The zero reference requires an explicit matching policy_path")
         if not policy_param:
             models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
             candidates = [os.path.join(models_dir, "policy.pt")]
@@ -321,7 +339,9 @@ class NXPJaguarControllerNode(Node):
             raise RuntimeError(f"Policy contract failure: expected finite (1,12), got {tuple(probe.shape)}")
         self.get_logger().info(f"Policy verified: expects_temporal={self.policy_expects_temporal}, output_shape={tuple(probe.shape)}")
 
-        self.obs_builder = JaguarObservationBuilder()
+        joint_reference = np.zeros(12, dtype=np.float32) if policy_reference == "zero" else DEFAULT_JOINT_POS
+        self.obs_builder = JaguarObservationBuilder(joint_reference=joint_reference)
+        self.get_logger().info(f"Policy joint reference: {policy_reference}")
         self.state_lock = threading.Lock()
 
         # State Variables
@@ -713,7 +733,7 @@ class NXPJaguarControllerNode(Node):
                 self.transition_start_time = now
                 with self.state_lock:
                     self.transition_start_pos = self.joint_pos.copy()
-                    self.transition_target_pos = np.clip(DEFAULT_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                    self.transition_target_pos = np.clip(STAND_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
                     self.cmd_vel[:] = 0.0
                     self.filtered_action[:] = 0.0
                 self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
@@ -830,12 +850,12 @@ class NXPJaguarControllerNode(Node):
             cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 self.state = "STAND_HOLD"
-                target_pos = DEFAULT_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
+                target_pos = STAND_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
                 target_vel = np.zeros(12, dtype=np.float32)
                 self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose (Power ON + IMU Auto-Level)")
         elif self.state == "STAND_HOLD":
             # Hold nominal knees while applying bounded hip/collar leveling.
-            target_pos = DEFAULT_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
+            target_pos = STAND_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
             target_vel = np.zeros(12, dtype=np.float32)
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
@@ -920,8 +940,8 @@ class NXPJaguarControllerNode(Node):
             else:
                 ramp = 1.0
 
-            applied_action = ramp * self.filtered_action
-            target_pos = DEFAULT_JOINT_POS + ACTION_SCALE * applied_action
+            policy_target = self.obs_builder.build_joint_target(self.filtered_action)
+            target_pos = STAND_JOINT_POS + ramp * (policy_target - STAND_JOINT_POS)
             target_vel = np.zeros(12, dtype=np.float32)
 
             # Impedance tracking gains for RL with smooth damping transition
