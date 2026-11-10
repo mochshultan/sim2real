@@ -188,7 +188,6 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("policy_reference", "nominal")
         self.declare_parameter("torque_safety_enabled", True)
         self.declare_parameter("overtorque_threshold", 14.0)
-        self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
         self.declare_parameter("safe_park_duration", 2.0)
         self.declare_parameter("safe_park_kp", 14.0)
@@ -238,7 +237,6 @@ class NXPJaguarControllerNode(Node):
 
         self.torque_safety_enabled = bool(self.get_parameter("torque_safety_enabled").value)
         self.overtorque_threshold = float(self.get_parameter("overtorque_threshold").value)
-        self.shutdown_duration = float(self.get_parameter("shutdown_duration").value)
         self.shutdown_settle_delay = float(self.get_parameter("shutdown_settle_delay").value)
         self.safe_park_duration = float(self.get_parameter("safe_park_duration").value)
         self.safe_park_kp = float(self.get_parameter("safe_park_kp").value)
