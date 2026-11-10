@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
-from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 from launch_ros.utilities import evaluate_parameters, normalize_parameters
 
 
@@ -87,18 +86,18 @@ class LaunchTorqueSafetyTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.controller_parameters("invalid")
 
-    def test_zero_launcher_passes_matching_policy_and_reference_to_controller(self):
+    def zero_controller_parameters(self, **overrides):
         root = Path(__file__).parents[1]
         zero_spec = importlib.util.spec_from_file_location("zero_launch", root / "launch/sim2real_zero.launch.py")
         zero_module = importlib.util.module_from_spec(zero_spec)
         zero_spec.loader.exec_module(zero_module)
         context = LaunchContext()
         context.launch_configurations.update(with_hardware="false", domain_id="17")
+        context.launch_configurations.update(overrides)
         with patch("launch.logging.get_logger"):
-            include = zero_module.generate_launch_description().entities[0]
-            for name, substitutions in include.launch_arguments:
-                context.launch_configurations[name] = perform_substitutions(
-                    context, normalize_to_list_of_substitutions(substitutions))
+            for action in zero_module.generate_launch_description().entities:
+                if isinstance(action, DeclareLaunchArgument):
+                    action.execute(context)
             actions = module.generate_launch_description().entities
             for action in actions:
                 if isinstance(action, DeclareLaunchArgument):
@@ -106,11 +105,31 @@ class LaunchTorqueSafetyTests(unittest.TestCase):
             with patch.object(module, "Node") as node:
                 module._launch_controller(context)
         parameters = evaluate_parameters(context, normalize_parameters(node.call_args.kwargs["parameters"]))
+        return context, parameters
+
+    def test_zero_launcher_passes_matching_policy_and_reference_to_controller(self):
+        root = Path(__file__).parents[1]
+        context, parameters = self.zero_controller_parameters()
         self.assertEqual(parameters[1]["policy_reference"], "zero")
         self.assertEqual(parameters[1]["policy_path"],
                          str(root / "models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
         self.assertEqual(context.launch_configurations["domain_id"], "17")
+
+    def test_zero_launcher_preserves_explicit_model_config_and_safety_overrides(self):
+        context, parameters = self.zero_controller_parameters(
+            policy_path="/tmp/custom_zero.pt", config_file="/tmp/custom.yaml",
+            torque_safety_enabled="false", domain_id="23")
+        self.assertEqual(parameters[0], Path("/tmp/custom.yaml"))
+        self.assertEqual(parameters[1], {
+            "policy_path": "/tmp/custom_zero.pt", "policy_reference": "zero",
+            "torque_safety_enabled": False,
+        })
+        self.assertEqual(context.launch_configurations["domain_id"], "23")
+
+    def test_zero_launcher_rejects_nominal_reference(self):
+        with self.assertRaises(RuntimeError):
+            self.zero_controller_parameters(policy_reference="nominal")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
@@ -17,11 +17,18 @@ def generate_launch_description() -> LaunchDescription:
     package_dir = Path(__file__).resolve().parents[1]
     policy_path = package_dir / "models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "policy_path",
+            default_value=str(policy_path),
+            description="TorchScript policy trained with a zero joint reference (default: Jaguar 5999)",
+        ),
+        DeclareLaunchArgument(
+            "policy_reference",
+            default_value="zero",
+            choices=["zero"],
+            description="Zero joint reference for observations and action targets",
+        ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(package_dir / "launch/sim2real.launch.py")),
-            launch_arguments={
-                "policy_path": str(policy_path),
-                "policy_reference": "zero",
-            }.items(),
         )
     ])
