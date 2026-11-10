@@ -9,6 +9,11 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 | [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, RobStride C++ CAN node (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
 | [`sim2real_zero.launch.py`](./sim2real_zero.launch.py) | Uses the same stack with Jaguar model 5999 and zero-reference observations/actions. | `ros2 launch jaguar_control sim2real_zero.launch.py` |
 
+Both launchers share the same stack. The zero launcher declares the model 5999
+path and `policy_reference=zero` before including the shared launch; user model
+path overrides are preserved. See the [complete zero-reference parameter tables](../docs/zero_reference.md)
+for launch flags, YAML settings and source-only constants.
+
 ### Arguments for `sim2real.launch.py`
 
 - `policy_reference` (default: `nominal`): Joint reference for observations and action targets. The zero launcher selects the matching policy and `zero` reference together.

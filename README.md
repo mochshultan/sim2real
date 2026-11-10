@@ -60,6 +60,8 @@ handling. Zero reference applies to policy observations and action targets;
 it does not command all joints to zero during standing. Stop the current launch
 before selecting the other model. Optional arguments such as
 `with_hardware:=false` also apply to the zero-reference launcher.
+See the [zero-reference launch and configuration tables](docs/zero_reference.md)
+for all flags, YAML parameters, defaults, and tuning examples.
 
 For model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with
@@ -74,11 +76,12 @@ estimator is `225 -> 128 -> 64 -> 3`; the actor is
 
 ## Overview
 
-The standing target is coxa `0.0` rad on all legs, front hip/knee `-1.51/+1.22` rad,
-and rear hip/knee `-1.49/+1.20` rad, defined by `STAND_ANGLE` in
+The standing target is coxa `0.0` rad on all legs, front hip/knee `-1.59/+1.40` rad,
+and rear hip/knee `-1.59/+1.38` rad, defined by `STAND_ANGLE` in
 `scripts/parameters.py`. The controller uses it for
 `STANDUP` and `STAND_HOLD`, with bounded IMU leveling trim when enabled. Walking
-retains the trained policy reference pose and blends to it during the walk ramp.
+uses the selected policy's reference and blends from the standing pose during
+the walk ramp: nominal for model 29996, zero for model 5999.
 
 The `cpp` branch executes low-level actuator communication through a native Linux SocketCAN driver node (`robstride_can_node`) running under a real-time `SCHED_FIFO` priority 80 thread. The node targets 200 Hz and coordinates 12 RobStride RS00 actuators; timing depends on the host and bus load.
 
