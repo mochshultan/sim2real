@@ -44,7 +44,9 @@ except Exception:
 HOST_ID = 0xFE
 BITRATE = 1_000_000
 CHANNELS = ["can0", "can1"]
-SCAN_IDS = range(1, 128)
+# Include ID 0 and the upper node-ID range used by replacement motors.
+# 0xFE is our host ID; 0xFF is reserved for broadcast.
+SCAN_IDS = range(0, HOST_ID)
 
 
 def make_get_device_id_frame(motor_id: int, host_id: int = HOST_ID) -> can.Message:
@@ -109,11 +111,13 @@ def scan_channel(channel: str):
                     responding_motor_id = upper_16 & 0xFF
                     unique_id = int.from_bytes(rx.data, byteorder="big", signed=False)
 
-                    found[responding_motor_id] = {
+                    info = found.setdefault(responding_motor_id, {
                         "unique_id": unique_id,
                         "raw_can_id": rx.arbitration_id,
                         "data": bytes(rx.data),
-                    }
+                        "unique_ids": set(),
+                    })
+                    info["unique_ids"].add(unique_id)
 
             time.sleep(0.005)
 
@@ -147,12 +151,21 @@ def main():
             for motor_id in sorted(motors.keys()):
                 info = motors[motor_id]
                 joint_name = expected_channel.get(motor_id, "UNKNOWN_JOINT")
+                unique_ids = info["unique_ids"]
+                status = "CONFLICT" if len(unique_ids) > 1 else (
+                    "OK" if motor_id in expected_channel else "UNMAPPED"
+                )
                 print(
-                    f"  [OK] ID={motor_id:2d} | Joint={joint_name:<16} | "
+                    f"  [{status}] ID={motor_id:2d} | Joint={joint_name:<16} | "
                     f"UID=0x{info['unique_id']:016X} | "
                     f"Reply CAN ID=0x{info['raw_can_id']:08X} | "
                     f"Data={info['data'].hex(' ').upper()}"
                 )
+
+                if len(unique_ids) > 1:
+                    print("    Multiple factory UIDs share this CAN ID: " +
+                          ", ".join(f"0x{uid:016X}" for uid in sorted(unique_ids)))
+                    print("    Isolate the replacement motor before changing its CAN ID.")
 
         # Check for missing motors on this channel
         missing_ids = sorted(set(expected_channel.keys()) - set(motors.keys()))
@@ -162,6 +175,7 @@ def main():
                 jname = expected_channel.get(mid, "UNKNOWN_JOINT")
                 print(f"    -> Motor ID={mid:2d} | Expected Joint: {jname}")
                 all_missing.append((channel, mid, jname))
+            print("    A replacement motor may share an existing ID; CAN collisions can hide replies.")
 
 if __name__ == "__main__":
     main()
