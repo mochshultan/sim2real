@@ -34,7 +34,8 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
         self.assertEqual(_sha256(identity_policy), POLICY_SHA256)
         self.assertEqual(sorted(path.name for path in (ROOT / "models").glob("policy*.pt")),
-                         ["policy.pt", identity_policy.name])
+                         ["policy.pt", identity_policy.name,
+                          "policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"])
         manifest = json.loads((ROOT / "models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json").read_text())
         self.assertEqual(manifest["policy_file"], default_policy.name)
         self.assertEqual(manifest["identity_policy_file"], identity_policy.name)
@@ -82,7 +83,7 @@ class DeploymentContractTests(unittest.TestCase):
                              for t in node.targets))
         stand_ros = ast.literal_eval(stand)
         np.testing.assert_array_equal(stand_ros,
-                                      [0.0, -1.49, 1.20] * 2 + [0.0, -1.51, 1.22] * 2)
+                                      [0.0, -1.59, 1.38] * 2 + [0.0, -1.59, 1.40] * 2)
 
         source = ast.parse((ROOT / "scripts/nxp_jaguar_controller.py").read_text())
         names = {"ROS_TO_ISAAC", "STAND_JOINT_POS", "DEFAULT_JOINT_POS", "ACTION_SCALE"}
@@ -92,18 +93,18 @@ class DeploymentContractTests(unittest.TestCase):
                                                          ROS_TO_ISAAC=[9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2])}
         exec(compile(ast.Module(body=assignments, type_ignores=[]), "<poses>", "exec"), namespace)
         np.testing.assert_allclose(namespace["STAND_JOINT_POS"],
-                                   [0.0] * 4 + [-1.51, -1.51, -1.49, -1.49]
-                                   + [1.22, 1.22, 1.20, 1.20], atol=1e-7)
+                                   [0.0] * 4 + [-1.59] * 4
+                                   + [1.40, 1.40, 1.38, 1.38], atol=1e-7)
 
         # Execute the actual WALK target expression at both ramp endpoints.
         target = next(node for node in ast.walk(source)
                       if isinstance(node, ast.Assign)
                       and any(isinstance(t, ast.Name) and t.id == "target_pos" for t in node.targets)
-                      and any(isinstance(n, ast.Name) and n.id == "applied_action"
+                      and any(isinstance(n, ast.Name) and n.id == "policy_target"
                               for n in ast.walk(node.value)))
         action = np.linspace(-0.5, 0.5, 12)
         for ramp in (0.0, 0.5, 1.0):
-            namespace.update(ramp=ramp, applied_action=ramp * action)
+            namespace.update(ramp=ramp, policy_target=namespace["DEFAULT_JOINT_POS"] + 0.25 * action)
             exec(compile(ast.Module(body=[target], type_ignores=[]), "<walk target>", "exec"), namespace)
             expected = ((1.0 - ramp) * namespace["STAND_JOINT_POS"]
                         + ramp * (namespace["DEFAULT_JOINT_POS"] + 0.25 * action))

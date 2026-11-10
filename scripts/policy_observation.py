@@ -7,6 +7,8 @@ import torch
 class JaguarObservationBuilder:
     def __init__(self, default_joint_pos, history_len: int = 5):
         self.default_joint_pos = np.asarray(default_joint_pos, dtype=np.float32).copy()
+        if self.default_joint_pos.shape != (12,) or not np.isfinite(self.default_joint_pos).all():
+            raise ValueError("Joint reference must contain 12 finite positions [rad]")
         self.history_len = history_len
         self.obs_dim = 45
         self.last_action = np.zeros(12, dtype=np.float32)
@@ -47,6 +49,10 @@ class JaguarObservationBuilder:
         ], axis=0).astype(np.float32)
 
         return obs_45d
+
+    def build_joint_target(self, action: np.ndarray, action_scale: float = 0.25) -> np.ndarray:
+        """Use the observation reference to convert policy actions to joint targets."""
+        return self.default_joint_pos + action_scale * action
 
     def update_and_get_history(self, obs_45d: np.ndarray) -> torch.Tensor:
         # Shift history left and insert newest observation at the end

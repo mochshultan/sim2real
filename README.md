@@ -34,7 +34,34 @@ Observations contain `q - q0`; actions use `q_des = q0 + 0.25 * action`.
 Joint groups retain FR/FL/BR/BL order, without a Pion joint-order adapter.
 The Pion policy and deployment artifacts previously added here were removed.
 
-Clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
+### Selecting either Jaguar policy
+
+Choose one launcher per controller session:
+
+```bash
+# Model 29996: observations q - q0, targets q0 + 0.25 * action
+ros2 launch jaguar_control sim2real.launch.py
+
+# Model 5999: observations q, targets 0.25 * action
+ros2 launch jaguar_control sim2real_zero.launch.py
+```
+
+The zero-reference launcher selects
+`models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt` and sets
+`policy_reference:=zero` in the shared controller. Its training run is
+`nxp_jaguar_adaboot_ideal_l2c2_zero_reference/2026-11-03_21-57-17_jaguar-kp45kd45-zero-scale025-ema0002-6144env-fresh6k-20261103T183206`.
+The export matches both checkpoint 5999 and the original training export exactly
+on CPU for batches 1, 16, and 64. Artifact hashes and training parameters are saved
+in `models/deployment_adaboot_ideal_l2c2_zero_reference_5999_20261103.json` and the
+matching model directory. This policy has not been tested on live hardware.
+
+Both launchers use the same standing pose, encoder calibration, gains, and safety
+handling. Zero reference applies to policy observations and action targets;
+it does not command all joints to zero during standing. Stop the current launch
+before selecting the other model. Optional arguments such as
+`with_hardware:=false` also apply to the zero-reference launcher.
+
+For model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with
 weight -0.01. Stand commands are sampled at 10%, resampled every 5 seconds.
 The exact contract, hashes, and validation are recorded in

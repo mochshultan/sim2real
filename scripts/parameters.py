@@ -67,12 +67,13 @@ STANDBY_ANGLE = [
 ]
 
 
-# Standing joint angles [rad] in ROS order (BL, BR, FL, FR).
+# Tuned standing joint angles [rad] in ROS order (BL, BR, FL, FR).
+# Separate from each checkpoint's observation/action reference.
 STAND_ANGLE = [
-     0.0, -1.49,  1.20,  # BL: coxa, hip, knee
-     0.0, -1.49,  1.20,  # BR: coxa, hip, knee
-     0.0, -1.51,  1.22,  # FL: coxa, hip, knee
-     0.0, -1.51,  1.22,  # FR: coxa, hip, knee
+     0.0, -1.59,  1.38,  # BL: coxa, hip, knee
+     0.0, -1.59,  1.38,  # BR: coxa, hip, knee
+     0.0, -1.59,  1.40,  # FL: coxa, hip, knee
+     0.0, -1.59,  1.40,  # FR: coxa, hip, knee
 ]
 
 # Trained policy reference joint angles in ROS joint order (BL, BR, FL, FR).

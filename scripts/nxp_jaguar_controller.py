@@ -98,7 +98,9 @@ class NXPJaguarControllerNode(Node):
         policy_path = self._configure_parameters()
         self._load_policy(policy_path)
 
-        self.obs_builder = JaguarObservationBuilder(DEFAULT_JOINT_POS)
+        joint_reference = np.zeros(12, dtype=np.float32) if self.policy_reference == "zero" else DEFAULT_JOINT_POS
+        self.obs_builder = JaguarObservationBuilder(joint_reference)
+        self.get_logger().info(f"Policy joint reference: {self.policy_reference}")
         self.state_lock = threading.Lock()
 
         # State Variables
@@ -183,6 +185,7 @@ class NXPJaguarControllerNode(Node):
 
         # Declare parameters
         self.declare_parameter("policy_path", "")
+        self.declare_parameter("policy_reference", "nominal")
         self.declare_parameter("torque_safety_enabled", True)
         self.declare_parameter("overtorque_threshold", 14.0)
         self.declare_parameter("shutdown_duration", 3.0)
@@ -218,7 +221,12 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("imu_roll_tolerance", 0.12)
         self.declare_parameter("imu_tilt_deadband", 0.02)
 
+        self.policy_reference = self.get_parameter("policy_reference").value
+        if self.policy_reference not in ("nominal", "zero"):
+            raise ValueError("policy_reference must be 'nominal' or 'zero'")
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
+        if self.policy_reference == "zero" and not policy_param:
+            raise ValueError("The zero reference requires an explicit matching policy_path")
         if not policy_param:
             policy_param = str(package_file("models", "policy.pt"))
         if not os.path.isfile(policy_param):
@@ -774,9 +782,8 @@ class NXPJaguarControllerNode(Node):
         else:
             ramp = 1.0
 
-        applied_action = ramp * self.filtered_action
-        target_pos = ((1.0 - ramp) * STAND_JOINT_POS
-                      + ramp * DEFAULT_JOINT_POS + ACTION_SCALE * applied_action)
+        policy_target = self.obs_builder.build_joint_target(self.filtered_action, ACTION_SCALE)
+        target_pos = STAND_JOINT_POS + ramp * (policy_target - STAND_JOINT_POS)
         target_vel = np.zeros(12, dtype=np.float32)
 
         # Impedance tracking gains for RL with smooth damping transition

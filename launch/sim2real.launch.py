@@ -8,7 +8,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def _launch_controller(context):
-    overrides = {"policy_path": LaunchConfiguration("policy_path")}
+    overrides = {
+        "policy_path": LaunchConfiguration("policy_path"),
+        "policy_reference": LaunchConfiguration("policy_reference"),
+    }
     torque_safety_enabled = LaunchConfiguration("torque_safety_enabled").perform(context)
     if torque_safety_enabled:
         overrides["torque_safety_enabled"] = torque_safety_enabled == "true"
@@ -41,6 +44,12 @@ def generate_launch_description():
         "policy_path",
         default_value=default_policy,
         description="Path to TorchScript policy; defaults to models/policy.pt",
+    )
+    policy_reference_arg = DeclareLaunchArgument(
+        "policy_reference",
+        default_value="nominal",
+        choices=["nominal", "zero"],
+        description="Joint reference for policy observations and position targets",
     )
     with_imu_arg = DeclareLaunchArgument(
         "with_imu",
@@ -173,6 +182,7 @@ def generate_launch_description():
                      "; all remote nodes and CLI terminals must use this domain and matching ROS distro."]),
         config_file_arg,
         policy_path_arg,
+        policy_reference_arg,
         with_imu_arg,
         with_joy_arg,
         with_teleop_arg,

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
+from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 from launch_ros.utilities import evaluate_parameters, normalize_parameters
 
 
@@ -52,7 +53,8 @@ class LaunchTorqueSafetyTests(unittest.TestCase):
     def controller_parameters(self, override=None):
         context = LaunchContext()
         context.launch_configurations.update(
-            config_file="custom_sim2real.yaml", policy_path="custom_policy.pt")
+            config_file="custom_sim2real.yaml", policy_path="custom_policy.pt",
+            policy_reference="nominal")
         if override is not None:
             context.launch_configurations["torque_safety_enabled"] = override
         with patch("launch.logging.get_logger"):
@@ -70,7 +72,7 @@ class LaunchTorqueSafetyTests(unittest.TestCase):
     def test_omitted_flag_preserves_yaml_setting(self):
         parameters = self.controller_parameters()
         self.assertEqual(parameters[0], Path("custom_sim2real.yaml"))
-        self.assertEqual(parameters[1], {"policy_path": "custom_policy.pt"})
+        self.assertEqual(parameters[1], {"policy_path": "custom_policy.pt", "policy_reference": "nominal"})
 
     def test_explicit_flags_override_yaml_with_boolean_values(self):
         for flag, expected in (("true", True), ("false", False)):
@@ -84,6 +86,31 @@ class LaunchTorqueSafetyTests(unittest.TestCase):
     def test_invalid_flag_is_rejected(self):
         with self.assertRaises(RuntimeError):
             self.controller_parameters("invalid")
+
+    def test_zero_launcher_passes_matching_policy_and_reference_to_controller(self):
+        root = Path(__file__).parents[1]
+        zero_spec = importlib.util.spec_from_file_location("zero_launch", root / "launch/sim2real_zero.launch.py")
+        zero_module = importlib.util.module_from_spec(zero_spec)
+        zero_spec.loader.exec_module(zero_module)
+        context = LaunchContext()
+        context.launch_configurations.update(with_hardware="false", domain_id="17")
+        with patch("launch.logging.get_logger"):
+            include = zero_module.generate_launch_description().entities[0]
+            for name, substitutions in include.launch_arguments:
+                context.launch_configurations[name] = perform_substitutions(
+                    context, normalize_to_list_of_substitutions(substitutions))
+            actions = module.generate_launch_description().entities
+            for action in actions:
+                if isinstance(action, DeclareLaunchArgument):
+                    action.execute(context)
+            with patch.object(module, "Node") as node:
+                module._launch_controller(context)
+        parameters = evaluate_parameters(context, normalize_parameters(node.call_args.kwargs["parameters"]))
+        self.assertEqual(parameters[1]["policy_reference"], "zero")
+        self.assertEqual(parameters[1]["policy_path"],
+                         str(root / "models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"))
+        self.assertEqual(context.launch_configurations["with_hardware"], "false")
+        self.assertEqual(context.launch_configurations["domain_id"], "17")
 
 
 if __name__ == "__main__":

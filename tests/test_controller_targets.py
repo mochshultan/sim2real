@@ -70,16 +70,42 @@ def walk_node(action):
 
 
 @pytest.mark.parametrize("elapsed,ramp", [(0.0, 0.0), (0.4, 0.5), (0.8, 1.0)])
-def test_walk_targets_preserve_policy_blend_and_gains(elapsed, ramp):
+@pytest.mark.parametrize("reference", [DEFAULT_JOINT_POS, np.zeros(12, dtype=np.float32)])
+def test_walk_targets_preserve_policy_blend_and_gains(elapsed, ramp, reference):
     node = walk_node([0.2] * 12)
+    node.obs_builder = JaguarObservationBuilder(reference)
     targets = Controller._walk_targets(node, 10.0 + elapsed, DEFAULT_JOINT_POS,
                                        np.zeros(12), [0, 0, 0, 1], np.zeros(3), np.zeros(3))
     position, velocity, kp, kd = targets
-    expected = (1 - ramp) * STAND_JOINT_POS + ramp * DEFAULT_JOINT_POS + 0.25 * ramp * 0.2
+    expected = (1 - ramp) * STAND_JOINT_POS + ramp * reference + 0.25 * ramp * 0.2
     np.testing.assert_allclose(position, expected, atol=1e-7)
     np.testing.assert_array_equal(velocity, 0)
     assert kp == [45.0] * 12
     assert kd == [4.5] * 12
+
+
+@pytest.mark.parametrize("reference,path,error", [
+    ("invalid", "", "policy_reference must be"),
+    ("zero", "", "explicit matching policy_path"),
+    ("zero", str(Path(__file__).parents[1] / "models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"), None),
+])
+def test_policy_reference_configuration(reference, path, error):
+    values = {"policy_reference": reference, "policy_path": path}
+
+    def declare(name, default):
+        values.setdefault(name, default)
+
+    def parameter(name):
+        value = values[name]
+        return SimpleNamespace(value=value, get_parameter_value=lambda: SimpleNamespace(string_value=value))
+
+    node = SimpleNamespace(declare_parameter=declare, get_parameter=parameter, get_logger=Mock())
+    if error:
+        with pytest.raises(ValueError, match=error):
+            Controller._configure_parameters(node)
+    else:
+        assert Controller._configure_parameters(node) == path
+        assert node.policy_reference == "zero"
 
 
 def test_invalid_walk_output_requests_shutdown_and_returns_no_target():
