@@ -5,10 +5,13 @@ import torch
 
 
 class JaguarObservationBuilder:
-    def __init__(self, default_joint_pos, history_len: int = 5):
+    def __init__(self, default_joint_pos, history_len: int = 5, history_initialization: str = "zeros"):
         self.default_joint_pos = np.asarray(default_joint_pos, dtype=np.float32).copy()
         if self.default_joint_pos.shape != (12,) or not np.isfinite(self.default_joint_pos).all():
             raise ValueError("Joint reference must contain 12 finite positions [rad]")
+        if history_initialization not in ("zeros", "repeat"):
+            raise ValueError("history_initialization must be zeros or repeat")
+        self.history_initialization = history_initialization
         self.history_len = history_len
         self.obs_dim = 45
         self.last_action = np.zeros(12, dtype=np.float32)
@@ -18,6 +21,9 @@ class JaguarObservationBuilder:
     def reset_history(self, initial_obs_45d: np.ndarray):
         self.history_buf.fill(0.0)
         self.history_buf[0, -1, :] = initial_obs_45d
+        if self.history_initialization == "repeat":
+            self.history_buf[0, :, :] = initial_obs_45d
+            self.history_buf[0, :, 33:45] = 0.0
         self.last_action[:] = 0.0
 
     def build_step_observation(self, ang_vel, quat, cmd, joint_pos, joint_vel) -> np.ndarray:

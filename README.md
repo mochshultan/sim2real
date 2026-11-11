@@ -42,18 +42,21 @@ Choose one launcher per controller session:
 # Model 29996: observations q - q0, targets q0 + 0.25 * action
 ros2 launch jaguar_control sim2real.launch.py
 
-# Model 5999: observations q, targets 0.25 * action
+# Model 19999: observations q, targets 0.25 * clipped_action
 ros2 launch jaguar_control sim2real_zero.launch.py
 ```
 
 The zero-reference launcher selects
-`models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt` and sets
-`policy_reference:=zero` in the shared controller. Its training run is
-`nxp_jaguar_adaboot_ideal_l2c2_zero_reference/2026-11-03_21-57-17_jaguar-kp45kd45-zero-scale025-ema0002-6144env-fresh6k-20261103T183206`.
-The export matches both checkpoint 5999 and the original training export exactly
-on CPU for batches 1, 16, and 64. Artifact hashes and training parameters are saved
-in `models/deployment_adaboot_ideal_l2c2_zero_reference_5999_20261103.json` and the
-matching model directory. This policy has not been tested on live hardware.
+`models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt` and sets
+`policy_reference:=zero` and `history_initialization:=repeat`. Its final training run is
+`nxp_jaguar_adaboot_l2c2_height_stand_clearance5cm/2026-11-11_16-07-13_recover-clearance5cm-to20k-20261111-1536env`.
+The exported means are clipped to +/-10 before target/action-feedback processing.
+CPU output matches the native training actor with clipping exactly for batches
+1/16/64 and zero/random/stress histories (maximum absolute difference 0.0).
+Hashes and training snapshots are in `models/deployment_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.json` and the
+matching model directory. The older model 5999 remains archived.
+ROS2 control, the main branch's 14 Nm cap and rear-hip calibration are retained.
+Physical motion with this policy has not been tested.
 
 Both launchers use the same standing pose, encoder calibration, gains, and safety
 handling. Zero reference applies to policy observations and action targets;
@@ -81,7 +84,7 @@ and rear hip/knee `-1.59/+1.38` rad, defined by `STAND_ANGLE` in
 `scripts/parameters.py`. The controller uses it for
 `STANDUP` and `STAND_HOLD`, with bounded IMU leveling trim when enabled. Walking
 uses the selected policy's reference and blends from the standing pose during
-the walk ramp: nominal for model 29996, zero for model 5999.
+the walk ramp: nominal for model 29996, zero for model 19999.
 
 This branch runs the 12 calibrated RobStride RS00 actuators through `jaguar_control/JaguarSystem` under `controller_manager` at 200 Hz. The impedance controller claims position, velocity, effort, Kp and Kd command interfaces. The Python policy remains at 50 Hz. See the [ros2_control migration and mock validation guide](docs/ros2_control.md).
 

@@ -35,7 +35,8 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertEqual(_sha256(identity_policy), POLICY_SHA256)
         self.assertEqual(sorted(path.name for path in (ROOT / "models").glob("policy*.pt")),
                          ["policy.pt", identity_policy.name,
-                          "policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"])
+                          "policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt",
+                          "policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt"])
         manifest = json.loads((ROOT / "models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json").read_text())
         self.assertEqual(manifest["policy_file"], default_policy.name)
         self.assertEqual(manifest["identity_policy_file"], identity_policy.name)

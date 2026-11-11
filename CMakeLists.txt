@@ -168,6 +168,8 @@ install(FILES models/policy.pt
   models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json
   models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt
   models/deployment_adaboot_ideal_l2c2_zero_reference_5999_20261103.json
+  models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt
+  models/deployment_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.json
   DESTINATION share/${PROJECT_NAME}/models
 )
 

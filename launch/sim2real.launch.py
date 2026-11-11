@@ -15,6 +15,7 @@ def _launch_controller(context):
     overrides = {
         "policy_path": LaunchConfiguration("policy_path"),
         "policy_reference": LaunchConfiguration("policy_reference"),
+        "history_initialization": LaunchConfiguration("history_initialization"),
     }
     return [Node(
         package="jaguar_control",
@@ -105,6 +106,10 @@ def generate_launch_description():
         default_value="nominal",
         choices=["nominal", "zero"],
         description="Joint reference for policy observations and position targets",
+    )
+    history_initialization_arg = DeclareLaunchArgument(
+        "history_initialization", default_value="zeros", choices=["zeros", "repeat"],
+        description="History cold start required by the selected policy",
     )
     with_imu_arg = DeclareLaunchArgument(
         "with_imu",
@@ -212,6 +217,7 @@ def generate_launch_description():
         config_file_arg,
         policy_path_arg,
         policy_reference_arg,
+        history_initialization_arg,
         with_imu_arg,
         with_joy_arg,
         with_teleop_arg,

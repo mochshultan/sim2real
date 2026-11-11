@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import shutil
 from pathlib import Path
@@ -20,11 +21,14 @@ class AdaBootPolicy(nn.Module):
     converts it to ``[15, 15, 15, 60, 60, 60]`` before the estimator.
     """
 
-    def __init__(self, actor_state_dict: dict[str, torch.Tensor], eps: float = 0.01) -> None:
+    def __init__(self, actor_state_dict: dict[str, torch.Tensor], eps: float = 0.01, clip_actions: float = 0.0) -> None:
         super().__init__()
         self.register_buffer("mean", actor_state_dict["obs_normalizer._mean"].clone().cpu())
         self.register_buffer("std", actor_state_dict["obs_normalizer._std"].clone().cpu())
         self.eps = eps
+        if not math.isfinite(clip_actions) or clip_actions < 0:
+            raise ValueError("clip_actions must be finite and nonnegative (zero disables clipping)")
+        self.clip_actions = clip_actions
 
         self.estimator = nn.Sequential(
             nn.Linear(225, 128),
@@ -69,7 +73,8 @@ class AdaBootPolicy(nn.Module):
         )
         estimated_velocity = self.estimator(estimator_input)
         latent = torch.cat((current, estimated_velocity), dim=1)
-        return self.actor((latent - self.mean) / (self.std + self.eps))
+        action = self.actor((latent - self.mean) / (self.std + self.eps))
+        return action.clamp(-self.clip_actions, self.clip_actions) if self.clip_actions > 0 else action
 
 
 def main() -> None:
@@ -80,6 +85,7 @@ def main() -> None:
     )
     parser.add_argument("--models-dir", default=str(Path(__file__).resolve().parents[1] / "models"))
     parser.add_argument("--tag", default="adaboot_tibia_2999_estimator")
+    parser.add_argument("--clip-actions", type=float, default=0.0, help="Clip exported mean actions; zero keeps unbounded output")
     parser.add_argument("--set-default", action="store_true", help="Also replace models/policy.pt")
     args = parser.parse_args()
 
@@ -88,7 +94,7 @@ def main() -> None:
         raise FileNotFoundError(checkpoint)
     checkpoint_data = torch.load(checkpoint, map_location="cpu", weights_only=False)
     actor_state_dict = checkpoint_data["actor_state_dict"]
-    model = AdaBootPolicy(actor_state_dict).eval()
+    model = AdaBootPolicy(actor_state_dict, clip_actions=args.clip_actions).eval()
 
     sample = torch.zeros(1, 5, 45)
     with torch.inference_mode():

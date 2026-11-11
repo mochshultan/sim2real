@@ -3,23 +3,27 @@ import ast
 from pathlib import Path
 import time
 import threading
+import sys
 import unittest
 from unittest.mock import Mock, patch
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+from policy_observation import JaguarObservationBuilder
 
 source = ast.parse((Path(__file__).parents[1] / 'scripts/nxp_jaguar_controller.py').read_text())
 cls = next(n for n in source.body if isinstance(n, ast.ClassDef) and n.name == 'NXPJaguarControllerNode')
 methods = {'_trigger_safe_shutdown', '_persistent_fault', '_update_torque_diagnostics', '_hardware_safe_park_cb',
            '_request_safe_park', '_sensors_ready', '_joy_cb',
-           '_hardware_status_cb', '_reset_controller_cb'}
+           '_hardware_status_cb', '_reset_controller_cb', '_new_observation_builder'}
 cls.bases = []
 cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in methods]
 namespace = dict(np=np, time=time, Bool=Mock, Joy=Mock, String=Mock,
                  ISAAC_JOINT_NAMES=[f'joint_{i}' for i in range(12)],
                  ISAAC_LIMITS_LOWER=np.full(12, -0.5), ISAAC_LIMITS_UPPER=np.full(12, 0.5),
                  FEEDBACK_LIMITS_LOWER=np.full(12, -0.7), FEEDBACK_LIMITS_UPPER=np.full(12, 0.7),
-                 SIT_JOINT_POS=np.zeros(12), STAND_JOINT_POS=np.full(12, 0.25), DEFAULT_JOINT_POS=np.zeros(12),
-                 JaguarObservationBuilder=Mock,
+                 SIT_JOINT_POS=np.zeros(12), STAND_JOINT_POS=np.full(12, 0.25), DEFAULT_JOINT_POS=np.full(12, 0.25),
+                 JaguarObservationBuilder=JaguarObservationBuilder,
                  threading=threading)
 exec(compile(ast.Module(body=[cls], type_ignores=[]), '<controller safety methods>', 'exec'), namespace)
 Controller = namespace['NXPJaguarControllerNode']
@@ -205,6 +209,8 @@ class SafetyTests(unittest.TestCase):
 
     def test_manual_controller_reset_requires_hardware_recovery(self):
         node = self.node
+        node.policy_reference = "zero"
+        node.history_initialization = "repeat"
         node.state = 'DISABLED'
         node.hardware_status = 'PASSIVE_ZERO_TORQUE'
         node.last_hardware_status_time = time.monotonic()
@@ -229,6 +235,8 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(node.state, 'STANDBY')
         np.testing.assert_allclose(node.cmd_vel, 0)
         np.testing.assert_allclose(node.filtered_action, 0)
+        np.testing.assert_array_equal(node.obs_builder.default_joint_pos, np.zeros(12))
+        self.assertEqual(node.obs_builder.history_initialization, "repeat")
 
 
 if __name__ == '__main__':

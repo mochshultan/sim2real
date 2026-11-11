@@ -1,16 +1,16 @@
 # Model Jaguar dengan referensi 0 rad
 
-Jalankan model 5999 melalui `sim2real_zero.launch.py`. Launcher ini memakai
+Jalankan model 19999 melalui `sim2real_zero.launch.py`. Launcher ini memakai
 stack ros2_control yang sama dengan launcher nominal: controller, pembatasan gerak, driver
 CAN, teleop, dan safety tidak diduplikasi.
 
 Referensi policy dan pose berdiri adalah dua konfigurasi berbeda:
 
-| Bagian | Referensi 0 rad / model 5999 | Referensi nominal / model 29996 |
+| Bagian | Referensi 0 rad / model 19999 | Referensi nominal / model 29996 |
 | --- | --- | --- |
 | Launcher | `sim2real_zero.launch.py` | `sim2real.launch.py` |
 | Posisi dalam observasi | `q` | `q - q0` |
-| Target policy sebelum clamp | `0.25 * action` | `q0 + 0.25 * action` |
+| Target policy sebelum clamp | `0.25 * clip(action, -10, 10)` | `q0 + 0.25 * action` |
 | Target selama ramp WALK | `stand + ramp * (target_policy - stand)` | Rumus yang sama |
 | Pose STANDUP / STAND_HOLD | `STAND_ANGLE`, ditambah trim IMU jika aktif | Pose yang sama |
 
@@ -38,7 +38,7 @@ ros2 launch jaguar_control sim2real_zero.launch.py
 Untuk terminal baru, muat environment dengan
 `source scripts/source_ros.sh` dan `source install/setup.bash` dari root repo.
 Log controller harus memuat `Policy joint reference: zero` dan path policy
-`policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt`.
+`policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt`.
 Xbox: **A** untuk berdiri, **Start/Menu** untuk masuk WALK; Start lagi untuk
 kembali ke STAND_HOLD. Model ini memiliki validasi offline; file manifest tidak
 menyatakan bahwa model sudah diuji pada hardware.
@@ -54,7 +54,8 @@ ros2 launch jaguar_control sim2real_zero.launch.py --show-args
 
 | Flag | Default pada launcher zero | Fungsi |
 | --- | --- | --- |
-| `policy_path` | `models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt` | Ganti actor TorchScript dengan model yang dilatih untuk referensi zero dan kontrak input/output yang sama. Path default di-resolve ke path absolut. |
+| `policy_path` | `models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt` | Ganti actor TorchScript dengan model yang dilatih untuk referensi zero dan kontrak input/output yang sama. Path default di-resolve ke path absolut. |
+| `history_initialization` | `repeat` | Ulangi observasi awal pada kelima frame, dengan feedback aksi awal nol. CLI override tetap berlaku; `zeros` tersedia untuk kompatibilitas policy lain. |
 | `policy_reference` | `zero`, hanya menerima `zero` | Menjaga pasangan model dan referensi; untuk nominal gunakan launcher nominal. |
 | `config_file` | `config/sim2real.yaml` | File parameter ROS untuk controller, teleop, mux, joy opsional, dan driver CAN. |
 | `domain_id` | `$ROS_DOMAIN_ID`, atau `1` jika belum diset | Domain DDS; terminal dan mesin lain harus menggunakan nilai yang sama. |
@@ -67,7 +68,7 @@ ros2 launch jaguar_control sim2real_zero.launch.py --show-args
 | `startup_clear_faults` | `true` | C++ driver: clear fault sekali sebelum enable saat startup. |
 
 Nilai CLI mengalahkan default launcher. Controller membaca file YAML, kemudian
-menerapkan override `policy_path`, `policy_reference`, . Pada launcher nominal, default reference
+menerapkan override `policy_path`, `policy_reference`, dan `history_initialization`. Pada launcher nominal, default reference
 adalah `nominal` dan default model adalah `models/policy.pt`.
 
 ## Parameter melalui YAML
@@ -172,3 +173,19 @@ ros2 launch jaguar_control sim2real_zero.launch.py --show-args
 Untuk menjalankan stack dengan feedback dari sumber lain, pilih
 `with_hardware:=false`; matikan pula `with_imu`/`with_teleop` bila sumber tersebut
 juga eksternal. Controller tetap memerlukan feedback yang valid sebelum WALK.
+
+
+## Kontrak model 19999
+
+Artifact dan manifest berada di `models/adaboot_l2c2_zero_reference_clearance5cm_19999_20261111/` dan
+`models/deployment_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.json`. Input adalah history
+`[batch,5,45]` time-major; estimator memakai packing per term, lalu mean actor
+di-clip +/-10 di dalam TorchScript sebelum menjadi feedback aksi dan target
+sendi. Referensi zero dan mode history dipertahankan setelah reset controller.
+Model 5999 lama tetap tersedia, sementara model nominal tetap 29996.
+
+Adaptasi ini berbasis main `4c57327` (migrasi ros2_control dan kalibrasi rear hip
+terbaru). Batas torsi 14 Nm, mapping dan kalibrasi dipertahankan dari main.
+Reward training memakai tinggi badan 25 cm / weight -10 dan clearance 5 cm
+simetris dikalikan magnitudo kecepatan XY kaki; tidak ada input privileged saat
+inferensi. Ini bukan jaminan bahwa lintasan kaki selalu tepat 5 cm.

@@ -50,8 +50,8 @@ def test_reference_is_copied_and_does_not_modify_the_default():
     np.testing.assert_array_equal(Builder(nominal).default_joint_pos, nominal)
 
 
-def test_zero_artifacts_match_the_deployment_manifest():
-    tag = "adaboot_ideal_l2c2_zero_reference_5999_20261103"
+@pytest.mark.parametrize("tag", ["adaboot_ideal_l2c2_zero_reference_5999_20261103", "adaboot_l2c2_zero_reference_clearance5cm_19999_20261111"])
+def test_zero_artifacts_match_the_deployment_manifest(tag):
     models = ROOT / "models"
     manifest = json.loads((models / f"deployment_{tag}.json").read_text())
     for kind in ("policy", "checkpoint"):

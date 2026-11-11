@@ -74,18 +74,20 @@ class LaunchPolicyTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         context, parameters = self.zero_controller_parameters()
         self.assertEqual(parameters[1]["policy_reference"], "zero")
+        self.assertEqual(parameters[1]["history_initialization"], "repeat")
         self.assertEqual(parameters[1]["policy_path"],
-                         str(root / "models/policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt"))
+                         str(root / "models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
         self.assertEqual(context.launch_configurations["domain_id"], "17")
 
     def test_zero_launcher_preserves_explicit_model_and_config_overrides(self):
         context, parameters = self.zero_controller_parameters(
             policy_path="/tmp/custom_zero.pt", config_file="/tmp/custom.yaml",
-            domain_id="23")
+            domain_id="23", history_initialization="zeros")
         self.assertEqual(parameters[0], Path("/tmp/custom.yaml"))
         self.assertEqual(parameters[1], {
             "policy_path": "/tmp/custom_zero.pt", "policy_reference": "zero",
+            "history_initialization": "zeros",
         })
         self.assertEqual(context.launch_configurations["domain_id"], "23")
 

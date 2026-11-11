@@ -54,3 +54,18 @@ def test_deployed_policy_accepts_extracted_observation_builder():
         result = policy(builder.update_and_get_history(obs))
     assert tuple(result.shape) == (1, 12)
     assert torch.isfinite(result).all()
+
+
+
+def test_repeat_history_cold_start_clears_previous_action_feedback():
+    builder = JaguarObservationBuilder(np.zeros(12), history_initialization="repeat")
+    builder.last_action[:] = 8.0
+    initial = np.arange(45, dtype=np.float32) / 10.0
+    builder.reset_history(initial)
+    expected = initial.copy()
+    expected[33:45] = 0.0
+    np.testing.assert_allclose(builder.history_buf, np.tile(expected, (1, 5, 1)))
+    np.testing.assert_array_equal(builder.last_action, np.zeros(12))
+    history = builder.update_and_get_history(np.ones(45, dtype=np.float32)).numpy()
+    np.testing.assert_allclose(history[0, :4], np.tile(expected, (4, 1)))
+    np.testing.assert_allclose(history[0, 4], 1.0)

@@ -98,8 +98,7 @@ class NXPJaguarControllerNode(Node):
         policy_path = self._configure_parameters()
         self._load_policy(policy_path)
 
-        joint_reference = np.zeros(12, dtype=np.float32) if self.policy_reference == "zero" else DEFAULT_JOINT_POS
-        self.obs_builder = JaguarObservationBuilder(joint_reference)
+        self.obs_builder = self._new_observation_builder()
         self.get_logger().info(f"Policy joint reference: {self.policy_reference}")
         self.state_lock = threading.Lock()
 
@@ -179,6 +178,11 @@ class NXPJaguarControllerNode(Node):
             f"roll tolerance={self.imu_roll_tolerance:.3f} rad | knees=fixed"
         )
 
+    def _new_observation_builder(self):
+        """Preserve the selected policy reference and history mode at startup and reset."""
+        reference = np.zeros(12, dtype=np.float32) if self.policy_reference == "zero" else DEFAULT_JOINT_POS
+        return JaguarObservationBuilder(reference, history_initialization=self.history_initialization)
+
     def _configure_parameters(self):
         """Declare ROS overrides and validate controller/safety configuration."""
         self.motion_limits = declare_motion_limits(self)
@@ -186,6 +190,7 @@ class NXPJaguarControllerNode(Node):
         # Declare parameters
         self.declare_parameter("policy_path", "")
         self.declare_parameter("policy_reference", "nominal")
+        self.declare_parameter("history_initialization", "zeros")
         self.declare_parameter("overtorque_threshold", 14.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
         self.declare_parameter("safe_park_duration", 2.0)
@@ -219,6 +224,7 @@ class NXPJaguarControllerNode(Node):
         self.declare_parameter("imu_roll_tolerance", 0.12)
         self.declare_parameter("imu_tilt_deadband", 0.02)
 
+        self.history_initialization = self.get_parameter("history_initialization").value
         self.policy_reference = self.get_parameter("policy_reference").value
         if self.policy_reference not in ("nominal", "zero"):
             raise ValueError("policy_reference must be 'nominal' or 'zero'")
@@ -367,7 +373,7 @@ class NXPJaguarControllerNode(Node):
             self.filtered_action[:] = 0.0
             self.transition_start_pos = self.joint_pos.copy()
             self.transition_target_pos = self.joint_pos.copy()
-            self.obs_builder = JaguarObservationBuilder(DEFAULT_JOINT_POS)
+            self.obs_builder = self._new_observation_builder()
         self.overtorque_counter = 0
         self.soft_fault_times.clear()
         self.last_safe_park_request = 0.0

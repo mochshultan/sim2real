@@ -7,9 +7,9 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 | Launch File | Description | Command |
 | :--- | :--- | :--- |
 | [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, ros2_control Jaguar hardware (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
-| [`sim2real_zero.launch.py`](./sim2real_zero.launch.py) | Uses the same stack with Jaguar model 5999 and zero-reference observations/actions. | `ros2 launch jaguar_control sim2real_zero.launch.py` |
+| [`sim2real_zero.launch.py`](./sim2real_zero.launch.py) | Uses the same stack with Jaguar model 19999, clipped actions and repeated initial history. | `ros2 launch jaguar_control sim2real_zero.launch.py` |
 
-Both launchers share the same stack. The zero launcher declares the model 5999
+Both launchers share the same stack. The zero launcher declares the model 19999
 path and `policy_reference=zero` before including the shared launch; user model
 path overrides are preserved. See the [complete zero-reference parameter tables](../docs/zero_reference.md)
 for launch flags, YAML settings and source-only constants.
@@ -18,6 +18,7 @@ for launch flags, YAML settings and source-only constants.
 
 - `policy_reference` (default: `nominal`): Joint reference for observations and action targets. The zero launcher selects the matching policy and `zero` reference together.
 - `policy_path` (default: `models/policy.pt`): Path to TorchScript policy model.
+- `history_initialization` (default: `zeros`): History cold start; the zero launcher defaults to `repeat` for model 19999.
 - `with_imu` (default: `true`): Launch serial IMU node.
 - `with_teleop` (default: `true`): Launch the Xbox input source. Xbox has priority while its heartbeat is active.
 - `with_joy` (default: `false`): Launch optional ROS 2 `joy_node`, remapped to `/joy_raw` for the teleop hub.
