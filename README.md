@@ -1,4 +1,4 @@
-# NXP Jaguar Quadruped: Sim-to-Real Deployment (Branch: `cpp`)
+# NXP Jaguar Quadruped: Sim-to-Real Deployment (Branch: `main`)
 
 Reinforcement learning control deployment from Isaac Lab (AdaBoot-Ideal) to RobStride RS00 actuators via ROS 2.
 
@@ -83,7 +83,7 @@ and rear hip/knee `-1.59/+1.38` rad, defined by `STAND_ANGLE` in
 uses the selected policy's reference and blends from the standing pose during
 the walk ramp: nominal for model 29996, zero for model 5999.
 
-The `cpp` branch executes low-level actuator communication through a native Linux SocketCAN driver node (`robstride_can_node`) running under a real-time `SCHED_FIFO` priority 80 thread. The node targets 200 Hz and coordinates 12 RobStride RS00 actuators; timing depends on the host and bus load.
+This branch runs the 12 calibrated RobStride RS00 actuators through `jaguar_control/JaguarSystem` under `controller_manager` at 200 Hz. The impedance controller claims position, velocity, effort, Kp and Kd command interfaces. The Python policy remains at 50 Hz. See the [ros2_control migration and mock validation guide](docs/ros2_control.md).
 
 ### DDS buffer errors and unexpected motor stop
 
@@ -129,7 +129,7 @@ IMU + /joint_states ---------------------------------------------->|
                                                                   v
                                                         /joint_commands
                                                                   |
-                                                        robstride_can_node
+                                                        ros2_control / JaguarSystem
                                                                   |
                                                                CAN motors
 ```
@@ -194,7 +194,7 @@ ros2 launch jaguar_control sim2real.launch.py
 
 The launch starts IMU, C++ hardware, Xbox input, mux and controller. The
 controller starts in passive `STANDBY`; launch does not auto-stand or auto-walk.
-Set `use_cpp_hardware:=false` only when the Python fallback is required.
+The shared launch uses ros2_control on this branch. Set `mock_hardware:=true` for an offline resource check; the legacy standalone launch is separate.
 See [launch arguments and fault recovery](launch/README.md).
 
 ## Xbox and keyboard
@@ -248,22 +248,17 @@ The generated user profile overrides the factory JSON after input-node restart.
 
 ## Safety and recovery
 
-Normal control torque is capped at 14 Nm. The controller's configurable
-feedback threshold defaults to 14 Nm with five-cycle debounce (about 100 ms).
-Only feedback magnitude strictly greater than 14 Nm requests safe park;
-exactly +14 or -14 Nm does not trip the watchdog. With the normal CAN decoding
-range of [-14, 14] Nm, this condition cannot be detected from saturated feedback.
-The firmware cap does not prove that physical torque never overshoots;
-`torque_safety_enabled:=false` makes only this watchdog log instead. Recoverable
-faults request `SAFE_PARK`; failed parking or unusable feedback escalates to
-an E-stop. Sensor freshness, position/tracking limits and timing checks remain
-active. Tilt protection requests safe shutdown rather than automatically
-resuming motion. Standby uses zero stiffness and damping.
+Command torque is capped at 14 Nm in the hardware/firmware configuration.
+Measured overtorque is diagnostic only and never requests SAFE_PARK or E-stop,
+including during parking. `overtorque_threshold` and five-cycle debounce control
+warnings only. Clipping a command does not prove that physical torque cannot
+overshoot. Firmware-reported motor faults still latch an E-stop.
 
-`torque_safety_enabled:=false` changes only the controller feedback overtorque
-watchdog to logging; driver limits and other safeguards remain active.
-Recovery requires manual driver/controller reset, fresh feedback and explicit
-re-arming; see [the recovery procedure](launch/README.md).
+Motor/CAN faults, invalid or stale feedback, encoder jumps, invalid/stale active
+commands, manual E-stop, and failed parking retain stop handling. Persistent
+position/tracking violations, excessive tilt and severe policy timing faults
+request safe park when feedback permits; otherwise they stop immediately.
+Recovery remains manual. See [the safety matrix and recovery commands](docs/ros2_control.md).
 
 ## Safety logs
 
@@ -272,7 +267,7 @@ Safety events use short `key=value` fields. `event` identifies the action and
 are included where applicable.
 
 ```text
-event=SAFE_PARK state=WALK code=OVERTORQUE joint=Fr_roll_joint actual_nm=14.100 limit_nm=14.000 samples=5 required_samples=5
+event=WARNING state=WALK code=OVERTORQUE joint=Fr_roll_joint actual_nm=14.100 limit_nm=14.000 samples=5 required_samples=5 action=LOG_ONLY
 [driver] time_ms=1793850000000 event=ESTOP code=FEEDBACK_TIMEOUT joint=BL_collar_joint bus=can1 can_id=4 age_s=0.260000 limit_s=0.250000
 ```
 
@@ -290,7 +285,7 @@ Capture both ROS logs and the C++ driver's stderr in one file:
 
 ```bash
 set -o pipefail
-ros2 launch jaguar_control sim2real.launch.py torque_safety_enabled:=false \
+ros2 launch jaguar_control sim2real_zero.launch.py \
   2>&1 | tee "sim2real_$(date +%Y%m%d_%H%M%S).log"
 ```
 

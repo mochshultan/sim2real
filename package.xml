@@ -10,6 +10,13 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>hardware_interface</depend>
+  <depend>controller_interface</depend>
+  <depend>pluginlib</depend>
+  <depend>realtime_tools</depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>ros2controlcli</exec_depend>
   <depend>ament_index_cpp</depend>
   <depend>yaml-cpp</depend>
   <depend>rclpy</depend>

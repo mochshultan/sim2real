@@ -21,9 +21,8 @@ import parameters as hardware
 from project_paths import load_default_config
 
 
-@pytest.mark.parametrize("enabled", [True, False])
-def test_fourteen_nm_cap_accepts_independent_feedback_watchdog(enabled):
-    values = {"torque_safety_enabled": enabled}
+def test_fourteen_nm_cap_accepts_feedback_diagnostic_threshold():
+    values = {}
 
     def declare(name, default):
         values.setdefault(name, default)
@@ -39,7 +38,7 @@ def test_fourteen_nm_cap_accepts_independent_feedback_watchdog(enabled):
     assert hardware.RS00_CONTROL_TORQUE_LIMIT_NM == 14.0
     assert load_default_config()["robstride_can_hardware"]["ros__parameters"]["control_torque_limit_nm"] == 14.0
     assert node.overtorque_threshold == 14.0
-    assert node.torque_safety_enabled is enabled
+    assert "torque_safety_enabled" not in values
 
 
 @pytest.mark.parametrize("duration", [2.0, 4.0])

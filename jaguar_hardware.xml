@@ -1,0 +1,5 @@
+<library path="jaguar_ros2_control">
+  <class name="jaguar_control/JaguarSystem" type="jaguar_control::JaguarSystem" base_class_type="hardware_interface::SystemInterface">
+    <description>Two-bus Jaguar RS00 impedance hardware with calibrated feedback and latched safety.</description>
+  </class>
+</library>

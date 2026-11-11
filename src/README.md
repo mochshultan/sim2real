@@ -2,7 +2,14 @@
 
 Hardware execution nodes for the NXP Jaguar quadruped.
 
-## `robstride_can_node.cpp`
+## ros2_control runtime
+
+`ros2_control_system.cpp` implements JaguarSystem (both CAN buses, lifecycle,
+calibration and safety). `impedance_controller.cpp` claims the five command
+interfaces and carries named policy commands, E-stop, safe park, and reset.
+`controller_manager` owns the 200 Hz cycle. See [the migration guide](../docs/ros2_control.md).
+
+## `robstride_can_node.cpp` (legacy standalone only)
 
 ROS 2 driver node for RobStride RS00 motor communication over SocketCAN.
 

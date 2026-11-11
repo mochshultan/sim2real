@@ -25,12 +25,38 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(Threads REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(controller_interface REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(realtime_tools REQUIRED)
 
 include(CTest)
 
 include_directories(
   include
 )
+
+add_library(jaguar_ros2_control SHARED src/ros2_control_system.cpp)
+target_compile_features(jaguar_ros2_control PUBLIC cxx_std_17)
+target_include_directories(jaguar_ros2_control PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(jaguar_ros2_control hardware_interface pluginlib rclcpp)
+target_link_libraries(jaguar_ros2_control ${JAGUAR_YAML_CPP_TARGET} Threads::Threads)
+pluginlib_export_plugin_description_file(hardware_interface jaguar_hardware.xml)
+
+add_library(jaguar_impedance_controller SHARED src/impedance_controller.cpp)
+target_compile_features(jaguar_impedance_controller PUBLIC cxx_std_17)
+target_include_directories(jaguar_impedance_controller PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(jaguar_impedance_controller
+  controller_interface pluginlib realtime_tools rclcpp sensor_msgs std_msgs std_srvs)
+pluginlib_export_plugin_description_file(controller_interface jaguar_controllers.xml)
+
+install(TARGETS jaguar_ros2_control jaguar_impedance_controller
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
 
 # Build RobStride Hard Real-Time C++ Node
 add_executable(robstride_can_node
@@ -56,6 +82,11 @@ ament_target_dependencies(robstride_can_node
 
 if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_executable(test_ros2_control_system tests/test_ros2_control_system.cpp)
+  target_link_libraries(test_ros2_control_system jaguar_ros2_control)
+  ament_target_dependencies(test_ros2_control_system hardware_interface rclcpp)
+  add_test(NAME ros2_control_system COMMAND test_ros2_control_system
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/cybergear_motor_params.yaml)
   add_executable(test_can_protocol tests/test_can_protocol.cpp)
   target_include_directories(test_can_protocol PRIVATE include)
   target_compile_features(test_can_protocol PRIVATE cxx_std_17)
@@ -70,6 +101,7 @@ if(BUILD_TESTING)
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(test_can_protocol PRIVATE -UNDEBUG)
     target_compile_options(test_motion_safety PRIVATE -UNDEBUG)
+    target_compile_options(test_ros2_control_system PRIVATE -UNDEBUG)
   endif()
   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(test_serial_parser PRIVATE -UNDEBUG)

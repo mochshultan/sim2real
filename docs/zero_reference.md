@@ -1,7 +1,7 @@
 # Model Jaguar dengan referensi 0 rad
 
 Jalankan model 5999 melalui `sim2real_zero.launch.py`. Launcher ini memakai
-stack yang sama dengan launcher nominal: controller, pembatasan gerak, driver
+stack ros2_control yang sama dengan launcher nominal: controller, pembatasan gerak, driver
 CAN, teleop, dan safety tidak diduplikasi.
 
 Referensi policy dan pose berdiri adalah dua konfigurasi berbeda:
@@ -62,14 +62,12 @@ ros2 launch jaguar_control sim2real_zero.launch.py --show-args
 | `with_teleop` | `true` | Jalankan sumber Xbox. Keyboard dijalankan terpisah. |
 | `with_joy` | `false` | Jalankan `joy_node` dengan output `/joy_raw`; biasanya pembaca Xbox langsung sudah cukup. |
 | `with_hardware` | `true` | Jalankan driver CAN. Nilai `false` hanya menonaktifkan driver ini, bukan seluruh stack. |
-| `use_cpp_hardware` | `true` | Pilih C++ driver; `false` memilih driver Python. |
+| `mock_hardware` | `false` | Gunakan hardware mock tanpa membuka CAN; bukan simulasi dinamika. |
 | `with_controller` | `true` | Jalankan controller RL. |
 | `startup_clear_faults` | `true` | C++ driver: clear fault sekali sebelum enable saat startup. |
-| `torque_safety_enabled` | Tidak dioverride; YAML saat ini `true` | `true`: respons overtorque aktif; `false`: controller hanya mencatat overtorque. Tidak menghapus clamp torque maupun E-stop driver. |
 
 Nilai CLI mengalahkan default launcher. Controller membaca file YAML, kemudian
-menerapkan override `policy_path`, `policy_reference`, dan flag
-`torque_safety_enabled` jika diberikan. Pada launcher nominal, default reference
+menerapkan override `policy_path`, `policy_reference`, . Pada launcher nominal, default reference
 adalah `nominal` dan default model adalah `models/policy.pt`.
 
 ## Parameter melalui YAML
@@ -104,24 +102,25 @@ mengubah konfigurasi. `ros2 param set` tidak menjamin perilaku berjalan berubah.
 | `nxp_jaguar_controller` | `imu_kp_roll`, `imu_kd_roll` | `0.30`, `0.03` | Gain koreksi roll IMU. |
 | `nxp_jaguar_controller` | `imu_hip_tolerance`, `imu_roll_tolerance` | `0.15`, `0.12` | Batas trim hip dan collar, rad. |
 | `nxp_jaguar_controller` | `imu_tilt_deadband` | `0.02` | Deadband tilt IMU, rad. |
-| `nxp_jaguar_controller` | `torque_safety_enabled` | `true` | Respons overtorque controller; dapat dioverride melalui flag launch. |
-| `nxp_jaguar_controller` | `overtorque_threshold` | `14.0` | Ambang feedback torque controller, Nm; harus positif dan tidak melebihi ceiling RS00. Terpisah dari cap driver. |
+| `nxp_jaguar_controller` | `overtorque_threshold` | `14.0` | Ambang diagnostik feedback torque, tanpa park/E-stop, Nm; harus positif dan tidak melebihi ceiling RS00. Terpisah dari cap driver. |
 | `nxp_jaguar_controller` | `safe_park_duration` | `2.0` | Durasi gerakan park, detik; positif. |
 | `nxp_jaguar_controller` | `safe_park_kp`, `safe_park_kd` | `14.0`, `0.5` | Gain saat safe park. |
 | `nxp_jaguar_controller` | `safe_park_double_press_window` | `1.0` | Jendela permintaan park berulang, detik. |
 | `nxp_jaguar_controller` | `shutdown_settle_delay` | `0.5` | Waktu hold setelah safe park sebelum kembali pasif, detik. |
-| `robstride_can_hardware` | `rate_hz`, `rt_priority` | `200`, `80` | Frekuensi loop C++ dan prioritas SCHED_FIFO; valid `1..1000` Hz dan prioritas `1..99`. |
-| `robstride_can_hardware` | `control_torque_limit_nm` | `14.0` | Cap torque software/firmware C++; valid `0 < nilai <= 14`. |
+| `controller_manager` | `update_rate`, `thread_priority` | `200`, `80` | Frekuensi ros2_control read/update/write (Hz) dan prioritas thread manager. |
+| `jaguar_impedance_controller` | `command_timeout` | `0.10` | Timeout command aktif dalam detik; monotonic clock, memicu E-stop jika stream hilang. |
+| `jaguar_hardware` | `control_torque_limit_nm` | `14.0` | Cap torque software/firmware C++; valid `0 < nilai <= 14`. |
 | Kedua node driver CAN | `default_coxa_kp`, `default_kp`, `default_knee_kp` | Masing-masing `45.0` | Gain awal collar, hip, knee. Command controller membawa gain tersendiri. |
 | Kedua node driver CAN | `default_coxa_kd`, `default_kd`, `default_knee_kd` | Masing-masing `4.5` | Damping awal collar, hip, knee. |
 | `jaguar_can_hardware` | `rate_hz` | `200` | Frekuensi driver Python ketika fallback dipilih. |
 | `joy_node` | `dev`, `deadzone`, `autorepeat_rate` | `/dev/input/js0`, `0.10`, `50.0` | Nilai yang dikirim ke joy opsional, bukan pembaca Xbox langsung. Nama parameter perangkat bergantung implementasi joy yang terpasang. |
 
-Node driver C++ bernama `robstride_can_hardware`; fallback Python bernama
-`jaguar_can_hardware`. Keduanya memiliki section YAML terpisah. Parameter
-`motor_params_file` juga dapat ditambahkan ke section driver C++ untuk memilih
-encoding RS00, dengan default `config/cybergear_motor_params.yaml` dari package
-share. Ini bukan flag langsung launcher sim2real.
+Pada branch ini launcher bersama memakai `controller_manager` dan plugin
+`JaguarSystem`. Section `jaguar_hardware` diterjemahkan ke hardware parameters
+pada URDF; optional `motor_params_file` dapat ditambahkan di section tersebut.
+Section driver standalone lama tetap tersedia untuk tool terpisah.
+`torque_safety_enabled` dihapus; overtorque selalu diagnostik, termasuk saat park.
+Lihat [arsitektur dan matriks safety ros2_control](ros2_control.md).
 
 Parameter lama `shutdown_duration` sudah dihapus karena tidak digunakan jalur
 kontrol. Durasi park ditentukan oleh `safe_park_duration`.

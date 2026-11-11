@@ -1,3 +1,5 @@
+> On `shultan/jaguar-ros2-control`, the runtime hardware path is `controller_manager` → `ImpedanceController` → `JaguarSystem`. The standalone paths below describe the retained diagnostic tools. See [the current ros2_control architecture](ros2_control.md).
+
 # Repository structure and configuration map
 
 This map describes the ROS 2 deployment repository after the 2026-11-05 cleanup.
@@ -50,7 +52,7 @@ flowchart TD
 | `include/jaguar_control/robstride_can_bus.hpp` | SocketCAN transport | Bus names from manager | Linux non-blocking CAN I/O |
 | `include/jaguar_control/robstride_protocol.hpp` and `include/cybergear_driver_core/` | CAN frame encoding/decoding | RS00 ranges loaded from `config/cybergear_motor_params.yaml` | Protocol implementation used by C++ driver/tests |
 | `include/jaguar_control/cybergear_motor_config.hpp` | Parse/validate RS00 encoding configuration | `config/cybergear_motor_params.yaml` | Supplies protocol ranges before buses open |
-| `scripts/can_hardware_node.py` | Optional Python hardware fallback | `jaguar_can_hardware` block plus `parameters.py` | Selected with `use_cpp_hardware:=false` |
+| `scripts/can_hardware_node.py` | Optional Python hardware fallback | `jaguar_can_hardware` block plus `parameters.py` | Standalone diagnostic tool; not selected by the shared launch |
 | `scripts/robstride_motor_lib.py` | Python RS motor communication | Explicit construction arguments from callers | Used by fallback and manual motor tools |
 | `serial_imu/src/serial_port.cpp` and `ch_serial.c` | Serial acquisition and IMU packet parsing | ROS `port`, `frame_id`, `topic_name`; standalone IMU launch arguments | Publishes IMU measurements; parser tested without serial hardware |
 | `launch/display.launch.py` | Assemble robot display | `model`, `rviz_config`; defaults to `urdf/nxp_jaguar.urdf` and `config/jaguar_display.rviz` | Reads actual model override, resolves meshes through package URIs |
@@ -60,7 +62,7 @@ flowchart TD
 ## Configuration precedence
 
 1. Launch `config_file` is passed to participating ROS nodes; ROS overrides
-   applied after a file win (for example `torque_safety_enabled`).
+   applied after a file win (for example `policy_path`).
 2. `motion_limits.py` declares packaged YAML defaults; node-specific ROS
    overrides still take precedence.
 3. Standalone calibration/hardware helpers obtain default gains/rate from the

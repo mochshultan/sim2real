@@ -9,7 +9,7 @@ import numpy as np
 
 source = ast.parse((Path(__file__).parents[1] / 'scripts/nxp_jaguar_controller.py').read_text())
 cls = next(n for n in source.body if isinstance(n, ast.ClassDef) and n.name == 'NXPJaguarControllerNode')
-methods = {'_trigger_safe_shutdown', '_persistent_fault', '_update_overtorque_safety', '_hardware_safe_park_cb',
+methods = {'_trigger_safe_shutdown', '_persistent_fault', '_update_torque_diagnostics', '_hardware_safe_park_cb',
            '_request_safe_park', '_sensors_ready', '_joy_cb',
            '_hardware_status_cb', '_reset_controller_cb'}
 cls.bases = []
@@ -34,7 +34,6 @@ class SafetyTests(unittest.TestCase):
         self.node._request_safe_park = Mock()
         self.node._sensors_ready = Mock(return_value=True)
         self.node.get_logger = Mock()
-        self.node.torque_safety_enabled = True
         self.node.overtorque_threshold = 14.0
         self.node.torque_overload_cycles = 5
         self.node.overtorque_counter = 0
@@ -61,36 +60,7 @@ class SafetyTests(unittest.TestCase):
             self.assertFalse(self.node._persistent_fault('tracking', True))
             self.assertTrue(self.node._persistent_fault('tracking', True))
 
-    def test_overtorque_parks_only_after_five_samples_above_threshold(self):
-        tau = np.zeros(12)
-        # Synthetic over-range feedback verifies the strict comparator.
-        tau[4] = 14.01
-
-        for cycle in range(4):
-            max_tau = self.node._update_overtorque_safety(float(cycle), tau)
-        self.assertAlmostEqual(max_tau, 14.01)
-        self.node._request_safe_park.assert_not_called()
-
-        self.node._update_overtorque_safety(4.0, tau)
-        self.node._request_safe_park.assert_called_once()
-        self.node.get_logger.return_value.warn.assert_not_called()
-
-    def test_torque_at_or_below_threshold_decays_counter_in_both_modes(self):
-        for enabled in (True, False):
-            for torque in (-14.0, -13.8, 0.0, 13.8, 14.0):
-                with self.subTest(enabled=enabled, torque=torque):
-                    self.node.torque_safety_enabled = enabled
-                    self.node.overtorque_counter = 4
-                    max_tau = self.node._update_overtorque_safety(1.0, np.full(12, torque))
-                    self.assertEqual(max_tau, abs(torque))
-                    self.assertEqual(self.node.overtorque_counter, 3)
-        self.node._request_safe_park.assert_not_called()
-        self.node.get_logger.return_value.warn.assert_not_called()
-
-    def test_disabled_torque_safety_logs_sustained_overload_and_keeps_state(self):
-        self.node.torque_safety_enabled = False
-        tau = np.zeros(12)
-        tau[4] = -14.10
+    def test_overtorque_only_logs_in_all_active_states_including_park(self):
         for state in ('STANDUP', 'STAND_HOLD', 'WALK', 'SITDOWN', 'SAFE_PARK'):
             with self.subTest(state=state):
                 self.node.state = state
@@ -98,41 +68,35 @@ class SafetyTests(unittest.TestCase):
                 logger = self.node.get_logger.return_value
                 logger.reset_mock()
                 for cycle in range(4):
-                    self.node._update_overtorque_safety(float(cycle), tau)
+                    self.node._update_torque_diagnostics(float(cycle), np.full(12, -14.1))
                 logger.warn.assert_not_called()
-
                 for cycle in range(4, 15):
-                    max_tau = self.node._update_overtorque_safety(float(cycle), tau)
-
-                self.assertEqual(max_tau, 14.10)
+                    self.node._update_torque_diagnostics(float(cycle), np.full(12, -14.1))
                 self.assertEqual(self.node.state, state)
                 self.node._request_safe_park.assert_not_called()
                 self.node._trigger_hard_estop.assert_not_called()
-                message = logger.warn.call_args.args[0]
-                self.assertIn('joint_4', message)
-                self.assertIn('actual_nm=14.100 limit_nm=14.000', message)
-                self.assertIn('action=LOG_ONLY', message)
-                self.assertEqual(logger.warn.call_args.kwargs, {'throttle_duration_sec': 1.0})
+                self.assertIn('action=LOG_ONLY', logger.warn.call_args.args[0])
+                self.assertIn('actual_nm=14.100 limit_nm=14.000', logger.warn.call_args.args[0])
 
-    def test_enabled_overtorque_during_park_still_escalates_to_estop(self):
-        self.node.state = 'SAFE_PARK'
-        for cycle in range(5):
-            self.node._update_overtorque_safety(float(cycle), np.full(12, 14.10))
-        self.node._trigger_hard_estop.assert_called_once()
-        self.node._request_safe_park.assert_not_called()
-
-    def test_inactive_states_ignore_overtorque_in_both_modes(self):
-        for enabled in (True, False):
-            for state in ('STANDBY', 'DISABLED'):
-                with self.subTest(enabled=enabled, state=state):
-                    self.node.torque_safety_enabled = enabled
-                    self.node.state = state
-                    self.node.overtorque_counter = 4
-                    self.node._update_overtorque_safety(1.0, np.full(12, 14.10))
-                    self.assertEqual(self.node.overtorque_counter, 3)
+    def test_torque_at_or_below_threshold_decays_diagnostic_counter(self):
+        for torque in (-14.0, -13.8, 0.0, 13.8, 14.0):
+            self.node.overtorque_counter = 4
+            maximum = self.node._update_torque_diagnostics(1.0, np.full(12, torque))
+            self.assertEqual(maximum, abs(torque))
+            self.assertEqual(self.node.overtorque_counter, 3)
+        self.node.get_logger.return_value.warn.assert_not_called()
         self.node._request_safe_park.assert_not_called()
         self.node._trigger_hard_estop.assert_not_called()
+
+    def test_inactive_states_ignore_overtorque(self):
+        for state in ('STANDBY', 'DISABLED'):
+            self.node.state = state
+            self.node.overtorque_counter = 4
+            self.node._update_torque_diagnostics(1.0, np.full(12, 14.1))
+            self.assertEqual(self.node.overtorque_counter, 3)
         self.node.get_logger.return_value.warn.assert_not_called()
+        self.node._request_safe_park.assert_not_called()
+        self.node._trigger_hard_estop.assert_not_called()
 
     def test_queued_driver_requests_do_not_restart_park(self):
         self.node.state = 'SAFE_PARK'

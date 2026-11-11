@@ -6,7 +6,7 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 
 | Launch File | Description | Command |
 | :--- | :--- | :--- |
-| [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, RobStride C++ CAN node (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
+| [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, ros2_control Jaguar hardware (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
 | [`sim2real_zero.launch.py`](./sim2real_zero.launch.py) | Uses the same stack with Jaguar model 5999 and zero-reference observations/actions. | `ros2 launch jaguar_control sim2real_zero.launch.py` |
 
 Both launchers share the same stack. The zero launcher declares the model 5999
@@ -22,7 +22,7 @@ for launch flags, YAML settings and source-only constants.
 - `with_teleop` (default: `true`): Launch the Xbox input source. Xbox has priority while its heartbeat is active.
 - `with_joy` (default: `false`): Launch optional ROS 2 `joy_node`, remapped to `/joy_raw` for the teleop hub.
 - `with_hardware` (default: `true`): Launch CAN hardware driver.
-- `use_cpp_hardware` (default: `true`): Use C++ node (`robstride_can_node`). Set to `false` for Python driver.
+- `mock_hardware` (default: `false`): Select offline mock hardware without opening CAN buses. The shared launch uses ros2_control on this branch.
 - `with_controller` (default: `true`): Launch RL controller node.
 - `startup_clear_faults` (default: `true`): With C++ hardware, clear latched motor faults once before startup enable. Set `startup_clear_faults:=false` to disable it; runtime faults still require manual reset.
 
@@ -83,8 +83,7 @@ stays `EMERGENCY_STOPPED`; inspect the log and do not keep retrying a persistent
 fault. Call `/jaguar/reset_controller` only after status becomes
 `PASSIVE_ZERO_TORQUE`; it requires fresh, in-range IMU and joint feedback and
 returns the controller to passive `STANDBY`, not walking. The hardware reset path
-is available only with `use_cpp_hardware:=true`; it has not been validated on a
-physical robot.
+is provided by the impedance controller and JaguarSystem on this branch. Hardware motion still requires validation. See [the ros2_control guide](../docs/ros2_control.md).
 
 ## 2. Standalone driver and display
 

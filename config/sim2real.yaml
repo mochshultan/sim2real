@@ -29,6 +29,32 @@ jaguar_cmd_vel_mux:
     xbox_timeout: 0.30
     keyboard_timeout: 0.30
 
+# ros2_control owns the 200 Hz CAN read/update/write loop on this branch.
+controller_manager:
+  ros__parameters:
+    update_rate: 200
+    thread_priority: 80
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    jaguar_impedance_controller:
+      type: jaguar_control/ImpedanceController
+
+joint_state_broadcaster:
+  ros__parameters:
+    joints: [Bl_roll_joint, Bl_hip_pitch_joint, Bl_knee_joint,
+             Br_roll_joint, Br_hip_pitch_joint, Br_knee_joint,
+             Fl_roll_joint, Fl_hip_pitch_joint, Fl_knee_joint,
+             Fr_roll_joint, Fr_hip_pitch_joint, Fr_knee_joint]
+    interfaces: [position, velocity, effort]
+
+jaguar_impedance_controller:
+  ros__parameters:
+    command_timeout: 0.10
+
+jaguar_hardware:
+  ros__parameters:
+    control_torque_limit_nm: 14.0
+
 robstride_can_hardware:
   ros__parameters:
     rate_hz: 200
@@ -54,7 +80,6 @@ jaguar_can_hardware:
 nxp_jaguar_controller:
   ros__parameters:
     # Driver/firmware cap and independent feedback watchdog both use 14 Nm.
-    torque_safety_enabled: true  # false: log overtorque only, continue control
     overtorque_threshold: 14.0
     shutdown_settle_delay: 0.5
     safe_park_duration: 2.0

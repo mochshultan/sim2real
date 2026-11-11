@@ -30,27 +30,15 @@ axis stops the previous direction and accelerates from zero. Keyboard release,
 source timeout and safety stops can also zero commands immediately. The
 benchmark override is speed-clamped by the controller and bypasses teleop ramps.
 
-## Overtorque watchdog
+## ros2_control and torque diagnostics
 
-Set `nxp_jaguar_controller.ros__parameters.torque_safety_enabled` in
-`sim2real.yaml` and restart the controller:
+- `controller_manager`: 200 Hz read/update/write and SCHED_FIFO priority 80.
+- `jaguar_hardware`: hardware torque cap (14 Nm); optional `motor_params_file`.
+- `jaguar_impedance_controller`: active command timeout, 0.10 s.
+- `joint_state_broadcaster`: publishes named calibrated feedback on `/joint_states`.
+- `robstride_can_hardware` and `jaguar_can_hardware`: retained for standalone tools only.
 
-- `true` (default): sustained feedback above `overtorque_threshold` requests
-  SAFE_PARK; another overload while parking escalates to E-stop.
-- `false`: the same overload only produces a warning, limited to once per
-  second, and control continues without a torque-triggered state change.
-
-Override this setting when launching, without editing YAML:
-
-```bash
-ros2 launch jaguar_control sim2real.launch.py torque_safety_enabled:=false
-ros2 launch jaguar_control sim2real.launch.py torque_safety_enabled:=true
-```
-
-The launch flag takes precedence over `config_file`. If omitted, the controller
-uses the YAML setting (or its default `true` if the YAML does not specify it).
-
-Both modes keep the existing five-cycle debounce (100 ms at 50 Hz).
-This flag controls only the controller's feedback overtorque watchdog.
-The low-level/firmware torque caps, motor fault handling, manual E-stop,
-and other safety checks remain active; a firmware motor fault can still stop control.
+`nxp_jaguar_controller.overtorque_threshold` controls feedback warnings only.
+Overtorque never requests park or E-stop on this branch; the old
+`torque_safety_enabled` flag/parameter has been removed. Motor fault bits and all
+other safety checks remain active. See [the migration guide](../docs/ros2_control.md).

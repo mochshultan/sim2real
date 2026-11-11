@@ -1,12 +1,14 @@
 """Shared Jaguar hardware, teleop and controller stack for both policy references."""
 
 import os
+import xml.etree.ElementTree as ET
+
+import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, SetEnvironmentVariable
-from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PythonExpression
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
 
 
 def _launch_controller(context):
@@ -14,9 +16,6 @@ def _launch_controller(context):
         "policy_path": LaunchConfiguration("policy_path"),
         "policy_reference": LaunchConfiguration("policy_reference"),
     }
-    torque_safety_enabled = LaunchConfiguration("torque_safety_enabled").perform(context)
-    if torque_safety_enabled:
-        overrides["torque_safety_enabled"] = torque_safety_enabled == "true"
     return [Node(
         package="jaguar_control",
         executable="nxp_jaguar_controller.py",
@@ -24,6 +23,60 @@ def _launch_controller(context):
         output="screen",
         parameters=[LaunchConfiguration("config_file"), overrides],
     )]
+
+
+def _robot_description(package_dir, hardware_parameters):
+    """Add the ros2_control contract to the existing calibrated Jaguar URDF."""
+    root = ET.parse(os.path.join(package_dir, "urdf", "nxp_jaguar.urdf")).getroot()
+    system = ET.SubElement(root, "ros2_control", name="JaguarRS00", type="system")
+    hardware = ET.SubElement(system, "hardware")
+    ET.SubElement(hardware, "plugin").text = "jaguar_control/JaguarSystem"
+    for name, value in hardware_parameters.items():
+        ET.SubElement(hardware, "param", name=name).text = str(value).lower() if isinstance(value, bool) else str(value)
+    for leg in ("Bl", "Br", "Fl", "Fr"):
+        for axis in ("roll", "hip_pitch", "knee"):
+            joint = ET.SubElement(system, "joint", name=f"{leg}_{axis}_joint")
+            for interface in ("position", "velocity", "kp", "kd", "effort"):
+                ET.SubElement(joint, "command_interface", name=interface)
+            for interface in ("position", "velocity", "effort", "temperature"):
+                state = ET.SubElement(joint, "state_interface", name=interface)
+                ET.SubElement(state, "param", name="initial_value").text = "25" if interface == "temperature" else "0"
+    safety = ET.SubElement(system, "gpio", name="jaguar_safety")
+    for interface in ("emergency_stop", "safe_park_active", "reset_fault"):
+        ET.SubElement(safety, "command_interface", name=interface)
+    for interface in ("emergency_stopped", "passive", "park_requested", "resetting", "torque_limit"):
+        ET.SubElement(safety, "state_interface", name=interface)
+    return ET.tostring(root, encoding="unicode")
+
+
+def _launch_hardware(context):
+    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_file = LaunchConfiguration("config_file").perform(context)
+    with open(config_file) as stream:
+        config = yaml.safe_load(stream)
+    hardware_parameters = dict(config["jaguar_hardware"]["ros__parameters"])
+    hardware_parameters.setdefault("motor_params_file", os.path.join(package_dir, "config", "cybergear_motor_params.yaml"))
+    hardware_parameters["mock_hardware"] = LaunchConfiguration("mock_hardware").perform(context)
+    hardware_parameters["startup_clear_faults"] = LaunchConfiguration("startup_clear_faults").perform(context)
+    description = _robot_description(package_dir, hardware_parameters)
+    return [
+        Node(
+            package="robot_state_publisher", executable="robot_state_publisher",
+            parameters=[{"robot_description": description}], output="screen",
+        ),
+        Node(
+            package="controller_manager", executable="ros2_control_node",
+            parameters=[config_file], output="screen",
+            remappings=[("~/robot_description", "/robot_description")],
+        ),
+        Node(
+            package="controller_manager", executable="spawner",
+            arguments=["joint_state_broadcaster", "jaguar_impedance_controller",
+                       "--controller-manager", "/controller_manager",
+                       "--controller-manager-timeout", "60", "--activate-as-group"],
+            output="screen",
+        ),
+    ]
 
 
 def generate_launch_description():
@@ -71,12 +124,13 @@ def generate_launch_description():
     with_hardware_arg = DeclareLaunchArgument(
         "with_hardware",
         default_value="true",
-        description="Launch CAN hardware driver node",
+        description="Launch controller_manager, Jaguar hardware and impedance controller",
     )
-    use_cpp_hardware_arg = DeclareLaunchArgument(
-        "use_cpp_hardware",
-        default_value="true",
-        description="Use C++ Hard Real-Time driver (robstride_can_node) instead of Python",
+    mock_hardware_arg = DeclareLaunchArgument(
+        "mock_hardware",
+        default_value="false",
+        choices=["true", "false"],
+        description="Use offline hardware with no CAN access (not a dynamics simulator)",
     )
     with_controller_arg = DeclareLaunchArgument(
         "with_controller",
@@ -86,23 +140,14 @@ def generate_launch_description():
     startup_clear_faults_arg = DeclareLaunchArgument(
         "startup_clear_faults",
         default_value="true",
-        description="Clear latched RobStride faults once, before startup enable (C++ hardware only)",
+        description="Clear latched RobStride faults once before hardware activation",
     )
-    torque_safety_enabled_arg = DeclareLaunchArgument(
-        "torque_safety_enabled",
-        default_value="",
-        choices=["", "true", "false"],
-        description="Override overtorque safety: true=SAFE_PARK/E-stop, false=log only; omitted uses YAML",
-    )
-
     config_file = LaunchConfiguration("config_file")
     with_imu = LaunchConfiguration("with_imu")
     with_joy = LaunchConfiguration("with_joy")
     with_teleop = LaunchConfiguration("with_teleop")
     with_hardware = LaunchConfiguration("with_hardware")
-    use_cpp_hardware = LaunchConfiguration("use_cpp_hardware")
     with_controller = LaunchConfiguration("with_controller")
-    startup_clear_faults = LaunchConfiguration("startup_clear_faults")
 
     # 1. IMU Driver Node
     imu_node = Node(
@@ -147,28 +192,10 @@ def generate_launch_description():
         parameters=[config_file],
     )
 
-    # 3A. RobStride C++ Hard Real-Time CAN Node (Default, Deterministic 200 Hz)
-    cpp_hardware_node = Node(
-        package="jaguar_control",
-        executable="robstride_can_node",
-        name="robstride_can_hardware",
-        output="screen",
-        parameters=[config_file, {"startup_clear_faults": ParameterValue(startup_clear_faults, value_type=bool)}],
-        condition=IfCondition(
-            PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' == 'true'"])
-        ),
-    )
-
-    # 3B. RobStride Python CAN Hardware Driver Node (Fallback)
-    py_hardware_node = Node(
-        package="jaguar_control",
-        executable="can_hardware_node.py",
-        name="jaguar_can_hardware",
-        output="screen",
-        parameters=[config_file],
-        condition=IfCondition(
-            PythonExpression(["'", with_hardware, "' == 'true' and '", use_cpp_hardware, "' != 'true'"])
-        ),
+    # controller_manager owns read/update/write; there is no standalone CAN loop.
+    hardware_stack = OpaqueFunction(
+        function=_launch_hardware,
+        condition=IfCondition(with_hardware),
     )
 
     # 4. NXP Jaguar Sim-to-Real RL Controller Node
@@ -189,15 +216,13 @@ def generate_launch_description():
         with_joy_arg,
         with_teleop_arg,
         with_hardware_arg,
-        use_cpp_hardware_arg,
+        mock_hardware_arg,
         with_controller_arg,
         startup_clear_faults_arg,
-        torque_safety_enabled_arg,
         imu_node,
         joy_node,
         teleop_node,
         cmd_vel_mux_node,
-        cpp_hardware_node,
-        py_hardware_node,
+        hardware_stack,
         controller_node,
     ])
