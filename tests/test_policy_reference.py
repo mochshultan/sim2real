@@ -54,8 +54,11 @@ def test_reference_is_copied_and_does_not_modify_the_default():
     np.testing.assert_array_equal(Builder().joint_reference, nominal)
 
 
-def test_zero_artifacts_match_the_deployment_manifest():
-    tag = "adaboot_ideal_l2c2_zero_reference_5999_20261103"
+@pytest.mark.parametrize("tag", [
+    "adaboot_ideal_l2c2_zero_reference_5999_20261103",
+    "adaboot_l2c2_zero_reference_clearance5cm_19999_20261111",
+])
+def test_zero_artifacts_match_the_deployment_manifest(tag):
     models = ROOT / "models"
     manifest = json.loads((models / f"deployment_{tag}.json").read_text())
     for kind in ("policy", "checkpoint"):
@@ -63,3 +66,23 @@ def test_zero_artifacts_match_the_deployment_manifest():
         assert digest == manifest[f"{kind}_sha256"]
     assert manifest["policy_reference"] == "zero"
     assert manifest["nominal_joint_pos_rad"] == [0.0] * 12
+
+
+def test_repeat_history_matches_training_cold_start_and_clears_previous_action():
+    builder = Builder(joint_reference=np.zeros(12), history_initialization="repeat")
+    builder.last_action[:] = 8.0
+    initial = np.arange(45, dtype=np.float32) / 10.0
+    builder.reset_history(initial)
+    expected = initial.copy()
+    expected[33:45] = 0.0
+    np.testing.assert_allclose(builder.history_buf, np.tile(expected, (1, 5, 1)))
+    np.testing.assert_array_equal(builder.last_action, np.zeros(12))
+    next_step = np.ones(45, dtype=np.float32)
+    history = builder.update_and_get_history(next_step).numpy()
+    np.testing.assert_allclose(history[0, :4], np.tile(expected, (4, 1)))
+    np.testing.assert_allclose(history[0, 4], next_step)
+
+
+def test_invalid_history_initialization_is_rejected():
+    with pytest.raises(ValueError, match="history_initialization"):
+        Builder(history_initialization="invalid")

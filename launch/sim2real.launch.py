@@ -28,6 +28,12 @@ def generate_launch_description():
         choices=["nominal", "zero"],
         description="Joint reference for both policy observations and position targets",
     )
+    history_initialization_arg = DeclareLaunchArgument(
+        "history_initialization",
+        default_value="zeros",
+        choices=["zeros", "repeat"],
+        description="History cold-start convention required by the selected policy",
+    )
     with_imu_arg = DeclareLaunchArgument(
         "with_imu",
         default_value="true",
@@ -149,7 +155,8 @@ def generate_launch_description():
         output="screen",
         parameters=[
             config_file,
-            {"policy_path": policy_path, "policy_reference": LaunchConfiguration("policy_reference")},
+            {"policy_path": policy_path, "policy_reference": LaunchConfiguration("policy_reference"),
+             "history_initialization": LaunchConfiguration("history_initialization")},
         ],
         condition=IfCondition(with_controller),
     )
@@ -158,6 +165,7 @@ def generate_launch_description():
         config_file_arg,
         policy_path_arg,
         policy_reference_arg,
+        history_initialization_arg,
         with_imu_arg,
         with_joy_arg,
         with_teleop_arg,

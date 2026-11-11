@@ -1,0 +1,80 @@
+{
+  "training_run": "/home/shultan/IsaacLab-upgrade/logs/rsl_rl/nxp_jaguar_adaboot_l2c2_height_stand_clearance5cm/2026-11-11_16-07-13_recover-clearance5cm-to20k-20261111-1536env",
+  "training_host": "erc-rtx5746ti (192.168.50.114)",
+  "training_checkpoint_path": "/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_adaboot_l2c2_height_stand_clearance5cm/2026-11-11_16-07-13_recover-clearance5cm-to20k-20261111-1536env/model_19999.pt",
+  "checkpoint_iteration": 19999,
+  "checkpoint_file": "model_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt",
+  "policy_file": "policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt",
+  "checkpoint_sha256": "e54ab839ee2bff9a892b3cffa1ecf595db314d294130c39fb5fca2503e994e7e",
+  "policy_sha256": "124d42a60458a74e7a5e6dda5a6b52aa9252043df105dd29701c838ade70a0b7",
+  "training_env_sha256": "8c8e99f4054fb257096777a763b0a0a88880e068a9d0434699bd8610b286553c",
+  "training_agent_sha256": "d0d3e71c1dc2ccf59b4db6ad8b8f2c3eb0829f2863d3f8912c07efe11de0075a",
+  "policy_reference": "zero",
+  "nominal_joint_pos_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "action_scale": 0.25,
+  "clip_actions": 10.0,
+  "history_initialization": "repeat",
+  "input_shape": [
+    "batch",
+    5,
+    45
+  ],
+  "output_shape": [
+    "batch",
+    12
+  ],
+  "history_order": "time-major input; term-major estimator packing, oldest first",
+  "observation_scales": {
+    "angular_velocity": 0.25,
+    "gravity": 1.0,
+    "command": [
+      2.0,
+      2.0,
+      0.25
+    ],
+    "joint_pos": 1.0,
+    "joint_vel": 0.05,
+    "last_action": 1.0
+  },
+  "training_nominal_kp": 45.0,
+  "training_nominal_kd": 4.5,
+  "control_period_seconds": 0.02,
+  "normalization_epsilon": 0.01,
+  "export_output": "deterministic mean clipped to +/-10 before target and last-action feedback",
+  "joint_order": [
+    "Fr_roll_joint",
+    "Fl_roll_joint",
+    "Br_roll_joint",
+    "Bl_roll_joint",
+    "Fr_hip_pitch_joint",
+    "Fl_hip_pitch_joint",
+    "Br_hip_pitch_joint",
+    "Bl_hip_pitch_joint",
+    "Fr_knee_joint",
+    "Fl_knee_joint",
+    "Br_knee_joint",
+    "Bl_knee_joint"
+  ],
+  "height_target_m": 0.25,
+  "height_weight": -10.0,
+  "clearance_target_m": 0.05,
+  "clearance_cost": "sum airborne feet abs(h-.05)^2 * norm(v_rel_body_xy)",
+  "coxa_nominal_stand": null,
+  "validation": "CPU parity against native training actor export: batches 1/16/64, zero/random/stress histories; no live hardware execution",
+  "max_abs_diff": 0.0,
+  "torch_version": "2.11.0+cu130",
+  "limitations": "Robot limits, soft-start ramp and firmware safety layers remain; simulator nominal 14 Nm and hardware normal 13.5 Nm cap differ."
+}

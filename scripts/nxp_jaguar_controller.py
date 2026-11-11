@@ -133,12 +133,15 @@ ROS_NAME_TO_ISAAC_IDX = {
 }
 
 class JaguarObservationBuilder:
-    def __init__(self, history_len: int = 5, joint_reference: np.ndarray | None = None):
+    def __init__(self, history_len: int = 5, joint_reference: np.ndarray | None = None, history_initialization: str = "zeros"):
         self.joint_reference = np.array(
             DEFAULT_JOINT_POS if joint_reference is None else joint_reference, dtype=np.float32, copy=True
         )
         if self.joint_reference.shape != (12,) or not np.isfinite(self.joint_reference).all():
             raise ValueError("Joint reference must contain 12 finite positions [rad]")
+        if history_initialization not in ("zeros", "repeat"):
+            raise ValueError("history_initialization must be zeros or repeat")
+        self.history_initialization = history_initialization
         self.history_len = history_len
         self.obs_dim = 45
         self.last_action = np.zeros(12, dtype=np.float32)
@@ -148,6 +151,10 @@ class JaguarObservationBuilder:
     def reset_history(self, initial_obs_45d: np.ndarray):
         self.history_buf.fill(0.0)
         self.history_buf[0, -1, :] = initial_obs_45d
+        if self.history_initialization == "repeat":
+            self.history_buf[0, :, :] = initial_obs_45d
+            # Reset action feedback as well when restarting WALK after a previous episode.
+            self.history_buf[0, :, 33:45] = 0.0
         self.last_action[:] = 0.0
 
     def build_step_observation(self, ang_vel, quat, cmd, joint_pos, joint_vel) -> np.ndarray:
@@ -205,6 +212,7 @@ class NXPJaguarControllerNode(Node):
         # Declare parameters
         self.declare_parameter("policy_path", "")
         self.declare_parameter("policy_reference", "nominal")
+        self.declare_parameter("history_initialization", "zeros")
         self.declare_parameter("overtorque_threshold", 13.8)
         self.declare_parameter("shutdown_duration", 3.0)
         self.declare_parameter("shutdown_settle_delay", 0.5)
@@ -340,7 +348,10 @@ class NXPJaguarControllerNode(Node):
         self.get_logger().info(f"Policy verified: expects_temporal={self.policy_expects_temporal}, output_shape={tuple(probe.shape)}")
 
         joint_reference = np.zeros(12, dtype=np.float32) if policy_reference == "zero" else DEFAULT_JOINT_POS
-        self.obs_builder = JaguarObservationBuilder(joint_reference=joint_reference)
+        self.obs_builder = JaguarObservationBuilder(
+            joint_reference=joint_reference,
+            history_initialization=self.get_parameter("history_initialization").value,
+        )
         self.get_logger().info(f"Policy joint reference: {policy_reference}")
         self.state_lock = threading.Lock()
 
