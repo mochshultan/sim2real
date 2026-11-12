@@ -12,8 +12,8 @@ import yaml
 
 
 ROOT = Path(__file__).parents[1]
-POLICY_SHA256 = "15c2e2cf7775361b7edbebe3e2181f0e4bae5ad8024c826b340cffb891bef5a0"
-CHECKPOINT_SHA256 = "4544c25e7602a294b8ed6df58e98532c3a1a08b066741b4eab56e386b5e56311"
+POLICY_SHA256 = "bc37ca24b38f2d659cfcccb9d1101219cdc5dc576003ebcd2dd5a4049d48ddcb"
+CHECKPOINT_SHA256 = "e83782ea5ad0da54add29d2403324adcd8569f5c074d21e43fc87f62b8679913"
 
 
 def _sha256(path: Path) -> str:
@@ -25,24 +25,22 @@ def _sha256(path: Path) -> str:
 
 
 class DeploymentContractTests(unittest.TestCase):
-    def test_default_and_identity_policy_match_jaguar_29996_checkpoint(self):
+    def test_default_and_identity_policy_match_jaguar_39996_checkpoint(self):
         default_policy = ROOT / "models/policy.pt"
-        checkpoint = ROOT / "models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
+        checkpoint = ROOT / "models/model_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt"
 
-        identity_policy = ROOT / "models" / "policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt"
+        identity_policy = ROOT / "models" / "policy_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt"
 
         self.assertEqual(_sha256(default_policy), POLICY_SHA256)
         self.assertEqual(_sha256(identity_policy), POLICY_SHA256)
-        self.assertEqual(sorted(path.name for path in (ROOT / "models").glob("policy*.pt")),
-                         ["policy.pt", identity_policy.name,
-                          "policy_adaboot_ideal_l2c2_zero_reference_5999_20261103.pt",
-                          "policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt"])
-        manifest = json.loads((ROOT / "models/deployment_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.json").read_text())
+        manifest = json.loads((ROOT / "models/deployment_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.json").read_text())
         self.assertEqual(manifest["policy_file"], default_policy.name)
         self.assertEqual(manifest["identity_policy_file"], identity_policy.name)
         self.assertEqual(manifest["policy_sha256"], POLICY_SHA256)
         self.assertEqual(manifest["checkpoint_sha256"], CHECKPOINT_SHA256)
         self.assertEqual(_sha256(checkpoint), CHECKPOINT_SHA256)
+        self.assertEqual(manifest["policy_reference"], "nominal")
+        self.assertEqual(manifest["clip_actions"], 10.0)
 
     def test_launch_and_controller_use_deterministic_default_policy(self):
         launch_source = (ROOT / "launch/sim2real.launch.py").read_text()

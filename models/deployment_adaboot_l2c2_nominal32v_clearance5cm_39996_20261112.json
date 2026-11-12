@@ -1,0 +1,111 @@
+{
+  "training_host": "erc-rtx5746ti (192.168.50.114)",
+  "training_run": "/home/shultan/IsaacLab/logs/rsl_rl/nxp_jaguar_29996_nominal_32v_adaptive_clearance5cm/2026-11-11_22-18-10_nominal29996-originalreward-clear5cm-32v-10k-20261111-1536env",
+  "checkpoint_iteration": 39996,
+  "source_checkpoint_iteration": 29996,
+  "additional_updates": 10000,
+  "checkpoint_file": "model_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt",
+  "checkpoint_sha256": "e83782ea5ad0da54add29d2403324adcd8569f5c074d21e43fc87f62b8679913",
+  "policy_file": "policy.pt",
+  "identity_policy_file": "policy_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt",
+  "policy_sha256": "bc37ca24b38f2d659cfcccb9d1101219cdc5dc576003ebcd2dd5a4049d48ddcb",
+  "training_env_sha256": "d23cbc49f6a3f2ed4a5c631ed5d51a0315c16f1bddc3ebeef2cb07f5e36d625c",
+  "training_agent_sha256": "79ce6a1791b5b9eb23d82ed373f83e26359527390f54aaa589d498e18c5bdbca",
+  "training_actor_export_sha256": "6fc91a67e9a9a8743c5286cc59cfcfe0a36faa60b61f3c204d5a13dac12045df",
+  "policy_reference": "nominal",
+  "nominal_joint_pos_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.51,
+    -1.51,
+    -1.49,
+    -1.49,
+    1.22,
+    1.22,
+    1.2,
+    1.2
+  ],
+  "action_scale": 0.25,
+  "clip_actions": 10.0,
+  "input_shape": [
+    "batch",
+    5,
+    45
+  ],
+  "output_shape": [
+    "batch",
+    12
+  ],
+  "history_order": "time-major input; term-major estimator packing, oldest first",
+  "history_initialization": "zeros",
+  "training_nominal_kp": 45.0,
+  "training_nominal_kd": 4.5,
+  "control_dt_s": 0.02,
+  "standing_fraction": 0.15,
+  "directional_foot_clearance_target_m": 0.05,
+  "clearance_reward": "isaaclab_tasks.core.velocity.config.nxp_jaguar_baseline.nxp_jaguar_mdp:DirectionalFootClearanceMisalignmentReward",
+  "base_height_target_m": 0.21,
+  "base_height_weight": -1.0,
+  "coxa_nominal_stand_weight": 1.0,
+  "actuator": {
+    "model": "RS00 linear voltage approximation",
+    "supply_voltage": 32.0,
+    "hardware_torque_limit_nm": 14.0,
+    "no_load_speed_rad_s": 21.991148575128552,
+    "status": "linear approximation, not measured at 32 V"
+  },
+  "validation": "CPU parity with native training actor, clipped deterministic means; zero/random/stress histories, batches 1/16/64",
+  "max_abs_diff": 0.0,
+  "cases": [
+    {
+      "batch": 1,
+      "history_scale": 0.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 1,
+      "history_scale": 0.2,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 1,
+      "history_scale": 5.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 16,
+      "history_scale": 0.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 16,
+      "history_scale": 0.2,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 16,
+      "history_scale": 5.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 64,
+      "history_scale": 0.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 64,
+      "history_scale": 0.2,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 64,
+      "history_scale": 5.0,
+      "max_abs_diff": 0.0
+    }
+  ],
+  "hardware_motion_tested": false,
+  "runtime_torque_limit_nm": 14.0,
+  "torch_version": "2.11.0+cu130"
+}

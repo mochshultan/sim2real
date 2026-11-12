@@ -8,25 +8,28 @@ For an existing Ubuntu 22.04/Humble installation, follow the
 
 ### Current policy
 
-The default deployment artifact is deterministically fixed at
-`models/policy.pt`; `policy_path` can override it explicitly. It is the
-estimator-only TorchScript export of Jaguar AdaBoot Ideal L2C2 checkpoint
-iteration 29996 from the Isaac Lab run
-`nxp_jaguar_baseline_tibia_adaboot_ideal_l2c2/2026-10-22_01-40-39_stand021-kp45kd45-stand10pct-cmd5s-fourfeet-coxa-clear8cm-ori002-torque95of145-w001-resume19997-10kit`.
-This continues checkpoint 19997 for another 10k iterations.
+The normal launcher loads `models/policy.pt`, the estimator-only TorchScript
+export of nominal checkpoint **39996**. It continues checkpoint 29996 for
+10,000 updates using the original nominal rewards with 5 cm clearance,
+15% standing commands, and the linear 32 V RS00 actuator approximation.
+The base-height target remains 21 cm with weight -1; the original coxa-standing
+and feet-contact-standing rewards remain active.
 
 The source checkpoint is
-`models/model_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt`.
-Its runtime actor is `models/policy.pt`. The identical named export
-`models/policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt`
-is retained as its identity pair. Both files must keep the same SHA-256.
-The checkpoint SHA-256 is
-`4544c25e7602a294b8ed6df58e98532c3a1a08b066741b4eab56e386b5e56311`;
-the policy SHA-256 is
-`15c2e2cf7775361b7edbebe3e2181f0e4bae5ad8024c826b340cffb891bef5a0`.
-CPU comparisons against both checkpoint reconstruction and the original run
-export matched exactly for batches 1, 16, and 64 of five 45-D frames.
-This was offline validation; no live hardware motion has been tested.
+`models/model_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt`.
+The identical named export is
+`models/policy_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt`.
+Its SHA-256 is `bc37ca24b38f2d659cfcccb9d1101219cdc5dc576003ebcd2dd5a4049d48ddcb`.
+The export embeds action clipping at +/-10 before target and previous-action
+feedback. CPU comparisons against the native training actor matched exactly
+for zero/random/stress histories and batches 1/16/64 (maximum difference 0.0).
+The export takes five proprioceptive frames and uses estimated velocity only;
+the privileged critic is not deployed.
+
+Hashes, validation, and actuator assumptions are in
+`models/deployment_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.json`;
+training snapshots are in the matching model directory. Model 29996 remains
+archived under its versioned filename. No live hardware motion was tested.
 
 Normal and transition gains are Kp 45 / Kd 4.5. The nominal reference remains
 Jaguar's: front hip/knee -1.51/+1.22 rad, rear -1.49/+1.20 rad, rolls 0 rad.
@@ -39,7 +42,7 @@ The Pion policy and deployment artifacts previously added here were removed.
 Choose one launcher per controller session:
 
 ```bash
-# Model 29996: observations q - q0, targets q0 + 0.25 * action
+# Model 39996: observations q - q0, targets q0 + 0.25 * clipped_action
 ros2 launch jaguar_control sim2real.launch.py
 
 # Model 19999: observations q, targets 0.25 * clipped_action
@@ -66,7 +69,7 @@ before selecting the other model. Optional arguments such as
 See the [zero-reference launch and configuration tables](docs/zero_reference.md)
 for all flags, YAML parameters, defaults, and tuning examples.
 
-For model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
+For archived model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with
 weight -0.01. Stand commands are sampled at 10%, resampled every 5 seconds.
 The exact contract, hashes, and validation are recorded in
@@ -84,7 +87,7 @@ and rear hip/knee `-1.59/+1.38` rad, defined by `STAND_ANGLE` in
 `scripts/parameters.py`. The controller uses it for
 `STANDUP` and `STAND_HOLD`, with bounded IMU leveling trim when enabled. Walking
 uses the selected policy's reference and blends from the standing pose during
-the walk ramp: nominal for model 29996, zero for model 19999.
+the walk ramp: nominal for model 39996, zero for model 19999.
 
 This branch runs the 12 calibrated RobStride RS00 actuators through `jaguar_control/JaguarSystem` under `controller_manager` at 200 Hz. The impedance controller claims position, velocity, effort, Kp and Kd command interfaces. The Python policy remains at 50 Hz. See the [ros2_control migration and mock validation guide](docs/ros2_control.md).
 
