@@ -77,6 +77,29 @@ class AdaBootPolicy(nn.Module):
         return action.clamp(-self.clip_actions, self.clip_actions) if self.clip_actions > 0 else action
 
 
+class PionJointOrderPolicy(nn.Module):
+    """Present Pion's FL/FR/BL/BR actor through the controller's FR/FL/BR/BL API.
+
+    Position, velocity and previous-action blocks in every history frame are
+    reordered before estimator history packing. Body-frame IMU and command fields
+    keep their original order. Output actions are mapped back to the controller.
+    """
+
+    def __init__(self, policy: nn.Module) -> None:
+        super().__init__()
+        self.policy = policy
+        joint_order = torch.tensor([1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10], dtype=torch.long)
+        self.register_buffer("action_order", joint_order)
+        self.register_buffer(
+            "observation_order",
+            torch.cat((torch.arange(9), joint_order + 9, joint_order + 21, joint_order + 33)),
+        )
+
+    def forward(self, history: torch.Tensor) -> torch.Tensor:
+        pion_actions = self.policy(history.index_select(-1, self.observation_order))
+        return pion_actions.index_select(-1, self.action_order)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export AdaBoot estimator-only policy for Jaguar sim-to-real")
     parser.add_argument(
@@ -87,6 +110,10 @@ def main() -> None:
     parser.add_argument("--tag", default="adaboot_tibia_2999_estimator")
     parser.add_argument("--clip-actions", type=float, default=0.0, help="Clip exported mean actions; zero keeps unbounded output")
     parser.add_argument("--set-default", action="store_true", help="Also replace models/policy.pt")
+    parser.add_argument(
+        "--training-joint-order", choices=("jaguar", "pion"), default="jaguar",
+        help="Adapt the training order to the existing controller without changing hardware mappings",
+    )
     args = parser.parse_args()
 
     checkpoint = os.path.abspath(args.checkpoint)
@@ -95,6 +122,8 @@ def main() -> None:
     checkpoint_data = torch.load(checkpoint, map_location="cpu", weights_only=False)
     actor_state_dict = checkpoint_data["actor_state_dict"]
     model = AdaBootPolicy(actor_state_dict, clip_actions=args.clip_actions).eval()
+    if args.training_joint_order == "pion":
+        model = PionJointOrderPolicy(model).eval()
 
     sample = torch.zeros(1, 5, 45)
     with torch.inference_mode():

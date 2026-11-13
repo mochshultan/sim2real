@@ -76,7 +76,7 @@ class LaunchPolicyTests(unittest.TestCase):
         self.assertEqual(parameters[1]["policy_reference"], "zero")
         self.assertEqual(parameters[1]["history_initialization"], "repeat")
         self.assertEqual(parameters[1]["policy_path"],
-                         str(root / "models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt"))
+                         str(root / "models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
         self.assertEqual(context.launch_configurations["domain_id"], "17")
 

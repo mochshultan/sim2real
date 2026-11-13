@@ -1,12 +1,20 @@
-# Model Jaguar dengan referensi 0 rad
+# Model Pion dengan referensi 0 rad
 
-Jalankan model 19999 melalui `sim2real_zero.launch.py`. Launcher ini memakai
+Jalankan model Pion 11500 melalui `sim2real_zero.launch.py`. Launcher ini memakai
 stack ros2_control yang sama dengan launcher nominal: controller, pembatasan gerak, driver
 CAN, teleop, dan safety tidak diduplikasi.
 
+Policy Pion dilatih dengan aktuator 32 V, target base height 25 cm (weight -10),
+clearance 5 cm, dan standing commands 15%. Urutan policy Pion FL/FR/BL/BR
+berbeda dari urutan controller FR/FL/BR/BL. Adapter di dalam TorchScript
+mengubah ketiga blok joint pada seluruh history (posisi, kecepatan, last action)
+ke urutan Pion, lalu mengubah output aksi kembali ke urutan controller.
+Blok angular velocity, gravity, dan command tetap pada urutan semula.
+Kalibrasi encoder, standing pose, mapping CAN, dan gains dari main tetap dipakai.
+
 Referensi policy dan pose berdiri adalah dua konfigurasi berbeda:
 
-| Bagian | Referensi 0 rad / model 19999 | Referensi nominal / model 29996 |
+| Bagian | Referensi 0 rad / model Pion 11500 | Referensi nominal / model 39996 |
 | --- | --- | --- |
 | Launcher | `sim2real_zero.launch.py` | `sim2real.launch.py` |
 | Posisi dalam observasi | `q` | `q - q0` |
@@ -38,7 +46,7 @@ ros2 launch jaguar_control sim2real_zero.launch.py
 Untuk terminal baru, muat environment dengan
 `source scripts/source_ros.sh` dan `source install/setup.bash` dari root repo.
 Log controller harus memuat `Policy joint reference: zero` dan path policy
-`policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt`.
+`policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt`.
 Xbox: **A** untuk berdiri, **Start/Menu** untuk masuk WALK; Start lagi untuk
 kembali ke STAND_HOLD. Model ini memiliki validasi offline; file manifest tidak
 menyatakan bahwa model sudah diuji pada hardware.
@@ -113,7 +121,7 @@ ros2 launch jaguar_control sim2real_zero.launch.py --show-args
 
 | Flag | Default pada launcher zero | Fungsi |
 | --- | --- | --- |
-| `policy_path` | `models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt` | Ganti actor TorchScript dengan model yang dilatih untuk referensi zero dan kontrak input/output yang sama. Path default di-resolve ke path absolut. |
+| `policy_path` | `models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt` | Ganti actor TorchScript dengan model yang dilatih untuk referensi zero dan kontrak input/output yang sama. Path default di-resolve ke path absolut. |
 | `history_initialization` | `repeat` | Ulangi observasi awal pada kelima frame, dengan feedback aksi awal nol. CLI override tetap berlaku; `zeros` tersedia untuk kompatibilitas policy lain. |
 | `policy_reference` | `zero`, hanya menerima `zero` | Menjaga pasangan model dan referensi; untuk nominal gunakan launcher nominal. |
 | `config_file` | `config/sim2real.yaml` | File parameter ROS untuk controller, teleop, mux, joy opsional, dan driver CAN. |
@@ -189,8 +197,8 @@ kontrol. Durasi park ditentukan oleh `safe_park_duration`.
 
 | Pengaturan | Lokasi / default | Cara mengubah |
 | --- | --- | --- |
-| Pose berdiri | `scripts/parameters.py`: `STAND_ANGLE`; collar `0`, hip `-1.59`, knee depan `1.40`, belakang `1.38` rad | Edit pose dalam urutan ROS BL, BR, FL, FR; build dan restart. Bukan flag/YAML runtime. |
-| Referensi nominal model 29996 | `DEFAULT_JOINT_POS` di controller, `DEFAULT_ANGLE` di parameters | Kontrak model nominal; model zero memakai array nol sebagai reference. |
+| Pose berdiri zero | `ZERO_STAND_JOINT_POS` di controller: collar `0`, hip `-1.25`, knee `+1.25` rad pada semua kaki | Terpisah dari `STAND_ANGLE` nominal di `scripts/parameters.py`; build dan restart setelah mengubah kode. |
+| Referensi nominal model 39996 | `DEFAULT_JOINT_POS` di controller, `DEFAULT_ANGLE` di parameters | Kontrak model nominal; model zero memakai array nol sebagai reference. |
 | Action scale | `ACTION_SCALE=0.25` di controller | Kontrak training model, bukan parameter tuning launch. |
 | Frekuensi controller / history | `CONTROL_DT=0.02` (50 Hz), history 5 × 45 | Kontrak runtime/model di kode; berbeda dari `rate_hz` driver. |
 | Durasi stand/sit | `transition_duration=4.0` detik di controller | Saat ini konstanta kode. |
@@ -234,17 +242,18 @@ Untuk menjalankan stack dengan feedback dari sumber lain, pilih
 juga eksternal. Controller tetap memerlukan feedback yang valid sebelum WALK.
 
 
-## Kontrak model 19999
+## Kontrak model Pion 11500
 
-Artifact dan manifest berada di `models/adaboot_l2c2_zero_reference_clearance5cm_19999_20261111/` dan
-`models/deployment_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.json`. Input adalah history
+Snapshot dan manifest berada di `models/pion_adaboot_l2c2_zero_32v_height25_11500_20261113/` dan
+`models/deployment_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.json`. Input adalah history
 `[batch,5,45]` time-major; estimator memakai packing per term, lalu mean actor
 di-clip +/-10 di dalam TorchScript sebelum menjadi feedback aksi dan target
 sendi. Referensi zero dan mode history dipertahankan setelah reset controller.
-Model 5999 lama tetap tersedia, sementara model nominal tetap 29996.
+Model zero Jaguar 19999 dan 5999 tetap tersedia, sementara model nominal tetap 39996.
 
-Adaptasi ini berbasis main `4c57327` (migrasi ros2_control dan kalibrasi rear hip
-terbaru). Batas torsi 14 Nm, mapping dan kalibrasi dipertahankan dari main.
+Adaptasi ini berbasis main `f485f06` (perekaman sesi dan pose berdiri zero simetris).
+Batas torsi 14 Nm, mapping hardware dan kalibrasi dipertahankan dari main.
 Reward training memakai tinggi badan 25 cm / weight -10 dan clearance 5 cm
-simetris dikalikan magnitudo kecepatan XY kaki; tidak ada input privileged saat
+dengan penalti peak-clearance shortfall dan swing-direction misalignment milik
+Jaguar, memakai koordinat ujung kaki Pion. Tidak ada input privileged saat
 inferensi. Ini bukan jaminan bahwa lintasan kaki selalu tepat 5 cm.

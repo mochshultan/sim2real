@@ -59,21 +59,30 @@ Choose one launcher per controller session:
 # Model 39996: observations q - q0, targets q0 + 0.25 * clipped_action
 ros2 launch jaguar_control sim2real.launch.py
 
-# Model 19999: observations q, targets 0.25 * clipped_action
+# Pion model 11500: observations q, targets 0.25 * clipped_action
 ros2 launch jaguar_control sim2real_zero.launch.py
 ```
 
 The zero-reference launcher selects
-`models/policy_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.pt` and sets
-`policy_reference:=zero` and `history_initialization:=repeat`. Its final training run is
-`nxp_jaguar_adaboot_l2c2_height_stand_clearance5cm/2026-11-11_16-07-13_recover-clearance5cm-to20k-20261111-1536env`.
-The exported means are clipped to +/-10 before target/action-feedback processing.
-CPU output matches the native training actor with clipping exactly for batches
-1/16/64 and zero/random/stress histories (maximum absolute difference 0.0).
-Hashes and training snapshots are in `models/deployment_adaboot_l2c2_zero_reference_clearance5cm_19999_20261111.json` and the
-matching model directory. The older model 5999 remains archived.
-ROS2 control, the main branch's 14 Nm cap and rear-hip calibration are retained.
-Physical motion with this policy has not been tested.
+`models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt` and sets
+`policy_reference:=zero` and `history_initialization:=repeat`. This is the
+latest Pion AdaBoot-L2C2 checkpoint 11500, trained with the estimated 32 V RS00
+actuator curve, a 25 cm base-height target (weight -10), 5 cm directional
+clearance, and 15% standing commands.
+
+Pion training uses FL/FR/BL/BR within each joint group; the controller uses
+FR/FL/BR/BL. The export remaps position, velocity and previous-action history
+into Pion order before estimation, then maps actions back to controller order.
+The body-frame IMU/command fields keep their order. Clipping +/-10 is embedded.
+CPU equality with the native Pion actor was verified for batches 1/16/64 and
+zero/random/stress histories (maximum absolute difference 0.0).
+
+Hashes, permutations, and training snapshots are in
+`models/deployment_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.json` and
+its matching model directory. Jaguar zero policies 19999 and 5999 remain
+archived. The current main calibration, standing pose, ros2_control stack,
+and 14 Nm hardware cap are retained. Physical motion with Pion 11500 has not
+been tested.
 
 The zero-reference launcher uses a standing pose of 0 rad coxa, -1.25 rad hip,
 and +1.25 rad knee on all four legs. The nominal launcher uses `STAND_ANGLE`.
@@ -105,7 +114,7 @@ BL hip/knee `-1.74/+1.28` rad, and BR hip/knee `-1.59/+1.23` rad, defined by `ST
 `scripts/parameters.py`. The controller uses it for
 `STANDUP` and `STAND_HOLD`, with bounded IMU leveling trim when enabled. Walking
 uses the selected policy's reference and blends from the standing pose during
-the walk ramp: nominal for model 39996, zero for model 19999.
+the walk ramp: nominal for model 39996, zero for Pion model 11500.
 
 This branch runs the 12 calibrated RobStride RS00 actuators through `jaguar_control/JaguarSystem` under `controller_manager` at 200 Hz. The impedance controller claims position, velocity, effort, Kp and Kd command interfaces. The Python policy remains at 50 Hz. See the [ros2_control migration and mock validation guide](docs/ros2_control.md).
 

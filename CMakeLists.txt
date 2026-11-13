@@ -165,6 +165,8 @@ install(DIRECTORY config launch urdf meshes
   PATTERN "__pycache__" EXCLUDE
 )
 install(FILES models/policy.pt
+  models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt
+  models/deployment_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.json
   models/policy_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt
   models/deployment_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.json
   models/policy_adaboot_ideal_l2c2_kp45kd45_clear8cm_29996_20261022.pt

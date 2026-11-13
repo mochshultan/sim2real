@@ -1,0 +1,193 @@
+{
+  "training_host": "erc-rtx5746ti (192.168.50.114)",
+  "training_robot": "Pion-QR1",
+  "checkpoint_iteration": 11500,
+  "training_run": "/home/shultan/IsaacLab/logs/rsl_rl/pion_qr1_adaboot_l2c2_zero_32v_height25/2026-11-13_13-35-29_from5300-h25-w10-std1-to11500-20261113-1152env",
+  "checkpoint_file": "model_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt",
+  "checkpoint_sha256": "abd52479c5e5950d01ccbaa4ead4881ea47399670e875d9e437bd483a1a186e6",
+  "policy_file": "policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt",
+  "policy_sha256": "00b5b313493503cc6703727bee6cea7d0cadc72d660fc4ed408b3d015efd2b85",
+  "training_env_sha256": "c90154edd9f522644d05020160085406da5408899bb5e08389ee0fb14ec5dc7f",
+  "training_agent_sha256": "7c1a983af41d4a7cbfda6620586478b6486d7c4e19cfeae76ce459a71769c8b6",
+  "policy_reference": "zero",
+  "nominal_joint_pos_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "action_scale": 0.25,
+  "clip_actions": 10.0,
+  "history_initialization": "repeat",
+  "input_shape": [
+    "batch",
+    5,
+    45
+  ],
+  "output_shape": [
+    "batch",
+    12
+  ],
+  "history_order": "time-major runtime history -> Pion joint order -> term-major estimator packing",
+  "training_joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "runtime_joint_order": [
+    "FR_collar_joint",
+    "FL_collar_joint",
+    "BR_collar_joint",
+    "BL_collar_joint",
+    "FR_hip_joint",
+    "FL_hip_joint",
+    "BR_hip_joint",
+    "BL_hip_joint",
+    "FR_knee_joint",
+    "FL_knee_joint",
+    "BR_knee_joint",
+    "BL_knee_joint"
+  ],
+  "runtime_observation_to_training_permutation": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    10,
+    9,
+    12,
+    11,
+    14,
+    13,
+    16,
+    15,
+    18,
+    17,
+    20,
+    19,
+    22,
+    21,
+    24,
+    23,
+    26,
+    25,
+    28,
+    27,
+    30,
+    29,
+    32,
+    31,
+    34,
+    33,
+    36,
+    35,
+    38,
+    37,
+    40,
+    39,
+    42,
+    41,
+    44,
+    43
+  ],
+  "training_action_to_runtime_permutation": [
+    1,
+    0,
+    3,
+    2,
+    5,
+    4,
+    7,
+    6,
+    9,
+    8,
+    11,
+    10
+  ],
+  "body_frame_fields": "angular velocity, gravity and commands unchanged",
+  "training_nominal_kp": 45.0,
+  "training_nominal_kd": 4.5,
+  "control_dt_s": 0.02,
+  "standing_fraction": 0.15,
+  "base_height_target_m": 0.25,
+  "base_height_weight": -10.0,
+  "directional_foot_clearance_target_m": 0.05,
+  "actuator_model": "estimated linear 32V RS00 torque-speed envelope",
+  "hardware_torque_limit_nm": 14.0,
+  "validation": "CPU equality with native Pion actor after independent anatomical joint mapping; zero/random/stress histories, batches 1/16/64",
+  "max_abs_diff": 0.0,
+  "cases": [
+    {
+      "batch": 1,
+      "history_scale": 0.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 1,
+      "history_scale": 0.2,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 1,
+      "history_scale": 5.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 16,
+      "history_scale": 0.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 16,
+      "history_scale": 0.2,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 16,
+      "history_scale": 5.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 64,
+      "history_scale": 0.0,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 64,
+      "history_scale": 0.2,
+      "max_abs_diff": 0.0
+    },
+    {
+      "batch": 64,
+      "history_scale": 5.0,
+      "max_abs_diff": 0.0
+    }
+  ],
+  "torch_version": "2.11.0+cu130",
+  "hardware_motion_tested": false,
+  "runtime_base_commit": "9488fb1",
+  "preserved_calibration_and_standing_pose": true,
+  "nominal_default_policy_sha256": "bc37ca24b38f2d659cfcccb9d1101219cdc5dc576003ebcd2dd5a4049d48ddcb"
+}
