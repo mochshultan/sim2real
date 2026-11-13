@@ -43,6 +43,65 @@ Xbox: **A** untuk berdiri, **Start/Menu** untuk masuk WALK; Start lagi untuk
 kembali ke STAND_HOLD. Model ini memiliki validasi offline; file manifest tidak
 menyatakan bahwa model sudah diuji pada hardware.
 
+Pose dasar berdiri khusus zero-reference: coxa `0.0`, semua hip `-1.25`,
+dan semua knee `+1.25` rad (`ZERO_STAND_JOINT_POS` di controller). Pose ini
+dipakai saat STANDUP, STAND_HOLD, kembali dari WALK, dan awal walk ramp.
+Auto-level IMU yang aktif tetap dapat menambahkan trim terbatas.
+
+## Log otomatis per sesi
+
+Saat `sim2real_zero.launch.py` dijalankan, controller otomatis merekam ke
+`~/.ros/jaguar_control/sessions/sim2real_zero_<waktu-UTC>_<id>.jsonl`.
+Path lengkap dicetak sebagai `Session recording: ...` pada startup. Setiap
+startup membuat file baru; file tetap tersimpan setelah launcher dihentikan.
+Perekaman dimulai di STANDBY, termasuk ketika menunggu sensor, dan berlanjut
+pada STANDUP, STAND_HOLD, WALK, SITDOWN, SAFE_PARK, dan DISABLED.
+
+Format JSONL berisi satu objek JSON per baris:
+
+- `metadata`: path model, referensi, pose berdiri, skala observasi, serta
+  `joint_names` yang menentukan urutan semua array 12 motor (FR/FL/BR/BL,
+  masing-masing kelompok roll, hip, lalu knee).
+- `sample`: waktu wall/monotonic/ROS, `state_start`, `state`, status hardware,
+  validitas dan umur sensor, feedback posisi (rad), kecepatan (rad/s), torsi
+  (Nm), quaternion, gyro dan command velocity. Satu sample per siklus 50 Hz.
+- `observation`: 45 nilai dengan layout dan skala pada metadata. Saat WALK,
+  ini persis observasi yang diberikan ke policy sebelum pembaruan last action;
+  `policy_history` menyimpan seluruh input 5 × 45.
+- `policy_action`: 12 output policy sebelum EMA dan skala 0.25. Model 19999
+  sudah melakukan clipping aksi di dalam TorchScript. Di luar WALK nilainya
+  `null`, `policy_history` juga `null`, dan `policy_evaluated` bernilai false.
+- `motor_output`: 12 target posisi dan kecepatan serta Kp/Kd yang benar-benar
+  dipublikasikan setelah ramp dan clamp batas posisi. Nilainya `null` jika
+  tidak ada command pada siklus itu. Kp/Kd bukan perintah torsi; torsi terukur
+  tersedia di `feedback_torque_nm`.
+- `estop`: alasan stop dan command pasif yang dipublikasikan, termasuk stop
+  yang datang dari callback di luar siklus kontrol.
+- `summary`: jumlah sample yang terbuang akibat antrean penuh.
+
+Observasi ketika sensor belum valid adalah snapshot nilai controller, bukan
+input inference; periksa `imu_valid`, `joints_valid`, umur sensor, dan
+`policy_evaluated` sebelum menganalisisnya.
+
+Penulisan file memakai thread terpisah dengan antrean terbatas. Antrean penuh
+membuang sample dan mencetak peringatan; error penulisan juga dilaporkan.
+Buffer di-flush setiap sekitar satu detik dan antrean dikuras saat shutdown
+normal. Penghentian paksa atau listrik padam dapat menghilangkan bagian akhir
+log. Tidak ada rotasi atau penghapusan log otomatis.
+
+Untuk mengubah direktori atau menonaktifkan rekaman, atur parameter ROS pada
+section `nxp_jaguar_controller.ros__parameters` dalam salinan konfigurasi penuh,
+lalu gunakan `config_file:=/path/absolut/custom.yaml`:
+
+```yaml
+record_session: true
+session_log_dir: /home/qr1/sim2real/log/zero_sessions
+```
+
+`record_session` default true untuk reference `zero`, false untuk `nominal`.
+Parameter ini dan `session_log_dir` dibaca saat startup, bukan flag launch
+langsung. Restart launcher setelah mengubahnya.
+
 ## Flag launch
 
 Format flag adalah `nama:=nilai`. Semua flag di bawah dibaca ketika launch.

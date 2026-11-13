@@ -154,6 +154,7 @@ install(FILES
   scripts/joint_layout.py
   scripts/project_paths.py
   scripts/policy_observation.py
+  scripts/session_recorder.py
   scripts/parallel_link_mapping.py
   DESTINATION lib/${PROJECT_NAME}
 )

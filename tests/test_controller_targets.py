@@ -59,6 +59,7 @@ def test_shared_transition_preserves_cosine_trajectory(duration, fraction, blend
 
 def walk_node(action):
     return SimpleNamespace(
+        stand_joint_pos=STAND_JOINT_POS.copy(),
         obs_builder=JaguarObservationBuilder(DEFAULT_JOINT_POS),
         policy=lambda history: torch.tensor([action], dtype=torch.float32),
         policy_expects_temporal=True, action_ema_alpha=0.0,
@@ -72,11 +73,13 @@ def walk_node(action):
 @pytest.mark.parametrize("reference", [DEFAULT_JOINT_POS, np.zeros(12, dtype=np.float32)])
 def test_walk_targets_preserve_policy_blend_and_gains(elapsed, ramp, reference):
     node = walk_node([0.2] * 12)
+    node.stand_joint_pos = (np.array([0.0] * 4 + [-1.25] * 4 + [1.25] * 4)
+                            if not np.any(reference) else STAND_JOINT_POS.copy())
     node.obs_builder = JaguarObservationBuilder(reference)
     targets = Controller._walk_targets(node, 10.0 + elapsed, DEFAULT_JOINT_POS,
                                        np.zeros(12), [0, 0, 0, 1], np.zeros(3), np.zeros(3))
     position, velocity, kp, kd = targets
-    expected = (1 - ramp) * STAND_JOINT_POS + ramp * reference + 0.25 * ramp * 0.2
+    expected = (1 - ramp) * node.stand_joint_pos + ramp * reference + 0.25 * ramp * 0.2
     np.testing.assert_allclose(position, expected, atol=1e-7)
     np.testing.assert_array_equal(velocity, 0)
     assert kp == [45.0] * 12
@@ -105,6 +108,8 @@ def test_policy_reference_configuration(reference, path, error):
     else:
         assert Controller._configure_parameters(node) == path
         assert node.policy_reference == "zero"
+        np.testing.assert_array_equal(node.stand_joint_pos,
+                                      [0.0] * 4 + [-1.25] * 4 + [1.25] * 4)
 
 
 def test_invalid_walk_output_requests_shutdown_and_returns_no_target():

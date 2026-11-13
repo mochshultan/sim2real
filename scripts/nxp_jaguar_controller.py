@@ -23,6 +23,7 @@ from joint_layout import ISAAC_JOINT_NAMES, ROS_NAME_TO_ISAAC_IDX
 import parameters as P
 from motion_limits import declare_motion_limits
 from policy_observation import JaguarObservationBuilder
+from session_recorder import SessionRecorder
 from project_paths import package_file
 
 # ==============================================================================
@@ -38,6 +39,8 @@ SIT_JOINT_POS = np.zeros(12, dtype=np.float32)
 
 # Standing target [rad], mapped from ROS order into Isaac order.
 STAND_JOINT_POS = np.array(P.STAND_ANGLE, dtype=np.float32)[ROS_TO_ISAAC]
+# Zero-reference standing target in Isaac order: rolls, hips, knees.
+ZERO_STAND_JOINT_POS = np.array([0.0] * 4 + [-1.25] * 4 + [1.25] * 4, dtype=np.float32)
 
 # Nominal reference from the deployed Jaguar AdaBoot Ideal L2C2 checkpoint 29996.
 DEFAULT_JOINT_POS = np.array([
@@ -169,6 +172,25 @@ class NXPJaguarControllerNode(Node):
         self.last_warn_time = 0.0
         self.dt_history = []
 
+        self.session_recorder = None
+        self._session_sample = None
+        if self.get_parameter("record_session").value:
+            self.session_recorder = SessionRecorder(
+                self.get_parameter("session_log_dir").value,
+                {"policy_path": policy_path, "policy_reference": self.policy_reference,
+                 "history_initialization": self.history_initialization,
+                 "joint_names": list(ISAAC_JOINT_NAMES), "control_period_s": CONTROL_DT,
+                 "standing_position_rad": self.stand_joint_pos.tolist(),
+                 "observation_layout": {"angular_velocity_scaled": [0, 3], "gravity": [3, 6],
+                                        "command_scaled": [6, 9], "relative_joint_position_rad": [9, 21],
+                                        "joint_velocity_scaled": [21, 33], "previous_action": [33, 45]},
+                 "observation_scales": {"angular_velocity": 0.25, "command": [2, 2, 0.25],
+                                        "joint_position": 1.0, "joint_velocity": 0.05},
+                 "action_scale": ACTION_SCALE,
+                 "motor_output_fields": "position_rad, velocity_rad_s, kp, kd; these are commands, not measured torque"},
+            )
+            self.get_logger().info(f"Session recording: {self.session_recorder.path}")
+
         # 50 Hz Control Timer Loop (20 ms dt)
         self.timer = self.create_timer(CONTROL_DT, self._control_loop)
         self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY (Motors Passive, Zero Torque)")
@@ -228,6 +250,10 @@ class NXPJaguarControllerNode(Node):
         self.policy_reference = self.get_parameter("policy_reference").value
         if self.policy_reference not in ("nominal", "zero"):
             raise ValueError("policy_reference must be 'nominal' or 'zero'")
+        self.declare_parameter("record_session", self.policy_reference == "zero")
+        self.declare_parameter("session_log_dir", "~/.ros/jaguar_control/sessions")
+        self.stand_joint_pos = (ZERO_STAND_JOINT_POS if self.policy_reference == "zero"
+                                else STAND_JOINT_POS).copy()
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
         if self.policy_reference == "zero" and not policy_param:
             raise ValueError("The zero reference requires an explicit matching policy_path")
@@ -352,6 +378,15 @@ class NXPJaguarControllerNode(Node):
         passive.velocity = [0.0] * 12
         passive.effort = [0.0] * 24
         self.joint_cmd_pub.publish(passive)
+        if getattr(self, "session_recorder", None) is not None:
+            output = {"position_rad": [0.0] * 12, "velocity_rad_s": [0.0] * 12,
+                      "kp": [0.0] * 12, "kd": [0.0] * 12}
+            self.session_recorder.record({
+                "type": "estop", "wall_time_ns": time.time_ns(), "reason": reason,
+                "state": self.state, "motor_output": output,
+            })
+            if self._session_sample is not None:
+                self._session_sample["motor_output"] = output
 
     def _hardware_status_cb(self, msg: String):
         self.hardware_status = msg.data
@@ -683,7 +718,7 @@ class NXPJaguarControllerNode(Node):
             self.transition_start_time = now
             with self.state_lock:
                 self.transition_start_pos = self.joint_pos.copy()
-                self.transition_target_pos = np.clip(STAND_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                self.transition_target_pos = np.clip(self.stand_joint_pos.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
                 self.cmd_vel[:] = 0.0
                 self.filtered_action[:] = 0.0
             self.get_logger().info("event=MODE_CHANGE source=start from=WALK to=STANDUP target=STAND_HOLD")
@@ -695,7 +730,7 @@ class NXPJaguarControllerNode(Node):
                 self.transition_start_time = now
                 with self.state_lock:
                     self.transition_start_pos = self.joint_pos.copy()
-                    self.transition_target_pos = np.clip(STAND_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                    self.transition_target_pos = np.clip(self.stand_joint_pos.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
                     self.cmd_vel[:] = 0.0
                     self.filtered_action[:] = 0.0
                 self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
@@ -750,6 +785,10 @@ class NXPJaguarControllerNode(Node):
         # 1. Build 45-Dimensional Step Observation & Update 5-Step History Buffer (1, 5, 45)
         obs_45d = self.obs_builder.build_step_observation(ang_v, quat, cmd, pos, vel)
         history_tensor = self.obs_builder.update_and_get_history(obs_45d)
+        if getattr(self, "session_recorder", None) is not None:
+            self._session_sample["observation"] = obs_45d.tolist()
+            self._session_sample["policy_history"] = history_tensor[0].tolist()
+            self._session_sample["policy_evaluated"] = True
 
         # 2. Neural Network Forward Inference
         with torch.no_grad():
@@ -760,6 +799,8 @@ class NXPJaguarControllerNode(Node):
                 actions = self.policy(obs_tensor)
 
         raw_action = actions.squeeze(0).cpu().numpy()
+        if getattr(self, "session_recorder", None) is not None:
+            self._session_sample["policy_action"] = raw_action.tolist()
         if raw_action.shape != (12,) or not np.all(np.isfinite(raw_action)):
             self._trigger_safe_shutdown(now, f"code=POLICY_OUTPUT shape={'x'.join(map(str, raw_action.shape)) or 'scalar'} expected_shape=12 finite={int(np.all(np.isfinite(raw_action)))}")
             return
@@ -781,7 +822,7 @@ class NXPJaguarControllerNode(Node):
             ramp = 1.0
 
         policy_target = self.obs_builder.build_joint_target(self.filtered_action, ACTION_SCALE)
-        target_pos = STAND_JOINT_POS + ramp * (policy_target - STAND_JOINT_POS)
+        target_pos = self.stand_joint_pos + ramp * (policy_target - self.stand_joint_pos)
         target_vel = np.zeros(12, dtype=np.float32)
 
         # Impedance tracking gains for RL with smooth damping transition
@@ -798,6 +839,48 @@ class NXPJaguarControllerNode(Node):
         return target_pos, target_vel, cmd_kp, cmd_kd
 
     def _control_loop(self):
+        recorder = self.session_recorder
+        if recorder is None:
+            return self._run_control_cycle()
+        self._session_sample = {
+            "type": "sample", "wall_time_ns": time.time_ns(),
+            "monotonic_time_ns": time.monotonic_ns(),
+            "ros_time_ns": self.get_clock().now().nanoseconds,
+            "state_start": self.state, "imu_valid": self.imu_received,
+            "joints_valid": self.joints_received,
+            "imu_age_s": time.monotonic() - self.last_imu_time if self.imu_received else None,
+            "joints_age_s": time.monotonic() - self.last_joints_time if self.joints_received else None,
+            "feedback_position_rad": self.joint_pos.tolist(),
+            "feedback_velocity_rad_s": self.joint_vel.tolist(),
+            "feedback_torque_nm": self.joint_tau.tolist(),
+            "body_quaternion_xyzw": self.body_quat.tolist(),
+            "body_angular_velocity_rad_s": self.body_ang_vel.tolist(),
+            "command_velocity": self.cmd_vel.tolist(),
+            "observation": self.obs_builder.build_step_observation(
+                self.body_ang_vel, self.body_quat, self.cmd_vel,
+                self.joint_pos, self.joint_vel).tolist(),
+            "policy_evaluated": False, "policy_history": None, "policy_action": None,
+            "motor_output": None,
+        }
+        try:
+            return self._run_control_cycle()
+        finally:
+            self._session_sample["state"] = self.state
+            self._session_sample["hardware_status"] = self.hardware_status
+            recorder.record(self._session_sample)
+            self._session_sample = None
+            if recorder.error is not None or recorder.dropped:
+                self.get_logger().warning(
+                    f"Session recording: dropped={recorder.dropped} error={recorder.error}",
+                    throttle_duration_sec=5.0)
+
+    def destroy_node(self):
+        if getattr(self, "session_recorder", None) is not None:
+            if not self.session_recorder.close():
+                self.get_logger().error(f"Session log incomplete: {self.session_recorder.error or 'writer timeout'}")
+        return super().destroy_node()
+
+    def _run_control_cycle(self):
         t_start = time.perf_counter()
         dt = t_start - self.last_loop_time
         self.last_loop_time = t_start
@@ -877,12 +960,12 @@ class NXPJaguarControllerNode(Node):
             cmd_kd = self.transition_kd[:]
             if alpha >= 1.0:
                 self.state = "STAND_HOLD"
-                target_pos = STAND_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
+                target_pos = self.stand_joint_pos.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
                 target_vel = np.zeros(12, dtype=np.float32)
                 self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose (Power ON + IMU Auto-Level)")
         elif self.state == "STAND_HOLD":
             # Hold nominal knees while applying bounded hip/collar leveling.
-            target_pos = STAND_JOINT_POS.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
+            target_pos = self.stand_joint_pos.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
             target_vel = np.zeros(12, dtype=np.float32)
             cmd_kp = self.transition_kp[:]
             cmd_kd = self.transition_kd[:]
@@ -969,6 +1052,11 @@ class NXPJaguarControllerNode(Node):
             cmd_msg.velocity = target_vel.tolist()
             cmd_msg.effort = (cmd_kp + cmd_kd)
             self.joint_cmd_pub.publish(cmd_msg)
+            if getattr(self, "session_recorder", None) is not None:
+                self._session_sample["motor_output"] = {
+                    "position_rad": list(cmd_msg.position), "velocity_rad_s": list(cmd_msg.velocity),
+                    "kp": list(cmd_kp), "kd": list(cmd_kd),
+                }
             park_status = Bool()
             park_status.data = self.state == "SAFE_PARK"
             self.safe_park_active_pub.publish(park_status)

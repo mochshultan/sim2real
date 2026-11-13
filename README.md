@@ -75,11 +75,15 @@ matching model directory. The older model 5999 remains archived.
 ROS2 control, the main branch's 14 Nm cap and rear-hip calibration are retained.
 Physical motion with this policy has not been tested.
 
-Both launchers use the same standing pose, encoder calibration, gains, and safety
-handling. Zero reference applies to policy observations and action targets;
+The zero-reference launcher uses a standing pose of 0 rad coxa, -1.25 rad hip,
+and +1.25 rad knee on all four legs. The nominal launcher uses `STAND_ANGLE`.
+Both launchers share encoder calibration, gains, and safety handling. Zero reference applies to policy observations and action targets;
 it does not command all joints to zero during standing. Stop the current launch
 before selecting the other model. Optional arguments such as
 `with_hardware:=false` also apply to the zero-reference launcher.
+The zero-reference controller automatically saves observation, state, policy
+actions and all 12 motor commands/feedback in per-session JSONL files under
+`~/.ros/jaguar_control/sessions/`; the full path is printed on startup.
 See the [zero-reference launch and configuration tables](docs/zero_reference.md)
 for all flags, YAML parameters, defaults, and tuning examples.
 

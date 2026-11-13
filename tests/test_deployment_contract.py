@@ -102,6 +102,7 @@ class DeploymentContractTests(unittest.TestCase):
                       and any(isinstance(t, ast.Name) and t.id == "target_pos" for t in node.targets)
                       and any(isinstance(n, ast.Name) and n.id == "policy_target"
                               for n in ast.walk(node.value)))
+        namespace["self"] = SimpleNamespace(stand_joint_pos=namespace["STAND_JOINT_POS"])
         action = np.linspace(-0.5, 0.5, 12)
         for ramp in (0.0, 0.5, 1.0):
             namespace.update(ramp=ramp, policy_target=namespace["DEFAULT_JOINT_POS"] + 0.25 * action)

@@ -32,6 +32,7 @@ Controller = namespace['NXPJaguarControllerNode']
 class SafetyTests(unittest.TestCase):
     def setUp(self):
         self.node = Controller()
+        self.node.stand_joint_pos = np.full(12, 0.25)
         self.node.state = 'WALK'
         self.node.soft_fault_times = {}
         self.node._trigger_hard_estop = Mock()
