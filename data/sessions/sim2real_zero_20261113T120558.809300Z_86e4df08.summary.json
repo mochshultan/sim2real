@@ -1,0 +1,50 @@
+{
+  "source_filename": "sim2real_zero_20261113T120558.809300Z_86e4df08.jsonl",
+  "archive_filename": "sim2real_zero_20261113T120558.809300Z_86e4df08.jsonl.gz",
+  "policy_file": "policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt",
+  "policy_sha256": "00b5b313493503cc6703727bee6cea7d0cadc72d660fc4ed408b3d015efd2b85",
+  "policy_reference": "zero",
+  "standing_position_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.25,
+    -1.25,
+    -1.25,
+    -1.25,
+    1.25,
+    1.25,
+    1.25,
+    1.25
+  ],
+  "first_sample_utc": "2026-11-13T12:05:58.831141+00:00",
+  "last_sample_utc": "2026-11-13T12:07:13.772136+00:00",
+  "duration_s": 74.940995417,
+  "record_counts": {
+    "metadata": 1,
+    "sample": 3748,
+    "summary": 1
+  },
+  "state_sample_counts": {
+    "STANDBY": 235,
+    "STANDUP": 200,
+    "STAND_HOLD": 15,
+    "WALK": 3073,
+    "SITDOWN": 225
+  },
+  "samples_with_observation_45": 3748,
+  "samples_with_policy_action_12": 3073,
+  "samples_with_motor_output_12": 3670,
+  "hardware_status_sample_counts": {
+    "": 85,
+    "PASSIVE_ZERO_TORQUE": 150,
+    "ACTIVE_MIT_CONTROL": 3513
+  },
+  "dropped_samples": 0,
+  "uncompressed_bytes": 24213877,
+  "compressed_bytes": 3275751,
+  "jsonl_sha256": "a99c2856fd27969adee04088a44c5ee25415fc2c0f329ccdf831dfcbd243eb82",
+  "archive_sha256": "29810cd2e7643a0d92d48884f422fb94b3fc1cb59c6608fc1f600622d2736180",
+  "repository_commit_at_archive": "6d85cf98694386aeb20c892d3f73e21a5459ba9a"
+}
