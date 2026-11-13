@@ -49,10 +49,10 @@ MOTOR_DIR = [
 # Zero-calibration angular offsets
 # Calibrated True Sitting Zero offsets (so that sitting position = 0.0 rad):
 MOTOR_OFFSET_ANGLE = [
-    +0.3245, -1.2683, -0.1988,  # BL (can1: Collar, Hip, Knee)
-    -0.3017, -1.2676, -0.1339,  # BR (can0: Collar, Hip, Knee)
-    +0.1326, -1.1627, -0.3467,  # FL (can1: Collar, Hip, Knee)
-    -0.1881, -1.1667, -0.2227,  # FR (can0: Collar, Hip, Knee)
+    +0.1645, -0.9283, -0.0788,  # BL (can1: Collar, Hip, Knee)
+    -0.2117, -0.9276, -0.0239,  # BR (can0: Collar, Hip, Knee)
+    -0.0174, -0.7727, -0.1867,  # FL (can1: Collar, Hip, Knee)
+    +0.0219, -0.7727, -0.1867,  # FR (can0: Collar, Hip, Knee)
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)
@@ -70,10 +70,10 @@ STANDBY_ANGLE = [
 # Tuned standing joint angles [rad] in ROS order (BL, BR, FL, FR).
 # Separate from each checkpoint's observation/action reference.
 STAND_ANGLE = [
-     0.0, -1.59,  1.38,  # BL: coxa, hip, knee
-     0.0, -1.59,  1.38,  # BR: coxa, hip, knee
-     0.0, -1.59,  1.40,  # FL: coxa, hip, knee
-     0.0, -1.59,  1.40,  # FR: coxa, hip, knee
+     0.0, -1.74,  1.28,  # BL: coxa, hip, knee
+     0.0, -1.59,  1.23,  # BR: coxa, hip, knee
+     0.0, -1.39,  1.25,  # FL: coxa, hip, knee
+     0.0, -1.39,  1.25,  # FR: coxa, hip, knee
 ]
 
 # Trained policy reference joint angles in ROS joint order (BL, BR, FL, FR).

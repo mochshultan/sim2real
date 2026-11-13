@@ -82,7 +82,8 @@ class DeploymentContractTests(unittest.TestCase):
                              for t in node.targets))
         stand_ros = ast.literal_eval(stand)
         np.testing.assert_array_equal(stand_ros,
-                                      [0.0, -1.59, 1.38] * 2 + [0.0, -1.59, 1.40] * 2)
+                                      [0.0, -1.74, 1.28] + [0.0, -1.59, 1.23]
+                                      + [0.0, -1.39, 1.25] * 2)
 
         source = ast.parse((ROOT / "scripts/nxp_jaguar_controller.py").read_text())
         names = {"ROS_TO_ISAAC", "STAND_JOINT_POS", "DEFAULT_JOINT_POS", "ACTION_SCALE"}
@@ -92,8 +93,8 @@ class DeploymentContractTests(unittest.TestCase):
                                                          ROS_TO_ISAAC=[9, 6, 3, 0, 10, 7, 4, 1, 11, 8, 5, 2])}
         exec(compile(ast.Module(body=assignments, type_ignores=[]), "<poses>", "exec"), namespace)
         np.testing.assert_allclose(namespace["STAND_JOINT_POS"],
-                                   [0.0] * 4 + [-1.59] * 4
-                                   + [1.40, 1.40, 1.38, 1.38], atol=1e-7)
+                                   [0.0] * 4 + [-1.39, -1.39, -1.59, -1.74]
+                                   + [1.25, 1.25, 1.23, 1.28], atol=1e-7)
 
         # Execute the actual WALK target expression at both ramp endpoints.
         target = next(node for node in ast.walk(source)

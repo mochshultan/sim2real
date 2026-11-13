@@ -39,6 +39,20 @@ The Pion policy and deployment artifacts previously added here were removed.
 
 ### Selecting either Jaguar policy
 
+Use `bash scripts/run.sh` (or the local `sim2real` shortcut) for the current
+nominal model 39996. Add `--old` to use the previous nominal model 29996:
+
+```bash
+sim2real --old
+# Equivalent from the repository:
+bash scripts/run.sh --old
+```
+
+Additional ROS launch arguments are forwarded, for example
+`sim2real --old with_hardware:=false`. Explicit `policy_path:=...`,
+`policy_reference:=...`, or `history_initialization:=...` arguments override
+the preset. Encoder calibration remains the latest local calibration.
+
 Choose one launcher per controller session:
 
 ```bash
@@ -82,8 +96,8 @@ estimator is `225 -> 128 -> 64 -> 3`; the actor is
 
 ## Overview
 
-The standing target is coxa `0.0` rad on all legs, front hip/knee `-1.59/+1.40` rad,
-and rear hip/knee `-1.59/+1.38` rad, defined by `STAND_ANGLE` in
+The standing target is coxa `0.0` rad on all legs, front hip/knee `-1.39/+1.25` rad,
+BL hip/knee `-1.74/+1.28` rad, and BR hip/knee `-1.59/+1.23` rad, defined by `STAND_ANGLE` in
 `scripts/parameters.py`. The controller uses it for
 `STANDUP` and `STAND_HOLD`, with bounded IMU leveling trim when enabled. Walking
 uses the selected policy's reference and blends from the standing pose during
