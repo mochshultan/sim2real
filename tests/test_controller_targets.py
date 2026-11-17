@@ -201,3 +201,18 @@ def test_manual_park_log_is_one_short_line_with_previous_state():
     Controller._request_safe_park(node, 1.2, "code=MANUAL source=xbox_rb")
     node._trigger_hard_estop.assert_called_once_with("code=PARK_DOUBLE_PRESS interval_s=0.200 limit_s=1.000")
     node.get_logger.return_value.warn.assert_called_once()
+
+
+@pytest.mark.parametrize('detail', [None, 'reason=nonfinite entries=effort:3:nan',
+                                  'reason=dimensions positions=12 velocities=0 efforts=0 expected=12'])
+def test_sensor_wait_reports_joint_rejection_reason(detail):
+    node = SimpleNamespace(last_sensor_wait_report=0.0, last_imu_time=9.9,
+                           last_joints_time=0.0, imu_received=True, joints_received=False,
+                           joint_pos=np.zeros(12), state='STANDBY', status_pub=Mock(), get_logger=Mock())
+    if detail is not None:
+        node.joint_fault_detail = detail
+    with patch('nxp_jaguar_controller.time.monotonic', return_value=10.0):
+        Controller._publish_sensor_wait_status(node)
+    status = node.status_pub.publish.call_args.args[0].data
+    assert 'joints=False' in status
+    assert f"joint_input={detail or 'reason=no_valid_sample'}" in status

@@ -80,14 +80,14 @@ public:
     joint_configs_.resize(N_JOINTS);
 
     // BL (can1)
-    joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.1645, -0.40,  0.40, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
-    joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1, +0.9283, -3.14,  3.14, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
-    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.0788, -0.10,  2.80, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
+    joint_configs_[0] = {"BL_collar_joint", "can1", 4,  1, -0.0145, -0.40,  0.40, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
+    joint_configs_[1] = {"BL_hip_joint",    "can1", 5, -1, +0.7727, -3.14,  3.14, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
+    joint_configs_[2] = {"BL_knee_joint",   "can1", 6, -1, +0.1867, -0.10,  2.80, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
 
     // BR (can0)
-    joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1, +0.2117, -0.40,  0.40, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
-    joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1, +0.9276, -3.14,  3.14, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
-    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.0239, -0.10,  2.80, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
+    joint_configs_[3] = {"BR_collar_joint", "can0", 4,  1, -0.0083, -0.40,  0.40, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
+    joint_configs_[4] = {"BR_hip_joint",    "can0", 5,  1, +0.7727, -3.14,  3.14, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
+    joint_configs_[5] = {"BR_knee_joint",   "can0", 6,  1, +0.1867, -0.10,  2.80, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};
 
     // FL (can1)
     joint_configs_[6] = {"FL_collar_joint", "can1", 1, -1, +0.0174, -0.40,  0.40, 20.0, RS00_CONTROL_TORQUE_LIMIT_NM, {}};

@@ -695,7 +695,8 @@ class NXPJaguarControllerNode(Node):
             f"WAITING_SENSORS state={self.state} imu={self.imu_received} "
             f"imu_age={imu_age:.2f}s joints={self.joints_received} "
             f"joint_age={joint_age:.2f}s finite={finite} in_limits={in_limits} "
-            f"bad_joints={','.join(bad_joints) if bad_joints else 'none'}")
+            f"bad_joints={','.join(bad_joints) if bad_joints else 'none'} "
+            f"joint_input={getattr(self, 'joint_fault_detail', 'reason=no_valid_sample') if not self.joints_received else 'accepted'}")
         self.status_pub.publish(status_msg)
         self.get_logger().warn(status_msg.data)
 
@@ -848,6 +849,8 @@ class NXPJaguarControllerNode(Node):
             "ros_time_ns": self.get_clock().now().nanoseconds,
             "state_start": self.state, "imu_valid": self.imu_received,
             "joints_valid": self.joints_received,
+            "joint_input_detail": (getattr(self, "joint_fault_detail", "reason=no_valid_sample")
+                                   if not self.joints_received else "accepted"),
             "imu_age_s": time.monotonic() - self.last_imu_time if self.imu_received else None,
             "joints_age_s": time.monotonic() - self.last_joints_time if self.joints_received else None,
             "feedback_position_rad": self.joint_pos.tolist(),
