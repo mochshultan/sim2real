@@ -1,0 +1,114 @@
+# Pion Current: deployment profile matched to the saved model_9999 training contract.
+# Joint Order:
+#   Coxa / Collar (Roll) : FR(9), FL(6), BR(3), BL(0)
+#   Hip (Pitch)          : FR(10), FL(7), BR(4), BL(1)
+#   Knee (Pitch)         : FR(11), FL(8), BR(5), BL(2)
+
+joy_node:
+  ros__parameters:
+    dev: "/dev/input/js0"
+    deadzone: 0.10
+    autorepeat_rate: 50.0
+
+/**:
+  ros__parameters:
+    # Shared body command limits for controller, Xbox and keyboard.
+    max_vx: 1.0  # m/s, forward/backward (per axis)
+    max_vy: 1.0  # m/s, sideways (per axis)
+    max_wz: 1.0  # rad/s, yaw
+    linear_accel_limit: 1.0  # m/s^2; Xbox deceleration is immediate
+    angular_accel_limit: 1.0  # rad/s^2; Xbox deceleration is immediate
+
+jaguar_unified_teleop:
+  ros__parameters:
+    linear_speed_base: 0.7  # m/s, combined X/Y speed with RT released
+    linear_speed_boost: 1.0  # m/s, combined X/Y speed with RT fully pressed
+
+jaguar_cmd_vel_mux:
+  ros__parameters:
+    xbox_timeout: 0.30
+    keyboard_timeout: 0.30
+
+# ros2_control owns the 200 Hz CAN read/update/write loop on this branch.
+controller_manager:
+  ros__parameters:
+    update_rate: 200
+    thread_priority: 80
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    jaguar_impedance_controller:
+      type: jaguar_control/ImpedanceController
+
+joint_state_broadcaster:
+  ros__parameters:
+    joints: [Bl_roll_joint, Bl_hip_pitch_joint, Bl_knee_joint,
+             Br_roll_joint, Br_hip_pitch_joint, Br_knee_joint,
+             Fl_roll_joint, Fl_hip_pitch_joint, Fl_knee_joint,
+             Fr_roll_joint, Fr_hip_pitch_joint, Fr_knee_joint]
+    interfaces: [position, velocity, effort]
+
+jaguar_impedance_controller:
+  ros__parameters:
+    command_timeout: 0.10
+
+jaguar_hardware:
+  ros__parameters:
+    control_torque_limit_nm: 14.0
+
+robstride_can_hardware:
+  ros__parameters:
+    rate_hz: 200
+    rt_priority: 80
+    default_coxa_kp: 45.0
+    default_coxa_kd: 4.5
+    default_kp: 45.0
+    default_kd: 4.5
+    default_knee_kp: 45.0
+    default_knee_kd: 4.5
+    control_torque_limit_nm: 14.0
+
+jaguar_can_hardware:
+  ros__parameters:
+    rate_hz: 200
+    default_coxa_kp: 45.0
+    default_coxa_kd: 4.5
+    default_kp: 45.0
+    default_kd: 4.5
+    default_knee_kp: 45.0
+    default_knee_kd: 4.5
+
+pion_controller:
+  ros__parameters:
+    # Driver/firmware torque ceiling and measured-torque warning use 14 Nm.
+    overtorque_threshold: 14.0
+    shutdown_settle_delay: 0.5
+    safe_park_duration: 2.0
+    safe_park_kp: 14.0
+    safe_park_kd: 0.5
+    safe_park_double_press_window: 1.0
+    cmd_timeout: 0.25
+    action_ema_alpha: 0.0  # Disabled per user request (no EMA filter, direct policy actions)
+    walk_ramp_duration: 0.0  # Training applies the full current-position action at each policy step.
+    imu_upside_down: true   # Set true if IMU is mounted rotated 180 deg around X on chassis
+    rl_kp_roll: 45.0
+    rl_kd_roll: 4.5
+    rl_kp_pitch: 45.0
+    rl_kd_pitch: 4.5
+    rl_kp_knee: 45.0
+    rl_kd_knee: 4.5
+    transition_kp_roll: 45.0
+    transition_kd_roll: 4.5
+    transition_kp_pitch: 45.0
+    transition_kd_pitch: 4.5
+    transition_kp_knee: 45.0
+    transition_kd_knee: 4.5
+    # Pion reset/standing pose is fixed; no extra IMU pose controller was trained.
+    # Pitch correction is bounded at the hips; knees keep their nominal target.
+    use_imu_stabilization: false
+    imu_kp_pitch: 0.55
+    imu_kd_pitch: 0.04
+    imu_kp_roll: 0.30
+    imu_kd_roll: 0.03
+    imu_hip_tolerance: 0.15
+    imu_roll_tolerance: 0.12
+    imu_tilt_deadband: 0.02

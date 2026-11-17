@@ -103,6 +103,22 @@ class PionJointOrderPolicy(nn.Module):
         return pion_actions.index_select(-1, self.action_order)
 
 
+class NativePionPolicy(nn.Module):
+    """Pion-order inference with an explicit deployment contract, no permutation."""
+
+    __constants__ = ["action_reference", "joint_order", "clip_actions"]
+
+    def __init__(self, policy: nn.Module):
+        super().__init__()
+        self.policy = policy
+        self.action_reference = "current"
+        self.joint_order = "pion_native_FL_FR_BL_BR"
+        self.clip_actions = 10.0
+
+    def forward(self, history: torch.Tensor) -> torch.Tensor:
+        return self.policy(history)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export AdaBoot estimator-only policy for Jaguar sim-to-real")
     parser.add_argument(
@@ -112,6 +128,7 @@ def main() -> None:
     parser.add_argument("--models-dir", default=str(Path(__file__).resolve().parents[1] / "models"))
     parser.add_argument("--tag", default="adaboot_tibia_2999_estimator")
     parser.add_argument("--clip-actions", type=float, default=0.0, help="Clip exported mean actions; zero keeps unbounded output")
+    parser.add_argument("--native-pion", action="store_true", help="Export native Pion controller order without Jaguar permutation")
     parser.add_argument("--set-default", action="store_true", help="Also replace models/policy.pt")
     parser.add_argument("--action-reference", choices=("absolute", "current"), default="absolute")
     parser.add_argument(
@@ -135,7 +152,11 @@ def main() -> None:
             raise ValueError("Current Pion export requires --training-joint-order pion")
     actor_state_dict = checkpoint_data["actor_state_dict"]
     model = AdaBootPolicy(actor_state_dict, clip_actions=args.clip_actions).eval()
-    if args.training_joint_order == "pion":
+    if args.native_pion:
+        if args.training_joint_order != "pion" or args.action_reference != "current" or args.clip_actions != 10.0:
+            raise ValueError("Native Pion requires Pion current-position checkpoint and --clip-actions 10")
+        model = NativePionPolicy(model).eval()
+    elif args.training_joint_order == "pion":
         model = PionJointOrderPolicy(model, action_reference=args.action_reference).eval()
 
     sample = torch.zeros(1, 5, 45)

@@ -124,6 +124,7 @@ install(TARGETS
 # Install Python scripts as executable nodes
 install(PROGRAMS
   scripts/nxp_jaguar_controller.py
+  scripts/pion_controller.py
   scripts/sim2sim_curpos_bridge.py
   scripts/keyboard_teleop.py
   scripts/keyboard_cmd_vel.py
@@ -155,6 +156,7 @@ install(FILES
   scripts/joint_layout.py
   scripts/project_paths.py
   scripts/policy_observation.py
+  scripts/pion_policy.py
   scripts/pion_mujoco_plant.py
   scripts/session_recorder.py
   scripts/parallel_link_mapping.py
@@ -167,6 +169,8 @@ install(DIRECTORY config launch urdf meshes sim2sim
   PATTERN "__pycache__" EXCLUDE
 )
 install(FILES models/policy.pt
+  models/policy_pion_current_native_9999_20261117.pt
+  models/deployment_pion_current_native_9999_20261117.json
   models/policy_pion_current_baseline_9999_20261117.pt
   models/deployment_pion_current_baseline_9999_20261117.json
   models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt

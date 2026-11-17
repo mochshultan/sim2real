@@ -6,6 +6,7 @@ Control nodes, teleoperation tools, calibration utilities, diagnostics, and brin
 
 | Script | Type | Description |
 | :--- | :---: | :--- |
+| [`pion_controller.py`](./pion_controller.py) | ROS 2 Node | Native Pion Current policy, training joint order and parity profile; used by both curpos entrypoints. |
 | [`nxp_jaguar_controller.py`](./nxp_jaguar_controller.py) | ROS 2 Node | Evaluates the CPU-only TorchScript policy at 50 Hz from the 5-step history of 45-D observations, handles state transitions, and enforces sensor freshness, tilt, torque, and tracking limits. |
 | [`can_hardware_node.py`](./can_hardware_node.py) | ROS 2 Node | Python SocketCAN driver fallback. Publishes `/joint_states` at 200 Hz. |
 | [`parameters.py`](./parameters.py) | Module | CAN IDs, motor directions, calibration offsets, joint names, and nominal standing angles. |

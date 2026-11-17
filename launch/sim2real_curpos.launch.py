@@ -16,10 +16,13 @@ def generate_launch_description():
     package = Path(__file__).resolve().parents[1]
     return LaunchDescription(
         [
+            DeclareLaunchArgument("config_file", default_value=str(package / "config/sim2real_pion.yaml")),
+            DeclareLaunchArgument("controller_executable", default_value="pion_controller.py", choices=["pion_controller.py"]),
+            DeclareLaunchArgument("controller_name", default_value="pion_controller", choices=["pion_controller"]),
             DeclareLaunchArgument(
                 "policy_path",
-                default_value=str(package / "models/policy_pion_current_baseline_9999_20261117.pt"),
-                description="Pion Current10k TorchScript, controller-order adapter included",
+                default_value=str(package / "models/policy_pion_current_native_9999_20261117.pt"),
+                description="Pion Current10k TorchScript, native Pion training joint order",
             ),
             DeclareLaunchArgument("policy_reference", default_value="current", choices=["current"]),
             DeclareLaunchArgument("history_initialization", default_value="repeat", choices=["repeat"]),

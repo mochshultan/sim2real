@@ -97,7 +97,7 @@ TRANSITION_KD_KNEE = float(P.KD_GAIN[2])
 
 class NXPJaguarControllerNode(Node):
     def __init__(self):
-        super().__init__("nxp_jaguar_controller")
+        super().__init__(getattr(self, "controller_node_name", "nxp_jaguar_controller"))
         policy_path = self._configure_parameters()
         self._load_policy(policy_path)
 
@@ -146,7 +146,7 @@ class NXPJaguarControllerNode(Node):
         # Subscribers
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
-        self.create_subscription(JointState, "/joint_states", self._joint_state_cb, 10)
+        self.create_subscription(JointState, "/joint_states", self._joint_state_cb, getattr(self, "joint_feedback_qos", 10))
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, COMMAND_QOS)
         self.create_subscription(Twist, "/jaguar/benchmark_cmd_vel", self._benchmark_cmd_vel_cb, COMMAND_QOS)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
@@ -180,7 +180,7 @@ class NXPJaguarControllerNode(Node):
                 {"policy_path": policy_path, "policy_reference": self.policy_reference,
                  "simulation": os.environ.get("JAGUAR_SIMULATION") == "1",
                  "history_initialization": self.history_initialization,
-                 "joint_names": list(ISAAC_JOINT_NAMES), "control_period_s": CONTROL_DT,
+                 "joint_names": list(getattr(self, "joint_names", ISAAC_JOINT_NAMES)), "control_period_s": CONTROL_DT,
                  "standing_position_rad": self.stand_joint_pos.tolist(),
                  "observation_layout": {"angular_velocity_scaled": [0, 3], "gravity": [3, 6],
                                         "command_scaled": [6, 9], "relative_joint_position_rad": [9, 21],
@@ -194,7 +194,7 @@ class NXPJaguarControllerNode(Node):
 
         # 50 Hz Control Timer Loop (20 ms dt)
         self.timer = self.create_timer(CONTROL_DT, self._control_loop)
-        self.get_logger().info("NXP Jaguar ROS 2 Controller Initialized. State: STANDBY (Motors Passive, Zero Torque)")
+        self.get_logger().info(f"{self.get_name()} ROS 2 Controller Initialized. State: STANDBY (Motors Passive, Zero Torque)")
         self.get_logger().info(
             f"IMU standing auto-level: {'ON' if self.use_imu_stabilization else 'OFF'} | "
             f"hip tolerance={self.imu_hip_tolerance:.3f} rad | "
@@ -380,7 +380,7 @@ class NXPJaguarControllerNode(Node):
         stop.data = True
         self.estop_pub.publish(stop)
         passive = JointState()
-        passive.name = ISAAC_JOINT_NAMES
+        passive.name = getattr(self, "joint_names", ISAAC_JOINT_NAMES)
         passive.position = [0.0] * 12
         passive.velocity = [0.0] * 12
         passive.effort = [0.0] * 24
@@ -448,7 +448,7 @@ class NXPJaguarControllerNode(Node):
             self.overtorque_counter += 1
             if self.overtorque_counter >= self.torque_overload_cycles:
                 joint_idx = int(np.argmax(np.abs(tau)))
-                joint_name = ISAAC_JOINT_NAMES[joint_idx]
+                joint_name = getattr(self, "joint_names", ISAAC_JOINT_NAMES)[joint_idx]
                 reason = (f"code=OVERTORQUE joint={joint_name} actual_nm={max_tau:.3f} "
                           f"limit_nm={self.overtorque_threshold:.3f} samples={self.overtorque_counter} "
                           f"required_samples={self.torque_overload_cycles}")
@@ -586,13 +586,13 @@ class NXPJaguarControllerNode(Node):
             self.joint_fault_detail = f"reason=nonfinite entries={entries}"
             return
         if msg.name:
-            indices = [ROS_NAME_TO_ISAAC_IDX.get(name) for name in msg.name]
+            indices = [getattr(self, "joint_name_to_index", ROS_NAME_TO_ISAAC_IDX).get(name) for name in msg.name]
             if len(indices) != 12 or None in indices or len(set(indices)) != 12:
                 self.joints_received = False
                 self.joint_fault_detail = f"reason=joint_names names={','.join(msg.name)}"
                 return
         else:
-            indices = np.argsort(ROS_TO_ISAAC).tolist()
+            indices = np.argsort(getattr(self, "ros_to_policy", ROS_TO_ISAAC)).tolist()
         with self.state_lock:
             for source, target in enumerate(indices):
                 self.joint_pos[target] = msg.position[source]
@@ -665,10 +665,10 @@ class NXPJaguarControllerNode(Node):
                 reasons.append(f"code=SENSOR_TIMEOUT sensor={sensor} age_s={now - stamp:.3f} limit_s=0.250")
         for index, position in enumerate(self.joint_pos):
             if not np.isfinite(position):
-                reasons.append(f"code=POSITION_NONFINITE joint={ISAAC_JOINT_NAMES[index]} actual_rad={position}")
+                reasons.append(f"code=POSITION_NONFINITE joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={position}")
             elif position < FEEDBACK_LIMITS_LOWER[index] - 0.2 or position > FEEDBACK_LIMITS_UPPER[index] + 0.2:
                 reasons.append(
-                    f"code=POSITION_RANGE joint={ISAAC_JOINT_NAMES[index]} actual_rad={position:.4f} "
+                    f"code=POSITION_RANGE joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={position:.4f} "
                     f"min_rad={FEEDBACK_LIMITS_LOWER[index] - 0.2:.4f} max_rad={FEEDBACK_LIMITS_UPPER[index] + 0.2:.4f}")
         return reasons
 
@@ -695,7 +695,7 @@ class NXPJaguarControllerNode(Node):
             for index, value in enumerate(self.joint_pos):
                 if value < FEEDBACK_LIMITS_LOWER[index] or value > FEEDBACK_LIMITS_UPPER[index]:
                     bad_joints.append(
-                        f"{ISAAC_JOINT_NAMES[index]}={value:+.3f}"
+                        f"{getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]}={value:+.3f}"
                         f"[{FEEDBACK_LIMITS_LOWER[index]:+.2f},{FEEDBACK_LIMITS_UPPER[index]:+.2f}]")
         status_msg = String()
         status_msg.data = (
@@ -832,7 +832,8 @@ class NXPJaguarControllerNode(Node):
         policy_target = self.obs_builder.build_joint_target(
             self.filtered_action, ACTION_SCALE, current_joint_pos=pos,
         )
-        target_pos = self.stand_joint_pos + ramp * (policy_target - self.stand_joint_pos)
+        target_pos = (policy_target if ramp == 1.0 else
+                      self.stand_joint_pos + ramp * (policy_target - self.stand_joint_pos))
         target_vel = np.zeros(12, dtype=np.float32)
 
         # Impedance tracking gains for RL with smooth damping transition
@@ -924,7 +925,7 @@ class NXPJaguarControllerNode(Node):
                 for index in np.flatnonzero(extra > limit):
                     bound = float(limit[index]) if np.ndim(limit) else float(limit)
                     faults.append(
-                        f"code=POSITION_LIMIT joint={ISAAC_JOINT_NAMES[index]} actual_rad={self.joint_pos[index]:.4f} "
+                        f"code=POSITION_LIMIT joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={self.joint_pos[index]:.4f} "
                         f"min_rad={ISAAC_LIMITS_LOWER[index]:.4f} max_rad={ISAAC_LIMITS_UPPER[index]:.4f} "
                         f"excess_rad={extra[index]:.4f} limit_rad={bound:.4f} "
                         f"duration_s={time.monotonic() - self.soft_fault_times['position']:.3f} debounce_s=0.100")
@@ -974,7 +975,7 @@ class NXPJaguarControllerNode(Node):
                 self.state = "STAND_HOLD"
                 target_pos = self.stand_joint_pos.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
                 target_vel = np.zeros(12, dtype=np.float32)
-                self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding standing pose (Power ON + IMU Auto-Level)")
+                self.get_logger().info("[CONTROLLER] STANDUP complete -> Holding configured standing pose")
         elif self.state == "STAND_HOLD":
             # Hold nominal knees while applying bounded hip/collar leveling.
             target_pos = self.stand_joint_pos.copy() + self._compute_imu_stabilization(1.0, "STAND_HOLD")
@@ -1012,7 +1013,7 @@ class NXPJaguarControllerNode(Node):
                     if np.max(np.abs(pos - SIT_JOINT_POS)) > 0.15:
                         index = int(np.argmax(np.abs(pos - SIT_JOINT_POS)))
                         self._trigger_hard_estop(
-                            f"code=PARK_POSITION joint={ISAAC_JOINT_NAMES[index]} actual_rad={pos[index]:.4f} "
+                            f"code=PARK_POSITION joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={pos[index]:.4f} "
                             f"target_rad={SIT_JOINT_POS[index]:.4f} error_rad={abs(pos[index] - SIT_JOINT_POS[index]):.4f} "
                             f"limit_rad=0.1500 elapsed_s={elapsed:.3f}")
                         return
@@ -1038,7 +1039,11 @@ class NXPJaguarControllerNode(Node):
         # Publish passive zero-gain commands in standby and targets in active states
         if target_pos is not None:
             # Physical safety clamping to prevent exceeding mechanical limits
+            unclamped_target = np.asarray(target_pos).copy()
             target_pos = np.clip(target_pos, ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+            if getattr(self, "_session_sample", None) is not None:
+                self._session_sample["target_before_limits_rad"] = unclamped_target.tolist()
+                self._session_sample["target_limit_clipped"] = (target_pos != unclamped_target).tolist()
 
             # Tracking error watchdog to prevent motor runaways / cable damage
             if self.state in ["STANDUP", "STAND_HOLD", "WALK", "SITDOWN", "SAFE_PARK"]:
@@ -1046,7 +1051,7 @@ class NXPJaguarControllerNode(Node):
                 max_err = float(np.max(tracking_err))
                 if self._persistent_fault("tracking", max_err > 2.0):
                     faults = [
-                        f"code=TRACKING joint={ISAAC_JOINT_NAMES[index]} actual_rad={self.joint_pos[index]:.4f} "
+                        f"code=TRACKING joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={self.joint_pos[index]:.4f} "
                         f"target_rad={target_pos[index]:.4f} error_rad={tracking_err[index]:.4f} limit_rad=2.0000 "
                         f"duration_s={time.monotonic() - self.soft_fault_times['tracking']:.3f} debounce_s=0.100"
                         for index in np.flatnonzero(tracking_err > 2.0)
@@ -1059,7 +1064,7 @@ class NXPJaguarControllerNode(Node):
 
             cmd_msg = JointState()
             cmd_msg.header.stamp = self.get_clock().now().to_msg()
-            cmd_msg.name = ISAAC_JOINT_NAMES
+            cmd_msg.name = getattr(self, "joint_names", ISAAC_JOINT_NAMES)
             cmd_msg.position = target_pos.tolist()
             cmd_msg.velocity = target_vel.tolist()
             cmd_msg.effort = (cmd_kp + cmd_kd)

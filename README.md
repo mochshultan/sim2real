@@ -66,20 +66,22 @@ ros2 launch jaguar_control sim2real.launch.py
 ```
 
 `sim2real_curpos.launch.py` replaces the former `sim2real_zero.launch.py` entrypoint.
-It selects `policy_pion_current_baseline_9999_20261117.pt`, `policy_reference=current`,
+It selects `pion_controller.py`, `config/sim2real_pion.yaml`,
+`policy_pion_current_native_9999_20261117.pt`, and `policy_reference=current`,
 and repeat-initialized five-frame history. Position observations remain calibrated
 `q` relative to0rad. Actions now use **q_target=q_measured+0.25*clipped_action**,
 anchored once per50Hz policy step and held by the200Hz motor loop. They do not
 integrate from the preceding target. Standing remains collar0, hip-1.25 and
 knee+1.25rad on all four legs.
 
-Pion training uses FL/FR/BL/BR within each joint group; the controller uses
-FR/FL/BR/BL. The exported policy maps every history frame into Pion order and
-maps actions back, with clipping+/-10. The original actor checkpoint and export
+Pion training and the dedicated controller both use FL/FR/BL/BR within each
+joint group. The native export needs no joint permutation and clips actions
+to +/-10. Named messages map the native Pion joints to the CAN hardware. The original actor checkpoint and export
 matched exactly for zero/random/stress histories and batches1/16/64.
 
-The normal `sim2real.launch.py`, calibration pulled from `main`, and hardware
-14Nm cap are retained. The current-position launcher requires an export carrying
+The normal `sim2real.launch.py` retains its nominal Jaguar policy and 14 Nm
+cap. Pion Current also uses the driver/firmware 14 Nm ceiling, as requested.
+Motor calibration remains shared with the physical hardware. The current-position launcher requires an export carrying
 the matching action-reference contract, so an old absolute-zero policy cannot
 silently be used with a measured-position action anchor. Earlier zero policies
 remain archived under their versioned filenames.

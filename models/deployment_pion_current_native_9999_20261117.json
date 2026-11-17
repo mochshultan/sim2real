@@ -1,0 +1,116 @@
+{
+  "source_checkpoint_pc2": "/home/shultan/IsaacLab/logs/rsl_rl/pion_current_baseline/2026-11-16_21-19-57_baseline-current-v2-yaw035-clearance-nospeed-10k-20261116-seed42-6000env/model_9999.pt",
+  "checkpoint_file": "model_pion_current_baseline_9999_20261117.pt",
+  "checkpoint_sha256": "9b77f3f87426a9ba4062346ee1317e7219dbc74b941073ba21ed16ecadd542f2",
+  "iteration": 9999,
+  "completed_updates": 10000,
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_joint_reference_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "policy_file": "policy_pion_current_native_9999_20261117.pt",
+  "policy_sha256": "86de0f5f141a4a206819a091e548300f98d67f8dbbf81115a616018fed706834",
+  "controller": "pion_controller.py",
+  "controller_joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "joint_order_adapter": false,
+  "history_initialization": "repeat",
+  "export_input": "time-major[batch,5,45]",
+  "estimator_history": "term-major225",
+  "control_dt": 0.02,
+  "physics_dt": 0.005,
+  "kp": 45.0,
+  "kd": 4.5,
+  "clip_actions": 10.0,
+  "action_ema_alpha": 0.0,
+  "walk_ramp_duration": 0.0,
+  "standing_imu_trim": false,
+  "standing_position_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.25,
+    -1.25,
+    -1.25,
+    -1.25,
+    1.25,
+    1.25,
+    1.25,
+    1.25
+  ],
+  "hardware_torque_cap_Nm": 14.0,
+  "training_torque_cap_range_Nm": [
+    12.6,
+    13.5
+  ],
+  "actuator": "RS00 32V linear approximation in training and MuJoCo; physical firmware impedance on hardware",
+  "safety_target_limits": "Collar [-0.5,0.5], hip [-2.5,0.2], knee [-0.25,2.5] rad; retained hardware guard",
+  "remaining_gap": [
+    "Hardware feedback age and asynchronous transport",
+    "Measured actuator dynamics not identified; training curve is an approximation",
+    "Mechanical position guards can clip targets; recorded in session logs",
+    "Training randomization is sampled; hardware parameters are fixed"
+  ],
+  "native_validation": {
+    "python_tests_passed": 168,
+    "cpp_tests_passed": 4,
+    "ros_build": "passed",
+    "recorded_sessions": [
+      {
+        "session": "sim2sim_curpos_20261117T074053.906337Z_7b8d77c8.jsonl",
+        "samples": 657,
+        "max_replay_error": 1.1920928955078125e-06,
+        "max_anchor_error_rad": 0.0,
+        "limited_joint_fraction": 0.0,
+        "mean_joint_feedback_age_s": 0.005591538584829398
+      },
+      {
+        "session": "sim2sim_curpos_20261117T074309.038378Z_caf388ce.jsonl",
+        "samples": 508,
+        "max_replay_error": 6.556510925292969e-07,
+        "max_anchor_error_rad": 0.0,
+        "limited_joint_fraction": 0.0,
+        "mean_joint_feedback_age_s": 0.002008270964532445
+      },
+      {
+        "session": "sim2sim_curpos_20261117T074408.933905Z_51efcd63.jsonl",
+        "samples": 507,
+        "max_replay_error": 1.0132789611816406e-06,
+        "max_anchor_error_rad": 0.0,
+        "limited_joint_fraction": 0.0,
+        "mean_joint_feedback_age_s": 0.0024659520647023793
+      }
+    ],
+    "torque_cap_at_recording_Nm": 13.5
+  },
+  "torque_limit_selection": "User requested the motor driver/firmware 14 Nm ceiling; no additional 13.5 Nm deployment ceiling"
+}

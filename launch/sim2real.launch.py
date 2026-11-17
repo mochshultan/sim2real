@@ -19,8 +19,8 @@ def _launch_controller(context):
     }
     return [Node(
         package="jaguar_control",
-        executable="nxp_jaguar_controller.py",
-        name="nxp_jaguar_controller",
+        executable=LaunchConfiguration("controller_executable"),
+        name=LaunchConfiguration("controller_name"),
         output="screen",
         parameters=[LaunchConfiguration("config_file"), overrides],
     )]
@@ -215,6 +215,8 @@ def generate_launch_description():
         LogInfo(msg=["Jaguar DDS domain: ", LaunchConfiguration("domain_id"),
                      "; all remote nodes and CLI terminals must use this domain and matching ROS distro."]),
         config_file_arg,
+        DeclareLaunchArgument("controller_executable", default_value="nxp_jaguar_controller.py"),
+        DeclareLaunchArgument("controller_name", default_value="nxp_jaguar_controller"),
         policy_path_arg,
         policy_reference_arg,
         history_initialization_arg,

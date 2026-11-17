@@ -26,7 +26,10 @@ def rs00_32v_torque(requested, velocity, cap=14.0):
 
 
 class PionMujocoPlant:
-    def __init__(self, path):
+    def __init__(self, path, torque_cap=14.0):
+        if not np.isfinite(torque_cap) or not 0 < torque_cap <= 14.0:
+            raise ValueError("Pion torque cap must be in (0,14] Nm")
+        self.torque_cap = float(torque_cap)
         self.model = mujoco.MjModel.from_xml_path(str(Path(path).resolve()))
         self.data = mujoco.MjData(self.model)
         ids = np.array(
@@ -67,6 +70,6 @@ class PionMujocoPlant:
     def step(self, passive=False):
         position, velocity, _ = self.feedback()
         requested = self.kp * (self.target - position) + self.kd * (self.target_velocity - velocity) + self.feedforward
-        self.torque = np.zeros(12) if passive else rs00_32v_torque(requested, velocity)
+        self.torque = np.zeros(12) if passive else rs00_32v_torque(requested, velocity, self.torque_cap)
         self.data.ctrl[self.actuators] = self.torque
         mujoco.mj_step(self.model, self.data)

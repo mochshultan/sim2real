@@ -71,16 +71,18 @@ node exits. It never launches the physical CAN/hardware or serial-IMU stack.
 | Anchor | Once per20ms policy step; target held during faster PD updates |
 | Physical standing | Collar0, hip-1.25, knee+1.25rad |
 | Gains | Kp45, Kd4.5 |
-| Motor torque cap |14Nm; sim uses the saved linear32V torque-speed approximation |
+| Motor torque cap |14 Nm through the driver/firmware; sim uses the saved linear32V torque-speed approximation |
 | Training base height |22cm, weight-10 |
 | Training clearance |3cm squared error per airborne foot, no XY-speed multiplier |
 | Runtime inference | Estimator-only; no privileged critic or simulator velocity input |
 
-The exact shared files are `scripts/policy_observation.py` and
-`scripts/nxp_jaguar_controller.py`. The former computes q-targets from the
-measured position passed by `_walk_targets`; the latter performs inference,
-filtering, standing/walk blending, clamping and safety checks. Sim2sim launches
-that same node rather than translating its formulas into another runner.
+The dedicated runtime is `scripts/pion_controller.py`, with its native contract
+in `scripts/pion_policy.py` and configuration in `config/sim2real_pion.yaml`.
+Policy state, history and actions use FL/FR/BL/BR grouped collar/hip/knee.
+The native TorchScript contains no Jaguar permutation. Named joint feedback and
+commands provide the mapping to the existing CAN hardware. The controller reuses
+the existing stop/state machine, but applies no action EMA, WALK ramp or standing
+IMU trim. Sim2sim launches this same Pion node.
 
 `pion_mujoco_plant.py` contains only plant dynamics and impedance tracking.
 `sim2sim_curpos_bridge.py` translates `/joint_commands`, `/joint_states`, `/imu/data`
@@ -92,7 +94,7 @@ not added a second time.
 The export includes a contract flag `action_reference=current`; the controller
 rejects absolute-action exports when launched as current-position. The baseline
 and model reference are distinct from the standing pose. Zero action holds the
-measured position after the walk ramp; it does not request0rad or a previous
+measured position at the policy sampling instant; it does not request0rad or a previous
 target. Existing absolute-zero exports can still be used explicitly with the
 shared main launch and `policy_reference:=zero`, but are not the curpos default.
 
@@ -115,7 +117,40 @@ an approximation rather than a measured motor model. Sim2sim is useful for
 checking the actual deployment controller against a physical simulation, but
 cannot establish numerical equivalence or guarantee real-robot stability.
 
-## Validation on2026-11-17
+## Native Pion update
+
+`sim2real_curpos` now selects `pion_controller.py`, `sim2real_pion.yaml`, and
+`policy_pion_current_native_9999_20261117.pt`. The selected export hash and contract
+are checked at startup. The main nominal launch keeps the Jaguar controller.
+
+- Sampling: 50 Hz policy, 200 Hz hardware; latest-sample joint feedback QoS.
+- Proprioception: 45D plus 3D estimated velocity, five-frame estimator history.
+- Gains: Kp=45, Kd=4.5; action scale=0.25; action clip=10.
+- Standing/reset reference: collars=0, hips=-1.25, knees=1.25 rad.
+- WALK target: sampled measured position plus scaled action, held between updates.
+- No extra WALK ramp, EMA, or standing IMU trim.
+- Torque cap=14 Nm through the driver/firmware, as requested. The historical training randomization was 12.6--13.5 Nm.
+- Hardware mechanical limits and emergency guards remain active. Session samples
+  include targets before limiting and a per-joint clipping mask.
+
+The training delay is randomized from 0--15 ms; no artificial delay is added to
+hardware. Actual transport delay must be measured. Noise, friction and strength
+randomization describe a training distribution, not values to inject into real
+sensor feedback. Physical motor response and geometry still need measurement.
+
+## Native validation on 2026-11-17
+
+- 168 Python tests and four C++ tests passed; ROS build passed.
+- Native export and the previously verified export agree exactly when the same
+  physically named histories are expressed in their respective joint orders.
+- ROS/MuJoCo stand, forward and backward smoke runs entered WALK and exited cleanly (recorded with the earlier 13.5 Nm deployment cap).
+- Session replay errors were at most 1.2e-6 (batched floating-point inference).
+  All recorded pre-limit targets matched sampled q + 0.25 action exactly.
+- No controller target clipping occurred in these three short runs.
+- No CAN hardware was launched or moved. These checks do not establish hardware
+  stability or measured actuator equivalence.
+
+## Earlier adapter validation on2026-11-17
 
 - Export/native actor equality: maximum absolute difference0.0 for the recorded
   zero/random/stress cases at batch sizes1/16/64.

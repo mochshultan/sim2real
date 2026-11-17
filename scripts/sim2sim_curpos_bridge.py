@@ -15,7 +15,7 @@ import numpy as np
 import rclpy
 import yaml
 from geometry_msgs.msg import Twist
-from joint_layout import ISAAC_JOINT_NAMES
+from joint_layout import ISAAC_JOINT_NAMES, ROS_NAME_TO_ISAAC_IDX
 from pion_mujoco_plant import PionMujocoPlant
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -40,8 +40,11 @@ class PionMujocoBridge(Node):
         ).items():
             self.declare_parameter(name, value)
         config = yaml.safe_load(Path(self.get_parameter("config_file").value).read_text())
-        self.imu_upside_down = bool(config["nxp_jaguar_controller"]["ros__parameters"]["imu_upside_down"])
-        self.plant = PionMujocoPlant(self.get_parameter("model_path").value)
+        self.imu_upside_down = bool(config.get("pion_controller", config.get("nxp_jaguar_controller"))["ros__parameters"]["imu_upside_down"])
+        self.plant = PionMujocoPlant(
+            self.get_parameter("model_path").value,
+            torque_cap=config["jaguar_hardware"]["ros__parameters"]["control_torque_limit_nm"],
+        )
         self.joints = self.create_publisher(JointState, "/joint_states", 10)
         self.imu = self.create_publisher(Imu, "/imu/data", qos_profile_sensor_data)
         self.joy = self.create_publisher(Joy, "/joy", 10)
@@ -72,7 +75,7 @@ class PionMujocoBridge(Node):
         if self.get_parameter("viz").value == "viser":
             self.setup_viewer()
         self.get_logger().info(
-            "MuJoCo bridge has no policy; nxp_jaguar_controller supplies all targets. No CAN opened."
+            "MuJoCo bridge has no policy; pion_controller supplies all targets. No CAN opened."
         )
         self.timer = self.create_timer(float(self.plant.model.opt.timestep), self.tick)
 
@@ -136,13 +139,14 @@ class PionMujocoBridge(Node):
 
     def on_command(self, message):
         try:
-            if len(message.name) != 12 or set(message.name) != set(ISAAC_JOINT_NAMES):
+            indices = [ROS_NAME_TO_ISAAC_IDX.get(name) for name in message.name]
+            if len(indices) != 12 or None in indices or len(set(indices)) != 12:
                 raise ValueError("Expected12 unique controller joint names")
             if len(message.position) != 12 or len(message.effort) not in (24, 36):
                 raise ValueError("Expected position12 and gains24 or gains/feedforward36")
             if len(message.velocity) not in (0, 12):
                 raise ValueError("Expected velocity0 or12")
-            order = [message.name.index(name) for name in ISAAC_JOINT_NAMES]
+            order = np.argsort(indices)
             gains = np.asarray(message.effort).reshape(-1, 12)
             velocity = np.asarray(message.velocity) if message.velocity else np.zeros(12)
             self.plant.set_command(
@@ -239,7 +243,7 @@ class PionMujocoBridge(Node):
             path.write_text(
                 json.dumps(
                     dict(
-                        controller="nxp_jaguar_controller.py",
+                        controller="pion_controller.py",
                         can_opened=False,
                         policy_in_bridge=False,
                         controller_states_seen=sorted(self.states_seen),
