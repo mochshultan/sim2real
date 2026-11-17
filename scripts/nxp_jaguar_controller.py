@@ -645,7 +645,8 @@ class NXPJaguarControllerNode(Node):
         roll_trim = float(np.clip(roll_trim, -self.imu_roll_tolerance, self.imu_roll_tolerance))
 
         # Isaac order: FR, FL, BR, BL rolls; then hips; then knees.
-        delta_q[0:4] = [roll_trim, -roll_trim, roll_trim, -roll_trim]
+        delta_q[0:4] = roll_trim * np.asarray(
+            getattr(self, "roll_trim_signs", (1.0, -1.0, 1.0, -1.0)))
         delta_q[4:8] = -hip_trim
         # Intentionally never compensate with knees. Their transition/hold
         # targets remain exactly the nominal trajectory values.

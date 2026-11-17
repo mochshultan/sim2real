@@ -7,11 +7,12 @@
 
 from pathlib import Path
 import sys
+import time
 
 import numpy as np
 import rclpy
 import torch
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, Joy
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 from pion_controller import PionControllerNode
@@ -71,6 +72,27 @@ def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedba
             assert max(abs(action)) <= 10
             np.testing.assert_array_equal(velocity, np.zeros(12))
             assert kp == [45.0] * 12 and kd == [4.5] * 12
+        # Return from WALK on tilted ground: leveling belongs to stand states,
+        # with left/right signs in native Pion order, not the legacy Jaguar order.
+        node.state = "WALK"
+        node.imu_received = True
+        node.last_imu_time = time.monotonic()
+        node.last_joints_time = time.monotonic()
+        node.body_quat[:] = [np.sin(0.1), 0, 0, np.cos(0.1)]
+        node._joy_cb(Joy(buttons=[0] * 7 + [1] + [0] * 3))
+        assert node.state == "STANDUP"
+        trim = node._compute_imu_stabilization(1.0, node.state)
+        assert trim[0] < 0 and trim[1] > 0 and trim[2] < 0 and trim[3] > 0
+        assert np.max(np.abs(trim[:4])) <= 0.12
+        np.testing.assert_array_equal(trim[8:], np.zeros(4))
+        np.testing.assert_array_equal(node._compute_imu_stabilization(1.0, "STAND_HOLD"), trim)
+        np.testing.assert_array_equal(node._compute_imu_stabilization(1.0, "WALK"), np.zeros(12))
+        node.body_quat[:] = [0, np.sin(0.1), 0, np.cos(0.1)]
+        pitch_trim = node._compute_imu_stabilization(1.0, "STAND_HOLD")
+        assert np.all(pitch_trim[4:8] < 0) and np.max(np.abs(pitch_trim[4:8])) <= 0.15
+        np.testing.assert_array_equal(pitch_trim[8:], np.zeros(4))
+        node.last_imu_time = time.monotonic() - 1.0
+        np.testing.assert_array_equal(node._compute_imu_stabilization(1.0, "STAND_HOLD"), np.zeros(12))
     finally:
         if node is not None:
             node.destroy_node()

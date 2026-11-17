@@ -52,7 +52,7 @@
   "clip_actions": 10.0,
   "action_ema_alpha": 0.0,
   "walk_ramp_duration": 0.0,
-  "standing_imu_trim": false,
+  "standing_imu_trim": true,
   "standing_position_rad": [
     0.0,
     0.0,
@@ -112,5 +112,10 @@
     ],
     "torque_cap_at_recording_Nm": 13.5
   },
-  "torque_limit_selection": "User requested the motor driver/firmware 14 Nm ceiling; no additional 13.5 Nm deployment ceiling"
+  "torque_limit_selection": "User requested the motor driver/firmware 14 Nm ceiling; no additional 13.5 Nm deployment ceiling",
+  "standing_imu_trim_states": [
+    "STANDUP",
+    "STAND_HOLD"
+  ],
+  "standing_imu_trim_policy": "Outside WALK policy; native Pion left/right signs; hip limit 0.15 rad, collar limit 0.12 rad, no knee correction"
 }

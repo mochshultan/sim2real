@@ -29,14 +29,15 @@ class PionControllerNode(NXPJaguarControllerNode):
     joint_names = JOINT_NAMES
     joint_name_to_index = NAME_TO_PION
     ros_to_policy = ROS_TO_PION
+    roll_trim_signs = (-1.0, 1.0, -1.0, 1.0)  # FL, FR, BL, BR
     joint_feedback_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
 
     def _configure_parameters(self):
         policy_path = super()._configure_parameters()
         if self.policy_reference != "current" or self.history_initialization != "repeat":
             raise ValueError("Pion Current requires current reference and repeat history initialization")
-        if self.action_ema_alpha != 0 or self.walk_ramp_duration != 0 or self.use_imu_stabilization:
-            raise ValueError("Pion training parity requires no action EMA, no WALK ramp and no standing IMU trim")
+        if self.action_ema_alpha != 0 or self.walk_ramp_duration != 0:
+            raise ValueError("Pion WALK training parity requires no action EMA and no WALK ramp")
         if not (np.allclose(self.rl_kp, KP) and np.allclose(self.rl_kd, KD)):
             raise ValueError("This Pion checkpoint requires Kp=45 and Kd=4.5")
         self.stand_joint_pos = STANDING.copy()

@@ -81,8 +81,8 @@ in `scripts/pion_policy.py` and configuration in `config/sim2real_pion.yaml`.
 Policy state, history and actions use FL/FR/BL/BR grouped collar/hip/knee.
 The native TorchScript contains no Jaguar permutation. Named joint feedback and
 commands provide the mapping to the existing CAN hardware. The controller reuses
-the existing stop/state machine, but applies no action EMA, WALK ramp or standing
-IMU trim. Sim2sim launches this same Pion node.
+the existing stop/state machine, but applies no action EMA or WALK ramp. Bounded IMU leveling is enabled
+only during STANDUP and STAND_HOLD, including return from WALK. Sim2sim launches this same Pion node.
 
 `pion_mujoco_plant.py` contains only plant dynamics and impedance tracking.
 `sim2sim_curpos_bridge.py` translates `/joint_commands`, `/joint_states`, `/imu/data`
@@ -128,7 +128,9 @@ are checked at startup. The main nominal launch keeps the Jaguar controller.
 - Gains: Kp=45, Kd=4.5; action scale=0.25; action clip=10.
 - Standing/reset reference: collars=0, hips=-1.25, knees=1.25 rad.
 - WALK target: sampled measured position plus scaled action, held between updates.
-- No extra WALK ramp, EMA, or standing IMU trim.
+- No extra WALK ramp or action EMA. Standing IMU trim is active outside WALK,
+  during STANDUP/STAND_HOLD. Native Pion collar signs are FL-, FR+, BL-, BR+;
+  hip correction is bounded at 0.15 rad, collar at 0.12 rad, knees unchanged.
 - Torque cap=14 Nm through the driver/firmware, as requested. The historical training randomization was 12.6--13.5 Nm.
 - Hardware mechanical limits and emergency guards remain active. Session samples
   include targets before limiting and a per-joint clipping mask.
