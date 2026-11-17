@@ -70,16 +70,20 @@ def walk_node(action):
 
 
 @pytest.mark.parametrize("elapsed,ramp", [(0.0, 0.0), (0.4, 0.5), (0.8, 1.0)])
-@pytest.mark.parametrize("reference", [DEFAULT_JOINT_POS, np.zeros(12, dtype=np.float32)])
-def test_walk_targets_preserve_policy_blend_and_gains(elapsed, ramp, reference):
+@pytest.mark.parametrize("reference,action_reference", [
+    (DEFAULT_JOINT_POS, "absolute"), (np.zeros(12, dtype=np.float32), "absolute"),
+    (np.zeros(12, dtype=np.float32), "current"),
+])
+def test_walk_targets_preserve_policy_blend_and_gains(elapsed, ramp, reference, action_reference):
     node = walk_node([0.2] * 12)
     node.stand_joint_pos = (np.array([0.0] * 4 + [-1.25] * 4 + [1.25] * 4)
                             if not np.any(reference) else STAND_JOINT_POS.copy())
-    node.obs_builder = JaguarObservationBuilder(reference)
+    node.obs_builder = JaguarObservationBuilder(reference, action_reference=action_reference)
     targets = Controller._walk_targets(node, 10.0 + elapsed, DEFAULT_JOINT_POS,
                                        np.zeros(12), [0, 0, 0, 1], np.zeros(3), np.zeros(3))
     position, velocity, kp, kd = targets
-    expected = (1 - ramp) * node.stand_joint_pos + ramp * reference + 0.25 * ramp * 0.2
+    origin = DEFAULT_JOINT_POS if action_reference == "current" else reference
+    expected = (1 - ramp) * node.stand_joint_pos + ramp * origin + 0.25 * ramp * 0.2
     np.testing.assert_allclose(position, expected, atol=1e-7)
     np.testing.assert_array_equal(velocity, 0)
     assert kp == [45.0] * 12
@@ -216,3 +220,10 @@ def test_sensor_wait_reports_joint_rejection_reason(detail):
     status = node.status_pub.publish.call_args.args[0].data
     assert 'joints=False' in status
     assert f"joint_input={detail or 'reason=no_valid_sample'}" in status
+
+
+def test_current_reference_rejects_an_absolute_action_export():
+    node = SimpleNamespace(policy_reference="current", get_logger=Mock())
+    absolute = Path(__file__).parents[1] / "models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt"
+    with pytest.raises(ValueError, match="current-position policy export"):
+        Controller._load_policy(node, str(absolute))

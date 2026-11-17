@@ -178,6 +178,7 @@ class NXPJaguarControllerNode(Node):
             self.session_recorder = SessionRecorder(
                 self.get_parameter("session_log_dir").value,
                 {"policy_path": policy_path, "policy_reference": self.policy_reference,
+                 "simulation": os.environ.get("JAGUAR_SIMULATION") == "1",
                  "history_initialization": self.history_initialization,
                  "joint_names": list(ISAAC_JOINT_NAMES), "control_period_s": CONTROL_DT,
                  "standing_position_rad": self.stand_joint_pos.tolist(),
@@ -202,8 +203,12 @@ class NXPJaguarControllerNode(Node):
 
     def _new_observation_builder(self):
         """Preserve the selected policy reference and history mode at startup and reset."""
-        reference = np.zeros(12, dtype=np.float32) if self.policy_reference == "zero" else DEFAULT_JOINT_POS
-        return JaguarObservationBuilder(reference, history_initialization=self.history_initialization)
+        reference = (np.zeros(12, dtype=np.float32)
+                     if self.policy_reference in ("zero", "current") else DEFAULT_JOINT_POS)
+        return JaguarObservationBuilder(
+            reference, history_initialization=self.history_initialization,
+            action_reference="current" if self.policy_reference == "current" else "absolute",
+        )
 
     def _configure_parameters(self):
         """Declare ROS overrides and validate controller/safety configuration."""
@@ -248,15 +253,15 @@ class NXPJaguarControllerNode(Node):
 
         self.history_initialization = self.get_parameter("history_initialization").value
         self.policy_reference = self.get_parameter("policy_reference").value
-        if self.policy_reference not in ("nominal", "zero"):
-            raise ValueError("policy_reference must be 'nominal' or 'zero'")
-        self.declare_parameter("record_session", self.policy_reference == "zero")
+        if self.policy_reference not in ("nominal", "zero", "current"):
+            raise ValueError("policy_reference must be 'nominal', 'zero' or 'current'")
+        self.declare_parameter("record_session", self.policy_reference in ("zero", "current"))
         self.declare_parameter("session_log_dir", "~/.ros/jaguar_control/sessions")
-        self.stand_joint_pos = (ZERO_STAND_JOINT_POS if self.policy_reference == "zero"
+        self.stand_joint_pos = (ZERO_STAND_JOINT_POS if self.policy_reference in ("zero", "current")
                                 else STAND_JOINT_POS).copy()
         policy_param = self.get_parameter("policy_path").get_parameter_value().string_value
-        if self.policy_reference == "zero" and not policy_param:
-            raise ValueError("The zero reference requires an explicit matching policy_path")
+        if self.policy_reference in ("zero", "current") and not policy_param:
+            raise ValueError("The zero/current reference requires an explicit matching policy_path")
         if not policy_param:
             policy_param = str(package_file("models", "policy.pt"))
         if not os.path.isfile(policy_param):
@@ -330,6 +335,8 @@ class NXPJaguarControllerNode(Node):
         self.get_logger().info(f"Loading TorchScript Policy from: {policy_param}")
         self.policy = torch.jit.load(policy_param, map_location="cpu")
         self.policy.eval()
+        if self.policy_reference == "current" and getattr(self.policy, "action_reference", "absolute") != "current":
+            raise ValueError("Current-position launch requires a current-position policy export")
         self.policy_expects_temporal = True
         with torch.no_grad():
             try:
@@ -822,7 +829,9 @@ class NXPJaguarControllerNode(Node):
         else:
             ramp = 1.0
 
-        policy_target = self.obs_builder.build_joint_target(self.filtered_action, ACTION_SCALE)
+        policy_target = self.obs_builder.build_joint_target(
+            self.filtered_action, ACTION_SCALE, current_joint_pos=pos,
+        )
         target_pos = self.stand_joint_pos + ramp * (policy_target - self.stand_joint_pos)
         target_vel = np.zeros(12, dtype=np.float32)
 

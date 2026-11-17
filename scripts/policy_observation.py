@@ -5,13 +5,17 @@ import torch
 
 
 class JaguarObservationBuilder:
-    def __init__(self, default_joint_pos, history_len: int = 5, history_initialization: str = "zeros"):
+    def __init__(self, default_joint_pos, history_len: int = 5, history_initialization: str = "zeros",
+                 action_reference: str = "absolute"):
         self.default_joint_pos = np.asarray(default_joint_pos, dtype=np.float32).copy()
         if self.default_joint_pos.shape != (12,) or not np.isfinite(self.default_joint_pos).all():
             raise ValueError("Joint reference must contain 12 finite positions [rad]")
         if history_initialization not in ("zeros", "repeat"):
             raise ValueError("history_initialization must be zeros or repeat")
         self.history_initialization = history_initialization
+        if action_reference not in ("absolute", "current"):
+            raise ValueError("action_reference must be absolute or current")
+        self.action_reference = action_reference
         self.history_len = history_len
         self.obs_dim = 45
         self.last_action = np.zeros(12, dtype=np.float32)
@@ -56,9 +60,19 @@ class JaguarObservationBuilder:
 
         return obs_45d
 
-    def build_joint_target(self, action: np.ndarray, action_scale: float = 0.25) -> np.ndarray:
-        """Use the observation reference to convert policy actions to joint targets."""
-        return self.default_joint_pos + action_scale * action
+    def build_joint_target(self, action: np.ndarray, action_scale: float = 0.25,
+                           current_joint_pos=None) -> np.ndarray:
+        """Anchor once per policy step, then let the motor loop hold this target.
+
+        Current-position actions use measured calibrated joint coordinates,
+        independently of the zero reference used in position observations.
+        """
+        origin = self.default_joint_pos
+        if self.action_reference == "current":
+            origin = np.asarray(current_joint_pos, dtype=np.float32)
+            if origin.shape != (12,) or not np.isfinite(origin).all():
+                raise ValueError("Current-position actions require 12 finite measured joint positions")
+        return origin + action_scale * action
 
     def update_and_get_history(self, obs_45d: np.ndarray) -> torch.Tensor:
         # Shift history left and insert newest observation at the end

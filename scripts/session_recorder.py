@@ -14,7 +14,10 @@ class SessionRecorder:
         directory = Path(directory).expanduser()
         directory.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
-        self.path = directory / f'sim2real_zero_{stamp}_{uuid4().hex[:8]}.jsonl'
+        prefix = 'sim2real_curpos' if metadata.get('policy_reference') == 'current' else 'sim2real_zero'
+        if metadata.get('simulation'):
+            prefix = prefix.replace('sim2real', 'sim2sim', 1)
+        self.path = directory / f'{prefix}_{stamp}_{uuid4().hex[:8]}.jsonl'
         self.dropped = 0
         self.error = None
         self._closed = False

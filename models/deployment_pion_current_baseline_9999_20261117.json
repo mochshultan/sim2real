@@ -1,0 +1,214 @@
+{
+  "policy_file": "policy_pion_current_baseline_9999_20261117.pt",
+  "checkpoint_file": "model_pion_current_baseline_9999_20261117.pt",
+  "policy_sha256": "2f884223f27cf88e9dfb24538f214ed0cd660536c13f4e0ee4b2374d8c08b0ca",
+  "checkpoint_sha256": "9b77f3f87426a9ba4062346ee1317e7219dbc74b941073ba21ed16ecadd542f2",
+  "source_checkpoint_pc2": "/home/shultan/IsaacLab/logs/rsl_rl/pion_current_baseline/2026-11-16_21-19-57_baseline-current-v2-yaw035-clearance-nospeed-10k-20261116-seed42-6000env/model_9999.pt",
+  "iteration": 9999,
+  "completed_updates": 10000,
+  "policy_reference": "current",
+  "observation_joint_reference_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "standing_position_controller_order_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.25,
+    -1.25,
+    -1.25,
+    -1.25,
+    1.25,
+    1.25,
+    1.25,
+    1.25
+  ],
+  "training_joint_order": "FL,FR,BL,BR grouped collar/hip/knee",
+  "controller_joint_order": "FR,FL,BR,BL grouped collar/hip/knee",
+  "permutation": [
+    1,
+    0,
+    3,
+    2,
+    5,
+    4,
+    7,
+    6,
+    9,
+    8,
+    11,
+    10
+  ],
+  "export_input": "time-major[batch,5,45]",
+  "training_estimator_history": "term-major225",
+  "clip_actions": 10.0,
+  "kp": 45.0,
+  "kd": 4.5,
+  "torque_cap_Nm": 14.0,
+  "actuator_curve": "32V linear approximation, not measured",
+  "export_parity": [
+    {
+      "batch": 1,
+      "mode": "zero",
+      "maximum_absolute_difference": 0.0
+    },
+    {
+      "batch": 1,
+      "mode": "random",
+      "maximum_absolute_difference": 0.0
+    },
+    {
+      "batch": 16,
+      "mode": "random",
+      "maximum_absolute_difference": 0.0
+    },
+    {
+      "batch": 64,
+      "mode": "stress",
+      "maximum_absolute_difference": 0.0
+    }
+  ],
+  "physical_robot_tested": false,
+  "shared_controller_trace_validation": [
+    {
+      "session": "sim2real_curpos_20261117T033518.971196Z_fa5255e1.jsonl",
+      "samples": 657,
+      "post_ramp_targets_checked": 606,
+      "maximum_target_error_rad": 0.0,
+      "maximum_replay_action_error": 0.0
+    },
+    {
+      "session": "sim2real_curpos_20261117T033727.675279Z_ce2a7bf3.jsonl",
+      "samples": 407,
+      "post_ramp_targets_checked": 357,
+      "maximum_target_error_rad": 0.0,
+      "maximum_replay_action_error": 0.0
+    },
+    {
+      "session": "sim2real_curpos_20261117T033913.641718Z_0e0e8e28.jsonl",
+      "samples": 407,
+      "post_ramp_targets_checked": 357,
+      "maximum_target_error_rad": 0.0,
+      "maximum_replay_action_error": 0.0
+    },
+    {
+      "session": "sim2sim_curpos_20261117T034032.374954Z_1addf44a.jsonl",
+      "samples": 208,
+      "post_ramp_targets_checked": 158,
+      "maximum_target_error_rad": 0.0,
+      "maximum_replay_action_error": 0.0
+    },
+    {
+      "session": "sim2sim_curpos_20261117T034220.352857Z_7b9fe89d.jsonl",
+      "samples": 207,
+      "post_ramp_targets_checked": 157,
+      "maximum_target_error_rad": 0.0,
+      "maximum_replay_action_error": 0.0
+    }
+  ],
+  "sim2sim_runs": {
+    "stand": {
+      "controller": "nxp_jaguar_controller.py",
+      "can_opened": false,
+      "policy_in_bridge": false,
+      "controller_states_seen": [
+        "STANDBY",
+        "STANDUP",
+        "STAND_HOLD",
+        "WALK"
+      ],
+      "joint_commands_received": 879,
+      "walk_commands_received": 648,
+      "minimum_base_height": 0.21841046616845883,
+      "final_base_position": [
+        -0.0024158628835936214,
+        0.0005572957180907364,
+        0.22394067847083282
+      ],
+      "maximum_torque_nm": 6.2152560643051045,
+      "simulation_seconds": 17.000000000000902
+    },
+    "forward": {
+      "controller": "nxp_jaguar_controller.py",
+      "can_opened": false,
+      "policy_in_bridge": false,
+      "controller_states_seen": [
+        "STANDBY",
+        "STANDUP",
+        "STAND_HOLD",
+        "WALK"
+      ],
+      "joint_commands_received": 630,
+      "walk_commands_received": 398,
+      "minimum_base_height": 0.21728886806735842,
+      "final_base_position": [
+        1.8689902316073843,
+        0.14595740981620842,
+        0.21845019987550168
+      ],
+      "maximum_torque_nm": 14.0,
+      "simulation_seconds": 11.995000000000475
+    },
+    "backward": {
+      "controller": "nxp_jaguar_controller.py",
+      "can_opened": false,
+      "policy_in_bridge": false,
+      "controller_states_seen": [
+        "STANDBY",
+        "STANDUP",
+        "STAND_HOLD",
+        "WALK"
+      ],
+      "joint_commands_received": 632,
+      "walk_commands_received": 398,
+      "minimum_base_height": 0.21309486574506625,
+      "final_base_position": [
+        -1.6337127320983975,
+        0.02550755603310989,
+        0.21995343611536786
+      ],
+      "maximum_torque_nm": 12.937718722736012,
+      "simulation_seconds": 11.985000000000474
+    },
+    "viser-http": {
+      "controller": "nxp_jaguar_controller.py",
+      "can_opened": false,
+      "policy_in_bridge": false,
+      "controller_states_seen": [
+        "STANDBY",
+        "STANDUP",
+        "STAND_HOLD",
+        "WALK"
+      ],
+      "joint_commands_received": 428,
+      "walk_commands_received": 198,
+      "minimum_base_height": 0.21841247031445252,
+      "final_base_position": [
+        0.0006893699104147745,
+        0.0001174070598570461,
+        0.22458721483670022
+      ],
+      "maximum_torque_nm": 6.2152560643051045,
+      "simulation_seconds": 7.984999999999852
+    }
+  },
+  "repo_base_commit": "c2c83b4"
+}

@@ -68,3 +68,18 @@ def test_zero_policy_accepts_temporal_observations(batch):
         result = policy(torch.zeros((batch, 5, 45), dtype=torch.float32))
     assert tuple(result.shape) == (batch, 12)
     assert torch.isfinite(result).all()
+
+
+def test_curpos_uses_measured_position_each_policy_step_without_changing_observation_reference():
+    builder = Builder(np.zeros(12), action_reference="current")
+    measured = nominal.copy()
+    action = np.linspace(-0.4, 0.4, 12, dtype=np.float32)
+    first = builder.build_joint_target(action, current_joint_pos=measured)
+    np.testing.assert_allclose(first, measured + 0.25 * action)
+    measured += 0.1
+    second = builder.build_joint_target(np.zeros(12), current_joint_pos=measured)
+    np.testing.assert_array_equal(second, measured)
+    obs = builder.build_step_observation(np.zeros(3), [0, 0, 0, 1], np.zeros(3), measured, np.zeros(12))
+    np.testing.assert_array_equal(obs[9:21], measured)
+    with pytest.raises(ValueError, match="measured joint"):
+        builder.build_joint_target(action)

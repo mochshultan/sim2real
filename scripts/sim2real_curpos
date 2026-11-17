@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Launch the trained Pion current-position policy through the shared ROS controller.
+set -e
+WORKSPACE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$WORKSPACE_DIR/scripts/source_ros.sh"
+source "$WORKSPACE_DIR/install/setup.bash"
+source "$WORKSPACE_DIR/scripts/runtime_python.sh" sim2real
+exec ros2 launch jaguar_control sim2real_curpos.launch.py "$@"

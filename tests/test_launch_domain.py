@@ -49,9 +49,9 @@ class LaunchDomainTests(unittest.TestCase):
 
 
 class LaunchPolicyTests(unittest.TestCase):
-    def zero_controller_parameters(self, **overrides):
+    def curpos_controller_parameters(self, **overrides):
         root = Path(__file__).parents[1]
-        zero_spec = importlib.util.spec_from_file_location("zero_launch", root / "launch/sim2real_zero.launch.py")
+        zero_spec = importlib.util.spec_from_file_location("zero_launch", root / "launch/sim2real_curpos.launch.py")
         zero_module = importlib.util.module_from_spec(zero_spec)
         zero_spec.loader.exec_module(zero_module)
         context = LaunchContext()
@@ -70,30 +70,30 @@ class LaunchPolicyTests(unittest.TestCase):
         parameters = evaluate_parameters(context, normalize_parameters(node.call_args.kwargs["parameters"]))
         return context, parameters
 
-    def test_zero_launcher_passes_matching_policy_and_reference_to_controller(self):
+    def test_curpos_launcher_passes_matching_policy_and_reference_to_controller(self):
         root = Path(__file__).parents[1]
-        context, parameters = self.zero_controller_parameters()
-        self.assertEqual(parameters[1]["policy_reference"], "zero")
+        context, parameters = self.curpos_controller_parameters()
+        self.assertEqual(parameters[1]["policy_reference"], "current")
         self.assertEqual(parameters[1]["history_initialization"], "repeat")
         self.assertEqual(parameters[1]["policy_path"],
-                         str(root / "models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt"))
+                         str(root / "models/policy_pion_current_baseline_9999_20261117.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
         self.assertEqual(context.launch_configurations["domain_id"], "17")
 
-    def test_zero_launcher_preserves_explicit_model_and_config_overrides(self):
-        context, parameters = self.zero_controller_parameters(
-            policy_path="/tmp/custom_zero.pt", config_file="/tmp/custom.yaml",
-            domain_id="23", history_initialization="zeros")
+    def test_curpos_launcher_preserves_explicit_model_and_config_overrides(self):
+        context, parameters = self.curpos_controller_parameters(
+            policy_path="/tmp/custom_current.pt", config_file="/tmp/custom.yaml",
+            domain_id="23", history_initialization="repeat")
         self.assertEqual(parameters[0], Path("/tmp/custom.yaml"))
         self.assertEqual(parameters[1], {
-            "policy_path": "/tmp/custom_zero.pt", "policy_reference": "zero",
-            "history_initialization": "zeros",
+            "policy_path": "/tmp/custom_current.pt", "policy_reference": "current",
+            "history_initialization": "repeat",
         })
         self.assertEqual(context.launch_configurations["domain_id"], "23")
 
-    def test_zero_launcher_rejects_nominal_reference(self):
+    def test_curpos_launcher_rejects_nominal_reference(self):
         with self.assertRaises(RuntimeError):
-            self.zero_controller_parameters(policy_reference="nominal")
+            self.curpos_controller_parameters(policy_reference="nominal")
 
 
 if __name__ == "__main__":

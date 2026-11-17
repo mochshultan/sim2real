@@ -85,9 +85,12 @@ class PionJointOrderPolicy(nn.Module):
     keep their original order. Output actions are mapped back to the controller.
     """
 
-    def __init__(self, policy: nn.Module) -> None:
+    __constants__ = ["action_reference"]
+
+    def __init__(self, policy: nn.Module, action_reference: str = "absolute") -> None:
         super().__init__()
         self.policy = policy
+        self.action_reference = action_reference
         joint_order = torch.tensor([1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10], dtype=torch.long)
         self.register_buffer("action_order", joint_order)
         self.register_buffer(
@@ -110,6 +113,7 @@ def main() -> None:
     parser.add_argument("--tag", default="adaboot_tibia_2999_estimator")
     parser.add_argument("--clip-actions", type=float, default=0.0, help="Clip exported mean actions; zero keeps unbounded output")
     parser.add_argument("--set-default", action="store_true", help="Also replace models/policy.pt")
+    parser.add_argument("--action-reference", choices=("absolute", "current"), default="absolute")
     parser.add_argument(
         "--training-joint-order", choices=("jaguar", "pion"), default="jaguar",
         help="Adapt the training order to the existing controller without changing hardware mappings",
@@ -120,10 +124,19 @@ def main() -> None:
     if not os.path.isfile(checkpoint):
         raise FileNotFoundError(checkpoint)
     checkpoint_data = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    if (checkpoint_data.get("pion_action_contract", {}).get("reference") == "current_joint_position"
+            and args.action_reference != "current"):
+        raise ValueError("Use --action-reference current for a current-position checkpoint")
+    if args.action_reference == "current":
+        contract = checkpoint_data.get("pion_action_contract", {})
+        if contract.get("reference") != "current_joint_position" or contract.get("scale") != 0.25:
+            raise ValueError("Current-position export requires a matching trained action contract")
+        if args.training_joint_order != "pion":
+            raise ValueError("Current Pion export requires --training-joint-order pion")
     actor_state_dict = checkpoint_data["actor_state_dict"]
     model = AdaBootPolicy(actor_state_dict, clip_actions=args.clip_actions).eval()
     if args.training_joint_order == "pion":
-        model = PionJointOrderPolicy(model).eval()
+        model = PionJointOrderPolicy(model, action_reference=args.action_reference).eval()
 
     sample = torch.zeros(1, 5, 45)
     with torch.inference_mode():

@@ -104,8 +104,8 @@ def generate_launch_description():
     policy_reference_arg = DeclareLaunchArgument(
         "policy_reference",
         default_value="nominal",
-        choices=["nominal", "zero"],
-        description="Joint reference for policy observations and position targets",
+        choices=["nominal", "zero", "current"],
+        description="Policy reference; current uses zero-observation reference and measured-position action anchor",
     )
     history_initialization_arg = DeclareLaunchArgument(
         "history_initialization", default_value="zeros", choices=["zeros", "repeat"],
