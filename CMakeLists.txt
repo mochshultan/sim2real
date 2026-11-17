@@ -124,6 +124,7 @@ install(TARGETS
 # Install Python scripts as executable nodes
 install(PROGRAMS
   scripts/nxp_jaguar_controller.py
+  scripts/sim2sim_curpos_bridge.py
   scripts/keyboard_teleop.py
   scripts/keyboard_cmd_vel.py
   scripts/jaguar_cmd_vel_mux.py
@@ -154,13 +155,14 @@ install(FILES
   scripts/joint_layout.py
   scripts/project_paths.py
   scripts/policy_observation.py
+  scripts/pion_mujoco_plant.py
   scripts/session_recorder.py
   scripts/parallel_link_mapping.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 # Deploy only runtime assets. Training checkpoints and offline tools stay in source.
-install(DIRECTORY config launch urdf meshes
+install(DIRECTORY config launch urdf meshes sim2sim
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
 )

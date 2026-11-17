@@ -7,18 +7,25 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 | Launch File | Description | Command |
 | :--- | :--- | :--- |
 | [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, ros2_control Jaguar hardware (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
-| [`sim2real_zero.launch.py`](./sim2real_zero.launch.py) | Uses the same stack with Jaguar model 19999, clipped actions and repeated initial history. | `ros2 launch jaguar_control sim2real_zero.launch.py` |
+| [`sim2real_curpos.launch.py`](./sim2real_curpos.launch.py) | Pion Current10k: measured-position action anchor, clipped actions and repeated history. | `ros2 launch jaguar_control sim2real_curpos.launch.py` |
 
-Both launchers share the same stack. The zero launcher declares the model 19999
-path and `policy_reference=zero` before including the shared launch; user model
-path overrides are preserved. See the [complete zero-reference parameter tables](../docs/zero_reference.md)
-for launch flags, YAML settings and source-only constants.
+The curpos launcher selects Pion baseline checkpoint9999 and
+`policy_reference=current` before including the shared stack. Sim2sim uses the
+same controller with a Pion MuJoCo feedback bridge and starts no CAN/serial IMU:
+
+```bash
+ros2 launch jaguar_control sim2sim_curpos.launch.py
+```
+
+See [current-position deployment](../docs/current_position.md) for the action
+contract, browser controls and headless verification. The former zero launcher
+has been replaced; old exports remain archived.
 
 ### Arguments for `sim2real.launch.py`
 
-- `policy_reference` (default: `nominal`): Joint reference for observations and action targets. The zero launcher selects the matching policy and `zero` reference together.
+- `policy_reference` (default: `nominal`): Joint reference for observations and action targets. The curpos launcher selects `current`; positions are observed relative to0rad and actions anchor to measured q.
 - `policy_path` (default: `models/policy.pt`): Path to TorchScript policy model.
-- `history_initialization` (default: `zeros`): History cold start; the zero launcher defaults to `repeat` for model 19999.
+- `history_initialization` (default: `zeros`): History cold start; the curpos launcher uses `repeat` for Pion Current10k.
 - `with_imu` (default: `true`): Launch serial IMU node.
 - `with_teleop` (default: `true`): Launch the Xbox input source. Xbox has priority while its heartbeat is active.
 - `with_joy` (default: `false`): Launch optional ROS 2 `joy_node`, remapped to `/joy_raw` for the teleop hub.

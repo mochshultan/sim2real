@@ -1,0 +1,6 @@
+# ROS2 Jazzy itself is supplied by /opt/ros/jazzy, not pip.
+torch
+numpy
+PyYAML
+mujoco
+viser

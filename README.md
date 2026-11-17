@@ -56,45 +56,48 @@ the preset. Encoder calibration remains the latest local calibration.
 Choose one launcher per controller session:
 
 ```bash
-# Model 39996: observations q - q0, targets q0 + 0.25 * clipped_action
+# Nominal Jaguar policy39996 (unchanged)
 ros2 launch jaguar_control sim2real.launch.py
 
-# Pion model 11500: observations q, targets 0.25 * clipped_action
-ros2 launch jaguar_control sim2real_zero.launch.py
+# Pion Current baseline, fresh10k checkpoint9999
+./scripts/sim2real_curpos
+# Same controller with a Pion MuJoCo plant, browser visualization, no CAN
+./scripts/sim2sim_curpos
 ```
 
-The zero-reference launcher selects
-`models/policy_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.pt` and sets
-`policy_reference:=zero` and `history_initialization:=repeat`. This is the
-latest Pion AdaBoot-L2C2 checkpoint 11500, trained with the estimated 32 V RS00
-actuator curve, a 25 cm base-height target (weight -10), 5 cm directional
-clearance, and 15% standing commands.
+`sim2real_curpos.launch.py` replaces the former `sim2real_zero.launch.py` entrypoint.
+It selects `policy_pion_current_baseline_9999_20261117.pt`, `policy_reference=current`,
+and repeat-initialized five-frame history. Position observations remain calibrated
+`q` relative to0rad. Actions now use **q_target=q_measured+0.25*clipped_action**,
+anchored once per50Hz policy step and held by the200Hz motor loop. They do not
+integrate from the preceding target. Standing remains collar0, hip-1.25 and
+knee+1.25rad on all four legs.
 
 Pion training uses FL/FR/BL/BR within each joint group; the controller uses
-FR/FL/BR/BL. The export remaps position, velocity and previous-action history
-into Pion order before estimation, then maps actions back to controller order.
-The body-frame IMU/command fields keep their order. Clipping +/-10 is embedded.
-CPU equality with the native Pion actor was verified for batches 1/16/64 and
-zero/random/stress histories (maximum absolute difference 0.0).
+FR/FL/BR/BL. The exported policy maps every history frame into Pion order and
+maps actions back, with clipping+/-10. The original actor checkpoint and export
+matched exactly for zero/random/stress histories and batches1/16/64.
 
-Hashes, permutations, and training snapshots are in
-`models/deployment_pion_adaboot_l2c2_zero_32v_height25_11500_20261113.json` and
-its matching model directory. Jaguar zero policies 19999 and 5999 remain
-archived. The current main calibration, standing pose, ros2_control stack,
-and 14 Nm hardware cap are retained. Physical motion with Pion 11500 has not
-been tested.
+The normal `sim2real.launch.py`, calibration pulled from `main`, and hardware
+14Nm cap are retained. The current-position launcher requires an export carrying
+the matching action-reference contract, so an old absolute-zero policy cannot
+silently be used with a measured-position action anchor. Earlier zero policies
+remain archived under their versioned filenames.
 
-The zero-reference launcher uses a standing pose of 0 rad coxa, -1.25 rad hip,
-and +1.25 rad knee on all four legs. The nominal launcher uses `STAND_ANGLE`.
-Both launchers share encoder calibration, gains, and safety handling. Zero reference applies to policy observations and action targets;
-it does not command all joints to zero during standing. Stop the current launch
-before selecting the other model. Optional arguments such as
-`with_hardware:=false` also apply to the zero-reference launcher.
-The zero-reference controller automatically saves observation, state, policy
-actions and all 12 motor commands/feedback in per-session JSONL files under
-`~/.ros/jaguar_control/sessions/`; the full path is printed on startup.
-See the [zero-reference launch and configuration tables](docs/zero_reference.md)
-for all flags, YAML parameters, defaults, and tuning examples.
+Sim2sim runs **the same `nxp_jaguar_controller.py` ROS node**, including history,
+inference, current-position targets, standing/walk ramp, mechanical target limits,
+and controller safety checks. The MuJoCo node only publishes calibrated joint/IMU
+feedback and consumes `/joint_commands`; it does not contain a policy. It uses
+DDS domain71 by default, separate from hardware domain1, and starts no CAN or
+serial-IMU nodes. Viser serves `http://<host-ip>:8080`; its sliders send velocity
+commands to the real controller. Simulation auto-arms from the standing spawn,
+then enters policy mode through the controller's normal A/B inputs. Physics is
+paused until the first active impedance command.
+
+See [the current-position guide](docs/current_position.md) for setup, headless
+runs, model provenance and interpretation limits. Real hardware motion with this
+new checkpoint has not been tested. Export and training contracts are recorded
+in `models/deployment_pion_current_baseline_9999_20261117.json`.
 
 For archived model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with
@@ -318,7 +321,7 @@ Capture both ROS logs and the C++ driver's stderr in one file:
 
 ```bash
 set -o pipefail
-ros2 launch jaguar_control sim2real_zero.launch.py \
+ros2 launch jaguar_control sim2real_curpos.launch.py \
   2>&1 | tee "sim2real_$(date +%Y%m%d_%H%M%S).log"
 ```
 

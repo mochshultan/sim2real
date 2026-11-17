@@ -1,0 +1,152 @@
+<mujoco model="Pion_QR1">
+  <compiler angle="radian" meshdir="./" />
+
+  <default><joint damping="0" armature="0.01" frictionloss="0" /></default><option timestep="0.005" iterations="20" />
+
+  <visual>
+    <global azimuth="120" elevation="-20" />
+    <headlight ambient="0.3 0.3 0.3" diffuse="0.6 0.6 0.6" specular="0 0 0" />
+    <rgba haze="0.15 0.25 0.35 1" />
+  </visual>
+
+  <asset>
+    <texture type="skybox" name="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072" />
+    <texture type="2d" name="groundplane_texture" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" width="300" height="300" />
+    <material name="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2" />
+    <mesh name="base_link_visual" content_type="model/stl" file="meshes/base_link.stl" />
+    <mesh name="bl_coxa_link_visual" content_type="model/stl" file="meshes/bl_coxa_link.STL" />
+    <mesh name="bl_femur_link_visual" content_type="model/stl" file="meshes/bl_femur_link.stl" />
+    <mesh name="bl_tibia_link_visual" content_type="model/stl" file="meshes/bl_tibia_link.STL" />
+    <mesh name="br_coxa_link_visual" content_type="model/stl" file="meshes/br_coxa_link.STL" />
+    <mesh name="br_femur_link_visual" content_type="model/stl" file="meshes/br_femur_link.stl" />
+    <mesh name="br_tibia_link_visual" content_type="model/stl" file="meshes/br_tibia_link.STL" />
+    <mesh name="fl_coxa_link_visual" content_type="model/stl" file="meshes/fl_coxa_link.STL" />
+    <mesh name="fl_femur_link_visual" content_type="model/stl" file="meshes/fl_femur_link.stl" />
+    <mesh name="fl_tibia_link_visual" content_type="model/stl" file="meshes/fl_tibia_link.STL" />
+    <mesh name="fr_coxa_link_visual" content_type="model/stl" file="meshes/fr_coxa_link.STL" />
+    <mesh name="fr_femur_link_visual" content_type="model/stl" file="meshes/fr_femur_link.stl" />
+    <mesh name="fr_tibia_link_visual" content_type="model/stl" file="meshes/fr_tibia_link.STL" />
+    <mesh name="fl_tibia_link_collision_mesh" content_type="model/obj" file="meshes/fl_tibia_link.obj" />
+    <mesh name="fr_tibia_link_collision_mesh" content_type="model/obj" file="meshes/fr_tibia_link.obj" />
+    <mesh name="bl_tibia_link_collision_mesh" content_type="model/obj" file="meshes/bl_tibia_link.obj" />
+    <mesh name="br_tibia_link_collision_mesh" content_type="model/obj" file="meshes/br_tibia_link.obj" />
+  </asset>
+
+  <worldbody>
+    <geom name="floor" size="0 0 0.05" type="plane" contype="0" friction="1 0.05 0.05" material="groundplane" />
+    <light name="scene_directional" pos="0 0 3" dir="0 0 -1" type="directional" />
+    <body name="base_link">
+      <inertial pos="0.026671 0.000525 0.064526" quat="-0.000123744 0.684182 0.00129322 0.72931" mass="5.2" diaginertia="0.102216 0.0878992 0.0291364" />
+      <joint name="root" type="free" />
+      <geom name="base_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.58 0.58 0.6 1" mesh="base_link_visual" />
+      <geom name="base_link_collision" size="0.0969421 0.115145 0.228096" pos="0.0591082 4.27153e-05 0.0550709" quat="0.740881 -0.000186569 -0.671636 0.000735189" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+      <site name="imu_site" pos="0 0 0" />
+      <body name="fl_coxa_link" pos="0.141 0.0725 0.0605" quat="0 0 0 1">
+        <inertial pos="0.048145 -0.000985 -0.00012" quat="0.427213 0.563272 -0.435185 0.557519" mass="0.39" diaginertia="0.000360014 0.00029553 0.000287456" />
+        <joint name="FL_collar_joint" pos="0 0 0" axis="-1 0 0" />
+        <geom name="fl_coxa_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="fl_coxa_link_visual" />
+        <geom name="fl_coxa_link_collision" size="0.0384699 0.0501793 0.0495244" pos="-0.0526729 0.0140842 4.11077e-05" quat="0.589504 -0.39902 -0.581317 -0.39413" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+        <body name="fl_femur_link" pos="-0.05181 -0.024 0" quat="0.707107 0 0 0.707107">
+          <inertial pos="-0.050256 -0.034517 0.031379" quat="0.898374 0.392021 -0.159512 0.117475" mass="0.7" diaginertia="0.00364088 0.00361568 0.000441442" />
+          <joint name="FL_hip_joint" pos="0 0 0" axis="-1 0 0" />
+          <geom name="fl_femur_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.24 0.25 0.27 1" mesh="fl_femur_link_visual" />
+          <geom name="fl_femur_link_collision" size="0.0399852 0.0396797 0.118104" pos="-0.0534511 -0.0731802 0.0323647" quat="0.678462 0.330684 -0.422508 0.501822" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+          <body name="fl_tibia_link" pos="-0.054 -0.166874 0.067477">
+            <inertial pos="-0.017992 0.077352 -0.086439" quat="0.931026 0.364954 0 0" mass="0.25" diaginertia="0.001312 0.00129532 5.16831e-05" />
+            <joint name="FL_knee_joint" pos="0 0 0" axis="-1 0 0" />
+            <geom name="fl_tibia_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="fl_tibia_link_visual" />
+            <geom name="fl_tibia_link_collision" type="mesh" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" mesh="fl_tibia_link_collision_mesh" />
+          </body>
+        </body>
+      </body>
+      <body name="fr_coxa_link" pos="0.141 -0.0725 0.0605" quat="0 0 0 1">
+        <inertial pos="-0.048145 -0.000985 0.00012" quat="0.563201 0.42732 -0.557597 0.435072" mass="0.4" diaginertia="0.000370014 0.00030353 0.000295456" />
+        <joint name="FR_collar_joint" pos="0 0 0" axis="-1 0 0" />
+        <geom name="fr_coxa_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="fr_coxa_link_visual" />
+        <geom name="fr_coxa_link_collision" size="0.0384867 0.0502212 0.049898" pos="-0.0530369 -0.0137903 -0.000134001" quat="-0.585653 -0.388011 0.594667 -0.390934" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+        <body name="fr_femur_link" pos="-0.05181 0.024 0" quat="0.707107 0 0 -0.707107">
+          <inertial pos="-0.050211 0.035226 0.031392" quat="0.409873 0.906255 0.0150746 0.102363" mass="0.75" diaginertia="0.00390957 0.00388743 0.000474995" />
+          <joint name="FR_hip_joint" pos="0 0 0" axis="1 0 0" />
+          <geom name="fr_femur_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.24 0.25 0.27 1" mesh="fr_femur_link_visual" />
+          <geom name="fr_femur_link_collision" size="0.0399511 0.0385573 0.118859" pos="-0.0556175 0.0710883 0.0343828" quat="0.663384 -0.291094 -0.448269 -0.52368" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+          <body name="fr_tibia_link" pos="-0.054 0.166874 0.067477">
+            <inertial pos="-0.018518 -0.077352 -0.086439" quat="0.931026 -0.364954 0 0" mass="0.25" diaginertia="0.001312 0.00129532 5.16831e-05" />
+            <joint name="FR_knee_joint" pos="0 0 0" axis="1 0 0" />
+            <geom name="fr_tibia_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="fr_tibia_link_visual" />
+            <geom name="fr_tibia_link_collision" type="mesh" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" mesh="fr_tibia_link_collision_mesh" />
+          </body>
+        </body>
+      </body>
+      <body name="bl_coxa_link" pos="-0.141 0.0725 0.0605">
+        <inertial pos="-0.048145 -0.000985 0.00012" quat="0.563201 0.42732 -0.557597 0.435072" mass="0.4" diaginertia="0.000370014 0.00030353 0.000295456" />
+        <joint name="BL_collar_joint" pos="0 0 0" axis="1 0 0" />
+        <geom name="bl_coxa_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="bl_coxa_link_visual" />
+        <geom name="bl_coxa_link_collision" size="0.0385597 0.0501305 0.0493486" pos="-0.0525091 -0.0142138 0.000577897" quat="-0.578602 -0.388674 0.587567 -0.410994" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+        <body name="bl_femur_link" pos="-0.05181 0.024 0" quat="0.707107 0 0 -0.707107">
+          <inertial pos="-0.050256 -0.034517 0.031379" quat="0.898374 0.392021 -0.159512 0.117475" mass="0.7" diaginertia="0.00364088 0.00361568 0.000441442" />
+          <joint name="BL_hip_joint" pos="0 0 0" axis="-1 0 0" />
+          <geom name="bl_femur_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.24 0.25 0.27 1" mesh="bl_femur_link_visual" />
+          <geom name="bl_femur_link_collision" size="0.0399852 0.0396797 0.118104" pos="-0.0534511 -0.0731802 0.0323647" quat="0.678462 0.330684 -0.422508 0.501822" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+          <body name="bl_tibia_link" pos="-0.054 -0.166874 0.067477">
+            <inertial pos="-0.017992 0.077352 -0.086439" quat="0.931026 0.364954 0 0" mass="0.25" diaginertia="0.001312 0.00129532 5.16831e-05" />
+            <joint name="BL_knee_joint" pos="0 0 0" axis="-1 0 0" />
+            <geom name="bl_tibia_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="bl_tibia_link_visual" />
+            <geom name="bl_tibia_link_collision" type="mesh" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" mesh="bl_tibia_link_collision_mesh" />
+          </body>
+        </body>
+      </body>
+      <body name="br_coxa_link" pos="-0.141 -0.0725 0.0605">
+        <inertial pos="-0.048145 0.000985 -0.00012" quat="0.435072 0.557597 -0.42732 0.563201" mass="0.4" diaginertia="0.000370014 0.00030353 0.000295456" />
+        <joint name="BR_collar_joint" pos="0 0 0" axis="1 0 0" />
+        <geom name="br_coxa_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="br_coxa_link_visual" />
+        <geom name="br_coxa_link_collision" size="0.0385364 0.050191 0.0499004" pos="-0.0530391 0.0137981 -0.000485886" quat="0.5987 -0.40256 -0.581223 -0.376409" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+        <body name="br_femur_link" pos="-0.05181 -0.024 0" quat="0.707107 0 0 0.707107">
+          <inertial pos="-0.050211 0.035226 0.031392" quat="0.409873 0.906255 0.0150746 0.102363" mass="0.75" diaginertia="0.00390957 0.00388743 0.000474995" />
+          <joint name="BR_hip_joint" pos="0 0 0" axis="1 0 0" />
+          <geom name="br_femur_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.24 0.25 0.27 1" mesh="br_femur_link_visual" />
+          <geom name="br_femur_link_collision" size="0.0399511 0.0385573 0.118859" pos="-0.0556175 0.0710883 0.0343828" quat="0.663384 -0.291094 -0.448269 -0.52368" type="box" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" />
+          <body name="br_tibia_link" pos="-0.054 0.166874 0.067477">
+            <inertial pos="-0.018518 -0.077352 -0.086439" quat="0.931026 -0.364954 0 0" mass="0.25" diaginertia="0.001312 0.00129532 5.16831e-05" />
+            <joint name="BR_knee_joint" pos="0 0 0" axis="1 0 0" />
+            <geom name="br_tibia_link_visual" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.73 0.23 0.2 1" mesh="br_tibia_link_visual" />
+            <geom name="br_tibia_link_collision" type="mesh" conaffinity="0" group="3" friction="1 0.05 0.05" density="0" rgba="0.2 0.2 0.2 0" mesh="br_tibia_link_collision_mesh" />
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude name="exclude_base_link_fl_coxa_link" body1="base_link" body2="fl_coxa_link" />
+    <exclude name="exclude_base_link_fr_coxa_link" body1="base_link" body2="fr_coxa_link" />
+    <exclude name="exclude_base_link_bl_coxa_link" body1="base_link" body2="bl_coxa_link" />
+    <exclude name="exclude_base_link_br_coxa_link" body1="base_link" body2="br_coxa_link" />
+    <exclude name="exclude_fl_coxa_link_fl_femur_link" body1="fl_coxa_link" body2="fl_femur_link" />
+    <exclude name="exclude_fl_femur_link_fl_tibia_link" body1="fl_femur_link" body2="fl_tibia_link" />
+    <exclude name="exclude_fr_coxa_link_fr_femur_link" body1="fr_coxa_link" body2="fr_femur_link" />
+    <exclude name="exclude_fr_femur_link_fr_tibia_link" body1="fr_femur_link" body2="fr_tibia_link" />
+    <exclude name="exclude_bl_coxa_link_bl_femur_link" body1="bl_coxa_link" body2="bl_femur_link" />
+    <exclude name="exclude_bl_femur_link_bl_tibia_link" body1="bl_femur_link" body2="bl_tibia_link" />
+    <exclude name="exclude_br_coxa_link_br_femur_link" body1="br_coxa_link" body2="br_femur_link" />
+    <exclude name="exclude_br_femur_link_br_tibia_link" body1="br_femur_link" body2="br_tibia_link" />
+  </contact>
+
+  <actuator>
+    <general name="FL_collar_joint" joint="FL_collar_joint" />
+    <general name="FL_hip_joint" joint="FL_hip_joint" />
+    <general name="FL_knee_joint" joint="FL_knee_joint" />
+    <general name="FR_collar_joint" joint="FR_collar_joint" />
+    <general name="FR_hip_joint" joint="FR_hip_joint" />
+    <general name="FR_knee_joint" joint="FR_knee_joint" />
+    <general name="BL_collar_joint" joint="BL_collar_joint" />
+    <general name="BL_hip_joint" joint="BL_hip_joint" />
+    <general name="BL_knee_joint" joint="BL_knee_joint" />
+    <general name="BR_collar_joint" joint="BR_collar_joint" />
+    <general name="BR_hip_joint" joint="BR_hip_joint" />
+    <general name="BR_knee_joint" joint="BR_knee_joint" />
+  </actuator>
+
+  <sensor>
+    <gyro site="imu_site" name="body_gyro" />
+  </sensor>
+</mujoco>

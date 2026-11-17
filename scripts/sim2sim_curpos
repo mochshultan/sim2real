@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Same ROS controller as sim2real_curpos, with MuJoCo feedback and no CAN hardware.
+set -e
+WORKSPACE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$WORKSPACE_DIR/scripts/source_ros.sh"
+source "$WORKSPACE_DIR/install/setup.bash"
+source "$WORKSPACE_DIR/scripts/runtime_python.sh" sim2sim
+export MUJOCO_GL=disable
+exec ros2 launch jaguar_control sim2sim_curpos.launch.py "$@"

@@ -1,3 +1,5 @@
+> Archived guide for absolute-zero policies. `sim2real_zero.launch.py` was replaced by `sim2real_curpos.launch.py`; use [current-position deployment](current_position.md) for the new model. Commands below describe the historical launcher.
+
 # Model Pion dengan referensi 0 rad
 
 Jalankan model Pion 11500 melalui `sim2real_zero.launch.py`. Launcher ini memakai

@@ -1,0 +1,129 @@
+# Pion Current position deployment
+
+This is the Pion Current baseline checkpoint9999 (10000 fresh PPO updates), not
+the new MoE model. The source run is:
+
+```text
+pion_current_baseline/2026-11-16_21-19-57_baseline-current-v2-yaw035-clearance-nospeed-10k-20261116-seed42-6000env/model_9999.pt
+```
+
+`origin/main` was pulled at `c2c83b4` before these changes, retaining the latest
+sitting calibration and invalid-feedback reporting. The ordinary nominal launch
+and its model remain separate.
+
+## Build and run
+
+```bash
+cd ~/jaguar_sim2real_ros2
+bash scripts/build.sh
+
+# Physical robot: same hardware stack as the existing launch
+./scripts/sim2real_curpos
+
+# Simulator only: same policy controller, MuJoCo instead of hardware
+./scripts/sim2sim_curpos
+```
+
+The wrappers source Jazzy and the local install. Python selection checks the
+active Python, local `.venv`, then existing `~/IsaacLab/.venv` and
+`~/IsaacLab-upgrade/.venv`. Set `JAGUAR_PYTHON=/path/to/python3` to pin another
+Python3.12 with PyTorch (and MuJoCo/Viser for simulation). Keep ROS dependencies
+available by sourcing Jazzy; do not prepend the entire system dist-packages to a
+venv's PYTHONPATH, since that can mix incompatible compiled dependencies.
+
+For a new environment, install the requirements into the selected Python:
+
+```bash
+uv venv --python /usr/bin/python3 .venv
+uv pip install --python .venv/bin/python -r requirements-curpos.txt
+```
+
+The browser simulator defaults to `0.0.0.0:8080` and can run on CPU. Connect from
+another machine at `http://<simulation-host-ip>:8080`. Sliders control forward,
+lateral and yaw velocities. The model starts in its physical standing pose;
+A/Stand and B/Policy controls are the same commands used by the real controller.
+Auto-walk performs that sequence by default; use `auto_walk:=false` for manual
+arming. A zero command while in WALK still evaluates the learned standing policy.
+
+```bash
+# Headless verification with the actual ROS controller
+./scripts/sim2sim_curpos viz:=none duration:=20.0 command_x:=0.3 report:=/tmp/pion-curpos.json
+# Different browser port; another simulation domain if needed
+./scripts/sim2sim_curpos port:=8081 domain_id:=72
+```
+
+Do not run two simulations in the same DDS domain. Simulation defaults to71;
+physical launch inherits the existing domain1 default. Teleop/CLI publishers for
+simulation must also use ROS_DOMAIN_ID=71. The launch ends when its simulator
+node exits. It never launches the physical CAN/hardware or serial-IMU stack.
+
+## Shared controller contract
+
+| Item | Value |
+|---|---|
+| Checkpoint/export | `model_pion_current_baseline_9999_20261117.pt` / matching `policy_...pt` |
+| Actor | MLP48 ->512 ->256 ->128 ->12 |
+| Velocity estimator |225 ->128 ->64 ->3 |
+| Export input | Time-major history `[B,5,45]`; internally repacked term-major225 |
+| History cold start | Repeat first observation; previous actions zero |
+| Joint observations | Calibrated q, zero reference |
+| Action | `q_target=q_measured+0.25*clip(action,-10,10)` |
+| Anchor | Once per20ms policy step; target held during faster PD updates |
+| Physical standing | Collar0, hip-1.25, knee+1.25rad |
+| Gains | Kp45, Kd4.5 |
+| Motor torque cap |14Nm; sim uses the saved linear32V torque-speed approximation |
+| Training base height |22cm, weight-10 |
+| Training clearance |3cm squared error per airborne foot, no XY-speed multiplier |
+| Runtime inference | Estimator-only; no privileged critic or simulator velocity input |
+
+The exact shared files are `scripts/policy_observation.py` and
+`scripts/nxp_jaguar_controller.py`. The former computes q-targets from the
+measured position passed by `_walk_targets`; the latter performs inference,
+filtering, standing/walk blending, clamping and safety checks. Sim2sim launches
+that same node rather than translating its formulas into another runner.
+
+`pion_mujoco_plant.py` contains only plant dynamics and impedance tracking.
+`sim2sim_curpos_bridge.py` translates `/joint_commands`, `/joint_states`, `/imu/data`
+and the mode/velocity topics. It emulates the configured IMU mounting orientation
+so the controller performs its normal body-frame correction once. Simulated
+feedback is already in calibrated joint coordinates; physical motor offsets are
+not added a second time.
+
+The export includes a contract flag `action_reference=current`; the controller
+rejects absolute-action exports when launched as current-position. The baseline
+and model reference are distinct from the standing pose. Zero action holds the
+measured position after the walk ramp; it does not request0rad or a previous
+target. Existing absolute-zero exports can still be used explicitly with the
+shared main launch and `policy_reference:=zero`, but are not the curpos default.
+
+## Recording and limits
+
+Physical curpos sessions are saved as `sim2real_curpos_*.jsonl`, and simulator
+sessions as `sim2sim_curpos_*.jsonl`, under
+`~/.ros/jaguar_control/sessions/`. They include policy history/action, calibrated
+state and motor targets. The header names the policy and current reference.
+The deployment manifest contains source/export hashes and parity results.
+Simulation reports are offline measurements, not hardware performance results.
+
+The Pion MJCF and its meshes are included under `sim2sim/pion_current/`; no
+external IsaacLab asset path is needed at runtime. They originate from the
+Pion URDF/training-collider MuJoCo conversion, with passive joint armature0.01.
+MuJoCo contacts, solver, nominal material/inertial parameters and communication
+timing differ from training and hardware. A0.1s bridge command timeout makes the
+plant passive; it does not reproduce all firmware fault latches. The32V curve is
+an approximation rather than a measured motor model. Sim2sim is useful for
+checking the actual deployment controller against a physical simulation, but
+cannot establish numerical equivalence or guarantee real-robot stability.
+
+## Validation on2026-11-17
+
+- Export/native actor equality: maximum absolute difference0.0 for the recorded
+  zero/random/stress cases at batch sizes1/16/64.
+- Actual ROS controller + MuJoCo: zero command, +0.3m/s forward, -0.3m/s backward,
+  and a Viser run all entered WALK. Viser HTTP returned200.
+- Recorded policy histories reproduced the recorded actions exactly. After the
+  walk ramp, motor targets matched clipped(q_measured+0.25*action) exactly.
+-166 Python tests and4 C++ tests passed; ROS2 build completed. Native deprecation
+  warnings remain for TorchScript and ROS C++ accessors.
+- No physical hardware was started or moved. These short simulator runs do not
+  establish long-horizon convergence or real-robot stability.
