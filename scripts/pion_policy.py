@@ -23,7 +23,7 @@ for index, name in enumerate(JOINT_NAMES):
     hardware_axis = {"collar": "roll", "hip": "hip_pitch", "knee": "knee"}[axis]
     NAME_TO_PION[f"{leg.title()}_{hardware_axis}_joint"] = index
 
-STANDING = np.array([0.0] * 4 + [-1.25] * 4 + [1.25] * 4, dtype=np.float32)
+STANDING = np.array([0.0] * 4 + [-1.1] * 4 + [1.1] * 4, dtype=np.float32)
 CONTROL_DT = 0.02
 ACTION_SCALE = 0.25
 CLIP_ACTIONS = 10.0

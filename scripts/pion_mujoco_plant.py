@@ -13,7 +13,7 @@ import numpy as np
 PION_CONTROLLER_ORDER = [
     f"{leg}_{joint}_joint" for joint in ("collar", "hip", "knee") for leg in ("FR", "FL", "BR", "BL")
 ]
-STANDING = np.array([0.0] * 4 + [-1.25] * 4 + [1.25] * 4)
+STANDING = np.array([0.0] * 4 + [-1.1] * 4 + [1.1] * 4)
 
 
 def rs00_32v_torque(requested, velocity, cap=14.0):
@@ -67,7 +67,7 @@ class PionMujocoPlant:
         # policy controller has applied its own limits. Do not infer these from
         # MuJoCo physical joint limits: desired PD targets have a separate guard.
         self.target = np.clip(self.target, [-0.7] * 4 + [-2.0] * 4 + [-0.05] * 4,
-                              [0.7] * 4 + [1.0] * 4 + [1.5] * 4)
+                              [0.7] * 4 + [1.0] * 4 + [1.6] * 4)
         self.feedforward = np.zeros(12) if feedforward is None else np.asarray(feedforward).copy()
         if self.feedforward.shape != (12,) or not np.isfinite(self.feedforward).all():
             raise ValueError("Feedforward requires12 finite torques")

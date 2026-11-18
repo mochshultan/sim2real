@@ -93,7 +93,7 @@ int main(int argc, char ** argv)
   assert(states[safety + 1].get_value() == 1.0);
   // Exercise the configured per-axis mechanical guard through actual mock I/O.
   const std::array<double, 3> lower{-0.7, -2.0, -0.05};
-  const std::array<double, 3> upper{0.7, 1.0, 1.5};
+  const std::array<double, 3> upper{0.7, 1.0, 1.6};
   for (const double requested : {10.0, -10.0}) {
     for (size_t i = 0; i < JOINT_COUNT; ++i) {
       (void)commands[i * COMMAND_COUNT].set_value(requested);

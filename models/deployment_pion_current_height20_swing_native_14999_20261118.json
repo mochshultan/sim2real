@@ -58,14 +58,14 @@
     0.0,
     0.0,
     0.0,
-    -1.25,
-    -1.25,
-    -1.25,
-    -1.25,
-    1.25,
-    1.25,
-    1.25,
-    1.25
+    -1.1,
+    -1.1,
+    -1.1,
+    -1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.1
   ],
   "hardware_torque_cap_Nm": 14.0,
   "training_torque_cap_range_Nm": [
@@ -73,7 +73,7 @@
     13.5
   ],
   "actuator": "RS00 32V linear approximation in training and MuJoCo; physical firmware impedance on hardware",
-  "safety_target_limits": "Operator-selected 2026-11-18: coxa [-0.7,0.7], hip [-2,1], knee [-0.05,1.5] rad; matching controller and CAN driver guards",
+  "safety_target_limits": "Operator-selected 2026-11-18: coxa [-0.7,0.7], hip [-2,1], knee [-0.05,1.6] rad; matching controller and CAN driver guards",
   "remaining_gap": [
     "Hardware feedback age and asynchronous transport",
     "Measured actuator dynamics not identified; training curve is an approximation",
@@ -471,8 +471,9 @@
     ],
     "knee": [
       -0.05,
-      1.5
+      1.6
     ]
   },
-  "target_limit_training_note": "This checkpoint predates these target limits; matching isolated training variants are prepared separately."
+  "target_limit_training_note": "This checkpoint predates these target limits; matching isolated training variants are prepared separately.",
+  "runtime_pose_note": "Operator-selected standing pose updated to hip -1.1 / knee +1.1 rad; policy weights remain checkpoint14999."
 }

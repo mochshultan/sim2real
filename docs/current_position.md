@@ -74,7 +74,7 @@ node exits. It never launches the physical CAN/hardware or serial-IMU stack.
 | Joint observations | Calibrated q, zero reference |
 | Action | `q_target=q_measured+0.25*clip(action,-10,10)` |
 | Anchor | Once per20ms policy step; target held during faster PD updates |
-| Physical standing | Collar0, hip-1.25, knee+1.25rad |
+| Physical standing | Collar0, hip-1.1, knee+1.1rad |
 | Gains | Kp45, Kd4.5 |
 | Motor torque cap |14 Nm through the driver/firmware; sim uses the saved linear32V torque-speed approximation |
 | Training base height |20cm from the base-link origin perpendicular to the local ground plane, weight-100 |
@@ -134,7 +134,7 @@ training and historical tasks are not modified.
 |---|---|---|---|
 | Collar | [-0.7,0.7] | [-0.7,0.7] | [-0.7,0.7] |
 | Hip | [-2.0,1.0] | [-2.0,1.0] | [-2.0,1.0] |
-| Knee | [-0.05,1.5] | [-0.05,1.5] | [-0.05,1.5] |
+| Knee | [-0.05,1.6] | [-0.05,1.6] | [-0.05,1.6] |
 
 Both hardware guards are retained. The MuJoCo plant now also applies the CAN
 guard after the shared controller guard, rather than omitting this second
@@ -146,7 +146,7 @@ Pion's target guard is declared in `scripts/pion_controller.py` as
 applies these Pion-specific bounds before publishing `/joint_commands`, so
 recorded target-clipping masks now cover the driver bounds too. The operator selected these new hardware limits on 2026-11-18. Pion feedback
 validity, standing transitions and the position watchdog use the same bounds,
-with the existing overshoot tolerances. Policy weights and the 14 Nm torque
+with the existing overshoot tolerances. Standing now uses hip -1.1 and knee +1.1 rad. Policy weights and the 14 Nm torque
 ceiling are unchanged. Historical checkpoints were not trained with these limits.
 
 Both curpos launches select `policy_pion_current_height20_swing_native_14999_20261118.pt`.

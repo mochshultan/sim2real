@@ -35,7 +35,7 @@ class PionControllerNode(NXPJaguarControllerNode):
     # Final calibrated-coordinate target guard: intersection of the controller
     # limits and the existing CAN-driver mechanical limits, in native Pion order.
     joint_target_lower = np.array([-0.7] * 4 + [-2.0] * 4 + [-0.05] * 4, dtype=np.float32)
-    joint_target_upper = np.array([0.7] * 4 + [1.0] * 4 + [1.5] * 4, dtype=np.float32)
+    joint_target_upper = np.array([0.7] * 4 + [1.0] * 4 + [1.6] * 4, dtype=np.float32)
 
     joint_feedback_lower = joint_target_lower - POSITION_LIMIT_TOLERANCE
     joint_feedback_upper = joint_target_upper + POSITION_LIMIT_TOLERANCE

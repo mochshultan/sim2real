@@ -129,7 +129,7 @@ def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedba
                                      node.get_clock().now().nanoseconds / 1e9)
         published = node.joint_cmd_pub.publish.call_args.args[0]
         np.testing.assert_allclose(published.position,
-                                  [-0.7, 0.7, -0.7, 0.7, -2.0, 1.0, -2.0, 1.0, -0.05, 1.5, -0.05, 1.5])
+                                  [-0.7, 0.7, -0.7, 0.7, -2.0, 1.0, -2.0, 1.0, -0.05, 1.6, -0.05, 1.6])
     finally:
         if node is not None:
             node.destroy_node()

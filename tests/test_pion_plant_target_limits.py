@@ -19,5 +19,5 @@ def test_plant_applies_driver_limits_to_targets_without_modifying_feedback():
     before = plant.feedback()[0]
     target = [0.8, -0.8, 0.1, -0.1, -4.0, 4.0, -1.25, -0.8, -1.0, 4.0, 0.5, 1.2]
     plant.set_command(target, [0.0] * 12, [45.0] * 12, [4.5] * 12)
-    np.testing.assert_allclose(plant.target, [0.7, -0.7, 0.1, -0.1, -2.0, 1.0, -1.25, -0.8, -0.05, 1.5, 0.5, 1.2])
+    np.testing.assert_allclose(plant.target, [0.7, -0.7, 0.1, -0.1, -2.0, 1.0, -1.25, -0.8, -0.05, 1.6, 0.5, 1.2])
     np.testing.assert_array_equal(plant.feedback()[0], before)
