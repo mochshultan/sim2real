@@ -124,6 +124,23 @@ cannot establish numerical equivalence or guarantee real-robot stability.
 
 ## Current Height20 model update on 2026-11-18
 
+The historical Height20 checkpoint was trained without target clipping. The
+training workspace now provides separate `Height20-Swing-TargetLimits` and
+`LowSpeed-Gait-TargetLimits` variants. They keep the current-position action
+equation and clip its resulting targets to the intersection below. Running
+training and historical tasks are not modified.
+
+| Joint group | Controller guard (rad) | CAN driver guard (rad) | Training variant (rad) |
+|---|---|---|---|
+| Collar | [-0.5,0.5] | [-0.4,0.4] | [-0.4,0.4] |
+| Hip | [-2.5,0.2] | [-3.14,3.14] | [-2.5,0.2] |
+| Knee | [-0.25,2.5] | [-0.1,2.8] | [-0.1,2.5] |
+
+Both hardware guards are retained. The MuJoCo plant now also applies the CAN
+guard after the shared controller guard, rather than omitting this second
+clipping stage. This changes simulator execution, not the policy export.
+See `data/sessions/curpos/README.md` for per-motor CAN reception-age telemetry.
+
 Both curpos launches select `policy_pion_current_height20_swing_native_14999_20261118.pt`.
 The controller verifies the paired `deployment_...json` filename and SHA-256.
 The previous native checkpoint9999 remains compatible when selected explicitly.

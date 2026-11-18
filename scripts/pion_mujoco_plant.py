@@ -63,6 +63,11 @@ class PionMujocoPlant:
         if (arrays[2] < 0).any() or (arrays[3] < 0).any():
             raise ValueError("Impedance gains must be nonnegative")
         self.target, self.target_velocity, self.kp, self.kd = [value.copy() for value in arrays]
+        # Match the CAN manager's calibrated-coordinate guards after the shared
+        # policy controller has applied its own limits. Do not infer these from
+        # MuJoCo physical joint limits: desired PD targets have a separate guard.
+        self.target = np.clip(self.target, [-0.4] * 4 + [-3.14] * 4 + [-0.1] * 4,
+                              [0.4] * 4 + [3.14] * 4 + [2.8] * 4)
         self.feedforward = np.zeros(12) if feedforward is None else np.asarray(feedforward).copy()
         if self.feedforward.shape != (12,) or not np.isfinite(self.feedforward).all():
             raise ValueError("Feedforward requires12 finite torques")
