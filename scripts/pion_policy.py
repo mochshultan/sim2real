@@ -6,6 +6,7 @@
 """Native Pion Current observation/action contract and named hardware boundary."""
 
 import numpy as np
+import torch
 
 from policy_observation import JaguarObservationBuilder
 
@@ -28,6 +29,29 @@ ACTION_SCALE = 0.25
 CLIP_ACTIONS = 10.0
 KP = 45.0
 KD = 4.5
+
+
+def infer_with_trace(native_policy, history):
+    """Evaluate the native export once, retaining the actual estimator/actor tensors."""
+    network = native_policy.policy
+    estimator_input = torch.cat(
+        [history[:, :, start:end].reshape(history.shape[0], -1)
+         for start, end in ((0, 3), (3, 6), (6, 9), (9, 21), (21, 33), (33, 45))], dim=1)
+    velocity = network.estimator(estimator_input)
+    actor_observation = torch.cat((history[:, -1, :], velocity), dim=1)
+    actor_input = (actor_observation - network.mean) / (network.std + network.eps)
+    actor_output = network.actor(actor_input)
+    action = (actor_output.clamp(-network.clip_actions, network.clip_actions)
+              if network.clip_actions > 0 else actor_output)
+    trace = {
+        "estimator_input": estimator_input[0].tolist(),
+        "estimator_output": velocity[0].tolist(),
+        "actor_observation": actor_observation[0].tolist(),
+        "actor_input": actor_input[0].tolist(),
+        "actor_output": actor_output[0].tolist(),
+        "policy_output": action[0].tolist(),
+    }
+    return action, trace
 
 
 class PionObservationBuilder(JaguarObservationBuilder):

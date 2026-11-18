@@ -17,10 +17,27 @@ from sensor_msgs.msg import JointState, Joy
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 from pion_controller import PionControllerNode
-from pion_policy import JOINT_NAMES, STANDING
+from pion_policy import JOINT_NAMES, STANDING, infer_with_trace
 
 ROOT = Path(__file__).parents[1]
 NATIVE = ROOT / "models/policy_pion_current_native_9999_20261117.pt"
+
+
+@pytest.mark.parametrize("policy_path", [
+    NATIVE, ROOT / "models/policy_pion_current_height20_swing_native_14999_20261118.pt",
+])
+def test_recorded_inference_matches_export_for_varied_histories(policy_path):
+    policy = torch.jit.load(str(policy_path)).eval()
+    generator = torch.Generator().manual_seed(39)
+    with torch.no_grad():
+        for scale in (0.0, 0.1, 1.0, 10.0):
+            history = torch.randn(1, 5, 45, generator=generator) * scale
+            action, trace = infer_with_trace(policy, history)
+            torch.testing.assert_close(action, policy(history), rtol=0, atol=0)
+            assert len(trace['estimator_input']) == 225
+            assert len(trace['estimator_output']) == 3
+            assert len(trace['actor_input']) == 48
+            assert len(trace['actor_output']) == 12
 
 
 def test_native_export_preserves_the_existing_verified_actor_for_named_joint_histories():

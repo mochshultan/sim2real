@@ -58,7 +58,7 @@ def test_shared_transition_preserves_cosine_trajectory(duration, fraction, blend
 
 
 def walk_node(action):
-    return SimpleNamespace(
+    node = SimpleNamespace(
         stand_joint_pos=STAND_JOINT_POS.copy(),
         obs_builder=JaguarObservationBuilder(DEFAULT_JOINT_POS),
         policy=lambda history: torch.tensor([action], dtype=torch.float32),
@@ -67,6 +67,8 @@ def walk_node(action):
         rl_kp=[45.0] * 12, rl_kd=[4.5] * 12, transition_kd=[4.5] * 12,
         debug_pub=Mock(), _trigger_safe_shutdown=Mock(),
     )
+    node._infer_temporal_policy = Controller._infer_temporal_policy.__get__(node)
+    return node
 
 
 @pytest.mark.parametrize("elapsed,ramp", [(0.0, 0.0), (0.4, 0.5), (0.8, 1.0)])

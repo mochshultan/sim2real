@@ -16,6 +16,7 @@ def generate_launch_description():
     package = Path(__file__).resolve().parents[1]
     return LaunchDescription(
         [
+            DeclareLaunchArgument("session_log_dir", default_value=str(package / "data/sessions/curpos")),
             DeclareLaunchArgument("config_file", default_value=str(package / "config/sim2real_pion.yaml")),
             DeclareLaunchArgument("controller_executable", default_value="pion_controller.py", choices=["pion_controller.py"]),
             DeclareLaunchArgument("controller_name", default_value="pion_controller", choices=["pion_controller"]),

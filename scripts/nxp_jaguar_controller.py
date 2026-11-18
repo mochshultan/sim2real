@@ -188,6 +188,14 @@ class NXPJaguarControllerNode(Node):
                  "observation_scales": {"angular_velocity": 0.25, "command": [2, 2, 0.25],
                                         "joint_position": 1.0, "joint_velocity": 0.05},
                  "action_scale": ACTION_SCALE,
+                 "inference_trace_fields": {
+                     "policy_input": "5x45 time-major history, oldest to newest",
+                     "estimator_input": "225 values packed per observation term across five frames",
+                     "estimator_output": "3D estimated body linear velocity (m/s)",
+                     "actor_observation": "45D current observation + 3D estimated velocity",
+                     "actor_input": "48D normalized actor observation",
+                     "actor_output": "12D actor action before clipping",
+                     "policy_output": "12D final action after clipping"},
                  "motor_output_fields": "position_rad, velocity_rad_s, kp, kd; these are commands, not measured torque"},
             )
             self.get_logger().info(f"Session recording: {self.session_recorder.path}")
@@ -802,7 +810,7 @@ class NXPJaguarControllerNode(Node):
         # 2. Neural Network Forward Inference
         with torch.no_grad():
             if self.policy_expects_temporal:
-                actions = self.policy(history_tensor)
+                actions = self._infer_temporal_policy(history_tensor)
             else:
                 obs_tensor = torch.from_numpy(obs_45d).unsqueeze(0).float()
                 actions = self.policy(obs_tensor)
@@ -850,6 +858,9 @@ class NXPJaguarControllerNode(Node):
         self.debug_pub.publish(debug_msg)
         return target_pos, target_vel, cmd_kp, cmd_kd
 
+    def _infer_temporal_policy(self, history):
+        return self.policy(history)
+
     def _control_loop(self):
         recorder = self.session_recorder
         if recorder is None:
@@ -874,6 +885,10 @@ class NXPJaguarControllerNode(Node):
                 self.body_ang_vel, self.body_quat, self.cmd_vel,
                 self.joint_pos, self.joint_vel).tolist(),
             "policy_evaluated": False, "policy_history": None, "policy_action": None,
+            "policy_input": None, "estimator_input": None, "estimator_output": None,
+            "actor_observation": None, "actor_input": None, "actor_output": None,
+            "policy_output": None,
+            "inference_start_wall_time_ns": None, "inference_end_wall_time_ns": None,
             "motor_output": None,
         }
         try:

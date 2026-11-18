@@ -13,6 +13,7 @@ feedback indexing, observation history and actions stay in native Pion order.
 import hashlib
 import json
 from pathlib import Path
+import time
 
 import numpy as np
 import rclpy
@@ -20,7 +21,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 from nxp_jaguar_controller import NXPJaguarControllerNode
 from pion_policy import ACTION_SCALE, CLIP_ACTIONS, CONTROL_DT, JOINT_NAMES, KD, KP
-from pion_policy import NAME_TO_PION, ROS_TO_PION, STANDING, PionObservationBuilder
+from pion_policy import NAME_TO_PION, ROS_TO_PION, STANDING, PionObservationBuilder, infer_with_trace
 
 
 class PionControllerNode(NXPJaguarControllerNode):
@@ -41,6 +42,17 @@ class PionControllerNode(NXPJaguarControllerNode):
             raise ValueError("This Pion checkpoint requires Kp=45 and Kd=4.5")
         self.stand_joint_pos = STANDING.copy()
         return policy_path
+
+    def _infer_temporal_policy(self, history):
+        if self._session_sample is None:
+            return self.policy(history)
+        started = time.time_ns()
+        action, trace = infer_with_trace(self.policy, history)
+        self._session_sample.update(trace)
+        self._session_sample["policy_input"] = history[0].tolist()
+        self._session_sample["inference_start_wall_time_ns"] = started
+        self._session_sample["inference_end_wall_time_ns"] = time.time_ns()
+        return action
 
     def _new_observation_builder(self):
         return PionObservationBuilder()

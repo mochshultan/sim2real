@@ -16,6 +16,7 @@ def _launch_controller(context):
         "policy_path": LaunchConfiguration("policy_path"),
         "policy_reference": LaunchConfiguration("policy_reference"),
         "history_initialization": LaunchConfiguration("history_initialization"),
+        "session_log_dir": LaunchConfiguration("session_log_dir"),
     }
     return [Node(
         package="jaguar_control",
@@ -215,6 +216,7 @@ def generate_launch_description():
         LogInfo(msg=["Jaguar DDS domain: ", LaunchConfiguration("domain_id"),
                      "; all remote nodes and CLI terminals must use this domain and matching ROS distro."]),
         config_file_arg,
+        DeclareLaunchArgument("session_log_dir", default_value="~/.ros/jaguar_control/sessions"),
         DeclareLaunchArgument("controller_executable", default_value="nxp_jaguar_controller.py"),
         DeclareLaunchArgument("controller_name", default_value="nxp_jaguar_controller"),
         policy_path_arg,

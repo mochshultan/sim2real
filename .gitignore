@@ -12,3 +12,7 @@ install/
 log/
 .venv-jazzy/
 /data/pace/
+# Keep curpos telemetry and run artifacts available for commit/push.
+!/data/sessions/curpos/
+!/data/sessions/curpos/**/
+!/data/sessions/curpos/**

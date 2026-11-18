@@ -27,8 +27,72 @@ def test_recorder_drains_and_keeps_sessions_separate(tmp_path):
     rows = read_log(first.path)
     assert rows[0]['joint_names'] == ['joint']
     assert [row['sequence'] for row in rows[1:-1]] == list(range(100))
-    assert rows[-1] == {'type': 'summary', 'dropped_samples': 0}
+    assert rows[-1]['type'] == 'summary'
+    assert rows[-1]['dropped_samples'] == 0
+    assert rows[-1]['written_records'] == 100
+    assert rows[-1]['wall_time_ns'] >= rows[0]['wall_time_ns']
     assert first.path != second.path
+
+
+def test_current_sessions_have_separate_run_folders(tmp_path):
+    recorder = SessionRecorder(tmp_path, {'policy_reference': 'current'})
+    assert recorder.close()
+    assert recorder.path.name == 'telemetry.jsonl'
+    assert recorder.path.parent.parent == tmp_path
+    metadata = read_log(recorder.path)[0]
+    assert metadata['run_id'] == recorder.path.parent.name
+    assert metadata['schema_version'] == 2
+    assert metadata['started_at_utc'].endswith('+00:00')
+
+
+def test_pion_session_records_actual_estimator_and_actor_tensors(tmp_path):
+    import rclpy
+    import torch
+    from pion_controller import PionControllerNode
+
+    root = Path(__file__).parents[1]
+    policy = root / 'models/policy_pion_current_height20_swing_native_14999_20261118.pt'
+    rclpy.init(args=['--ros-args', '--params-file', str(root / 'config/sim2real_pion.yaml'),
+                     '-p', f'policy_path:={policy}', '-p', 'policy_reference:=current',
+                     '-p', 'history_initialization:=repeat', '-p', f'session_log_dir:={tmp_path}'])
+    node = None
+    try:
+        node = PionControllerNode()
+        for publisher in ('joint_cmd_pub', 'safe_park_active_pub', 'status_pub', 'debug_pub'):
+            setattr(node, publisher, Mock())
+        path = node.session_recorder.path
+        node._control_loop()
+        node.imu_received = node.joints_received = True
+        node.last_imu_time = node.last_joints_time = time.monotonic()
+        node.joint_pos = node.stand_joint_pos.copy()
+        node.state = 'STAND_HOLD'
+        node._control_loop()
+        node.state = 'WALK'
+        node.last_imu_time = node.last_joints_time = time.monotonic()
+        node._control_loop()
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+    samples = [row for row in read_log(path) if row['type'] == 'sample']
+    assert len(samples) == 3
+    assert samples[0]['estimator_input'] is None
+    assert samples[1]['actor_output'] is None
+    walk = samples[2]
+    history = torch.tensor([walk['policy_input']])
+    network = node.policy.policy
+    expected_packing = torch.cat([history[:, :, a:b].flatten(1)
+                                 for a, b in ((0, 3), (3, 6), (6, 9), (9, 21), (21, 33), (33, 45))], 1)
+    with torch.no_grad():
+        velocity = network.estimator(expected_packing)
+        actor_input = (torch.cat((history[:, -1], velocity), 1) - network.mean) / (network.std + network.eps)
+        np.testing.assert_array_equal(walk['estimator_input'], expected_packing[0].numpy())
+        np.testing.assert_array_equal(walk['estimator_output'], velocity[0].numpy())
+        np.testing.assert_array_equal(walk['actor_input'], actor_input[0].numpy())
+        np.testing.assert_array_equal(walk['actor_output'], network.actor(actor_input)[0].numpy())
+        np.testing.assert_array_equal(walk['policy_output'], node.policy(history)[0].numpy())
+    assert walk['policy_action'] == walk['policy_output']
+    assert walk['inference_end_wall_time_ns'] >= walk['inference_start_wall_time_ns'] >= walk['wall_time_ns']
 
 
 def test_slow_storage_drops_without_blocking_control_thread(tmp_path):

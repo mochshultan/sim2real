@@ -24,6 +24,11 @@ bash scripts/build.sh
 ./scripts/sim2sim_curpos
 ```
 
+Each curpos controller run automatically records timestamped observations,
+estimator input/output, actor input/output, and motor commands under
+`data/sessions/curpos/<run_id>/telemetry.jsonl`. These files are included by Git
+when added and committed. See the [telemetry format](../data/sessions/curpos/README.md).
+
 The wrappers source Jazzy and the local install. Python selection checks the
 active Python, local `.venv`, then existing `~/IsaacLab/.venv` and
 `~/IsaacLab-upgrade/.venv`. Set `JAGUAR_PYTHON=/path/to/python3` to pin another

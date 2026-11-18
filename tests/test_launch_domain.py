@@ -75,6 +75,7 @@ class LaunchPolicyTests(unittest.TestCase):
         context, parameters = self.curpos_controller_parameters()
         self.assertEqual(parameters[1]["policy_reference"], "current")
         self.assertEqual(parameters[1]["history_initialization"], "repeat")
+        self.assertEqual(parameters[1]["session_log_dir"], str(root / "data/sessions/curpos"))
         self.assertEqual(parameters[1]["policy_path"],
                          str(root / "models/policy_pion_current_height20_swing_native_14999_20261118.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
@@ -83,11 +84,12 @@ class LaunchPolicyTests(unittest.TestCase):
     def test_curpos_launcher_preserves_explicit_model_and_config_overrides(self):
         context, parameters = self.curpos_controller_parameters(
             policy_path="/tmp/custom_current.pt", config_file="/tmp/custom.yaml",
-            domain_id="23", history_initialization="repeat")
+            domain_id="23", history_initialization="repeat", session_log_dir="/tmp/custom_sessions")
         self.assertEqual(parameters[0], Path("/tmp/custom.yaml"))
         self.assertEqual(parameters[1], {
             "policy_path": "/tmp/custom_current.pt", "policy_reference": "current",
             "history_initialization": "repeat",
+            "session_log_dir": "/tmp/custom_sessions",
         })
         self.assertEqual(context.launch_configurations["domain_id"], "23")
 

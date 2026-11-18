@@ -51,8 +51,8 @@ MOTOR_DIR = [
 MOTOR_OFFSET_ANGLE = [
     +0.0145, -0.7727, -0.1867,  # BL (can1: Collar, Hip, Knee)
     +0.0083, -0.7727, -0.1867,  # BR (can0: Collar, Hip, Knee)
-    -0.0174, -0.7727, -0.1867,  # FL (can1: Collar, Hip, Knee)
-    +0.0219, -0.7727, -0.1867,  # FR (can0: Collar, Hip, Knee)
+    +0.0326, -0.7727, -0.1867,  # FL (can1: Collar, Hip, Knee)
+    -0.0281, -0.7927, -0.2367,  # FR (can0: Collar, Hip, Knee)
 ]
 
 # ROS Hardware Joint Names (Order: BL, BR, FL, FR)

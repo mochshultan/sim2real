@@ -17,14 +17,25 @@ class SessionRecorder:
         prefix = 'sim2real_curpos' if metadata.get('policy_reference') == 'current' else 'sim2real_zero'
         if metadata.get('simulation'):
             prefix = prefix.replace('sim2real', 'sim2sim', 1)
-        self.path = directory / f'{prefix}_{stamp}_{uuid4().hex[:8]}.jsonl'
+        run_id = f'{prefix}_{stamp}_{uuid4().hex[:8]}'
+        if metadata.get('policy_reference') == 'current':
+            directory = directory / run_id
+            directory.mkdir()
+            self.path = directory / 'telemetry.jsonl'
+        else:
+            self.path = directory / f'{run_id}.jsonl'
+        self._written = 0
+        self._started_ns = time.time_ns()
         self.dropped = 0
         self.error = None
         self._closed = False
         self._queue = Queue(maxsize=queue_size)
         self._stream = self.path.open('x', encoding='utf-8')
         try:
-            self._stream.write(json.dumps({'type': 'metadata', 'schema_version': 1, **metadata}) + '\n')
+            self._stream.write(json.dumps({
+                'type': 'metadata', 'schema_version': 2, 'run_id': run_id,
+                'started_at_utc': datetime.now(timezone.utc).isoformat(),
+                'wall_time_ns': self._started_ns, **metadata}) + '\n')
             self._stream.flush()
         except Exception:
             self._stream.close()
@@ -55,10 +66,14 @@ class SessionRecorder:
                 if sample is None:
                     break
                 self._stream.write(json.dumps(sample, separators=(',', ':')) + '\n')
+                self._written += 1
                 if time.monotonic() - last_flush >= 1.0:
                     self._stream.flush()
                     last_flush = time.monotonic()
-            self._stream.write(json.dumps({'type': 'summary', 'dropped_samples': self.dropped}) + '\n')
+            self._stream.write(json.dumps({
+                'type': 'summary', 'dropped_samples': self.dropped,
+                'written_records': self._written, 'wall_time_ns': time.time_ns(),
+                'duration_s': (time.time_ns() - self._started_ns) / 1e9}) + '\n')
         except Exception as exc:
             self.error = str(exc)
         finally:
