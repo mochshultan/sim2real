@@ -132,9 +132,9 @@ training and historical tasks are not modified.
 
 | Joint group | Controller guard (rad) | CAN driver guard (rad) | Training variant (rad) |
 |---|---|---|---|
-| Collar | [-0.5,0.5] | [-0.4,0.4] | [-0.4,0.4] |
-| Hip | [-2.5,0.2] | [-3.14,3.14] | [-2.5,0.2] |
-| Knee | [-0.25,2.5] | [-0.1,2.8] | [-0.1,2.5] |
+| Collar | [-0.7,0.7] | [-0.7,0.7] | [-0.7,0.7] |
+| Hip | [-2.0,1.0] | [-2.0,1.0] | [-2.0,1.0] |
+| Knee | [-0.05,1.5] | [-0.05,1.5] | [-0.05,1.5] |
 
 Both hardware guards are retained. The MuJoCo plant now also applies the CAN
 guard after the shared controller guard, rather than omitting this second
@@ -144,8 +144,10 @@ See `data/sessions/curpos/README.md` for per-motor CAN reception-age telemetry.
 Pion's target guard is declared in `scripts/pion_controller.py` as
 `joint_target_lower` and `joint_target_upper`. The shared publication method
 applies these Pion-specific bounds before publishing `/joint_commands`, so
-recorded target-clipping masks now cover the driver bounds too. The effective
-hardware limits remain the same; this is not a change to trained policy weights.
+recorded target-clipping masks now cover the driver bounds too. The operator selected these new hardware limits on 2026-11-18. Pion feedback
+validity, standing transitions and the position watchdog use the same bounds,
+with the existing overshoot tolerances. Policy weights and the 14 Nm torque
+ceiling are unchanged. Historical checkpoints were not trained with these limits.
 
 Both curpos launches select `policy_pion_current_height20_swing_native_14999_20261118.pt`.
 The controller verifies the paired `deployment_...json` filename and SHA-256.

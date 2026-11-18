@@ -19,7 +19,7 @@ import numpy as np
 import rclpy
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
-from nxp_jaguar_controller import NXPJaguarControllerNode
+from nxp_jaguar_controller import NXPJaguarControllerNode, POSITION_LIMIT_TOLERANCE
 from pion_policy import ACTION_SCALE, CLIP_ACTIONS, CONTROL_DT, JOINT_NAMES, KD, KP
 from pion_policy import NAME_TO_PION, ROS_TO_PION, STANDING, PionObservationBuilder, infer_with_trace
 
@@ -34,8 +34,11 @@ class PionControllerNode(NXPJaguarControllerNode):
     joint_feedback_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
     # Final calibrated-coordinate target guard: intersection of the controller
     # limits and the existing CAN-driver mechanical limits, in native Pion order.
-    joint_target_lower = np.array([-0.4] * 4 + [-2.5] * 4 + [-0.1] * 4, dtype=np.float32)
-    joint_target_upper = np.array([0.4] * 4 + [0.2] * 4 + [2.5] * 4, dtype=np.float32)
+    joint_target_lower = np.array([-0.7] * 4 + [-2.0] * 4 + [-0.05] * 4, dtype=np.float32)
+    joint_target_upper = np.array([0.7] * 4 + [1.0] * 4 + [1.5] * 4, dtype=np.float32)
+
+    joint_feedback_lower = joint_target_lower - POSITION_LIMIT_TOLERANCE
+    joint_feedback_upper = joint_target_upper + POSITION_LIMIT_TOLERANCE
 
     def _configure_parameters(self):
         policy_path = super()._configure_parameters()

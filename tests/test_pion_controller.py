@@ -120,12 +120,16 @@ def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedba
         node.joint_cmd_pub = Mock()
         node.safe_park_active_pub = Mock()
         node.state = "WALK"
+        node.last_imu_time = node.last_joints_time = time.monotonic()
+        node.joint_pos[4:8] = 0.8
+        assert node._sensors_ready()  # The new positive hip range must not trip the old +0.2 guard.
+        node.joint_pos[:] = native_positions
         requested = np.array([-1., 1., -1., 1., -4., 1., -4., 1., -1., 4., -1., 4.])
         assert node._publish_targets(requested, np.zeros(12), [45.] * 12, [4.5] * 12,
                                      node.get_clock().now().nanoseconds / 1e9)
         published = node.joint_cmd_pub.publish.call_args.args[0]
         np.testing.assert_allclose(published.position,
-                                  [-0.4, 0.4, -0.4, 0.4, -2.5, 0.2, -2.5, 0.2, -0.1, 2.5, -0.1, 2.5])
+                                  [-0.7, 0.7, -0.7, 0.7, -2.0, 1.0, -2.0, 1.0, -0.05, 1.5, -0.05, 1.5])
     finally:
         if node is not None:
             node.destroy_node()

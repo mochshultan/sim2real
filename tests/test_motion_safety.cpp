@@ -5,12 +5,13 @@ using namespace robstride;
 using Clock = std::chrono::steady_clock;
 
 void feedback(RobStrideHardwareManager & manager, Clock::time_point now,
-              double knee = 0.0, double roll = 0.0)
+              double hip_offset = 0.0, double roll = 0.0)
 {
   const auto & configs = manager.getJointConfigs();
   for (size_t i = 0; i < N_JOINTS; ++i) {
     const auto & cfg = configs[i];
-    const double position = i == 11 ? knee : (i == 0 ? roll : 0.0);
+    const double position = i % 3 == 1 ? -2.0 + (i == 10 ? hip_offset : 0.0) :
+      (i == 0 ? roll : 0.0);
     can_frame frame{};
     frame.can_id = CAN_EFF_FLAG | (2U << 24) | (cfg.can_id << 8) | 0xFE;
     frame.can_dlc = 8;
@@ -22,11 +23,12 @@ void feedback(RobStrideHardwareManager & manager, Clock::time_point now,
   }
 }
 
-void command(RobStrideHardwareManager & manager, double knee)
+void command(RobStrideHardwareManager & manager, double hip_distance)
 {
   std::vector<JointCommand> commands(N_JOINTS);
   for (auto & cmd : commands) cmd.kp = 14.0;
-  commands[11].position = knee;
+  for (size_t i = 1; i < N_JOINTS; i += 3) commands[i].position = -2.0;
+  commands[10].position = -2.0 + hip_distance;
   assert(manager.setJointCommands(commands));
 }
 
@@ -74,20 +76,20 @@ int main()
   tracking.checkMotionSafety(now + ms(310));
   assert(tracking.isEmergencyStopped());
 
-  // The logged roll overshoot can recover during park without retripping.
+  // A roll overshoot beyond the new +/-0.7 guard can recover during park.
   RobStrideHardwareManager position;
   command(position, 0.0);
-  feedback(position, now, 0.0, -0.794);
+  feedback(position, now, 0.0, -1.094);
   position.checkMotionSafety(now);
   position.checkMotionSafety(now + ms(110));
   assert(position.safeParkRequested());
   position.setSafeParkActive(true);
-  feedback(position, now + ms(220), 0.0, -0.794);
+  feedback(position, now + ms(220), 0.0, -1.094);
   position.checkMotionSafety(now + ms(220));
   assert(!position.isEmergencyStopped());
-  feedback(position, now + ms(330), 0.0, -0.86);
+  feedback(position, now + ms(330), 0.0, -1.16);
   position.checkMotionSafety(now + ms(330));
-  feedback(position, now + ms(440), 0.0, -0.86);
+  feedback(position, now + ms(440), 0.0, -1.16);
   position.checkMotionSafety(now + ms(440));
   assert(position.isEmergencyStopped());
 
@@ -114,7 +116,8 @@ int main()
   RobStrideHardwareManager multiple;
   std::vector<JointCommand> targets(N_JOINTS);
   for (auto & target : targets) target.kp = 14.0;
-  targets[2].position = targets[11].position = 2.2;
+  for (size_t i = 1; i < N_JOINTS; i += 3) targets[i].position = -2.0;
+  targets[1].position = targets[10].position = 0.2;
   assert(multiple.setJointCommands(targets));
   feedback(multiple, now);
   multiple.checkMotionSafety(now);
@@ -131,8 +134,8 @@ int main()
   std::cerr.rdbuf(previous_log);
 
   const auto logs = captured.str();
-  assert(logs.find("event=SAFE_PARK code=TRACKING joint=FR_knee_joint actual_rad=") != std::string::npos);
-  assert(logs.find("event=SAFE_PARK code=TRACKING joint=BL_knee_joint actual_rad=") != std::string::npos);
+  assert(logs.find("event=SAFE_PARK code=TRACKING joint=FR_hip_joint actual_rad=") != std::string::npos);
+  assert(logs.find("event=SAFE_PARK code=TRACKING joint=BL_hip_joint actual_rad=") != std::string::npos);
   assert(logs.find("error_rad=") != std::string::npos && logs.find("debounce_ms=100") != std::string::npos);
   assert(logs.find("event=SAFE_PARK code=POSITION_LIMIT joint=BL_collar_joint") != std::string::npos);
   assert(logs.find("event=ESTOP code=POSITION_RANGE joint=BL_collar_joint") != std::string::npos);

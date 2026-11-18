@@ -73,7 +73,7 @@
     13.5
   ],
   "actuator": "RS00 32V linear approximation in training and MuJoCo; physical firmware impedance on hardware",
-  "safety_target_limits": "Collar [-0.5,0.5], hip [-2.5,0.2], knee [-0.25,2.5] rad; retained hardware guard",
+  "safety_target_limits": "Operator-selected 2026-11-18: coxa [-0.7,0.7], hip [-2,1], knee [-0.05,1.5] rad; matching controller and CAN driver guards",
   "remaining_gap": [
     "Hardware feedback age and asynchronous transport",
     "Measured actuator dynamics not identified; training curve is an approximation",
@@ -459,5 +459,20 @@
   "source_config_sha256": {
     "agent.yaml": "bac51343e3e0315ac511e738e633d23085ab942030d472e9564dfd81ea34ea11",
     "env.yaml": "5b7b67cf043e50c0173c0450069b6ed90cc85090858206f64e8e2b388b240056"
-  }
+  },
+  "runtime_target_limits_rad": {
+    "coxa": [
+      -0.7,
+      0.7
+    ],
+    "hip": [
+      -2.0,
+      1.0
+    ],
+    "knee": [
+      -0.05,
+      1.5
+    ]
+  },
+  "target_limit_training_note": "This checkpoint predates these target limits; matching isolated training variants are prepared separately."
 }

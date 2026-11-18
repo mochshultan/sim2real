@@ -488,6 +488,8 @@ class NXPJaguarControllerNode(Node):
                 self.get_clock().now().nanoseconds / 1e9, "code=DRIVER_REQUEST source=hardware_safe_park")
 
     def _request_safe_park(self, now: float, reason: str, automatic=False):
+        target_lower = getattr(self, "joint_target_lower", ISAAC_LIMITS_LOWER)
+        target_upper = getattr(self, "joint_target_upper", ISAAC_LIMITS_UPPER)
         if self.state == "DISABLED":
             return
         if (not automatic and self.last_safe_park_request > 0.0 and
@@ -509,8 +511,8 @@ class NXPJaguarControllerNode(Node):
             self.soft_fault_times.clear()
             self.overtorque_counter = 0
             self.park_initial_extra = np.maximum(
-                np.maximum(ISAAC_LIMITS_LOWER - self.joint_pos,
-                           self.joint_pos - ISAAC_LIMITS_UPPER), 0.0)
+                np.maximum(target_lower - self.joint_pos,
+                           self.joint_pos - target_upper), 0.0)
             self.transition_start_pos = self.joint_pos.copy()
             self.transition_target_pos = SIT_JOINT_POS.copy()
             self.transition_start_time = now
@@ -701,6 +703,8 @@ class NXPJaguarControllerNode(Node):
         return delta_q
 
     def _sensor_fault_reasons(self):
+        feedback_lower = getattr(self, "joint_feedback_lower", FEEDBACK_LIMITS_LOWER)
+        feedback_upper = getattr(self, "joint_feedback_upper", FEEDBACK_LIMITS_UPPER)
         now = time.monotonic()
         reasons = []
         for sensor, received, stamp, detail in (
@@ -714,21 +718,25 @@ class NXPJaguarControllerNode(Node):
         for index, position in enumerate(self.joint_pos):
             if not np.isfinite(position):
                 reasons.append(f"code=POSITION_NONFINITE joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={position}")
-            elif position < FEEDBACK_LIMITS_LOWER[index] - 0.2 or position > FEEDBACK_LIMITS_UPPER[index] + 0.2:
+            elif position < feedback_lower[index] - 0.2 or position > feedback_upper[index] + 0.2:
                 reasons.append(
                     f"code=POSITION_RANGE joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={position:.4f} "
-                    f"min_rad={FEEDBACK_LIMITS_LOWER[index] - 0.2:.4f} max_rad={FEEDBACK_LIMITS_UPPER[index] + 0.2:.4f}")
+                    f"min_rad={feedback_lower[index] - 0.2:.4f} max_rad={feedback_upper[index] + 0.2:.4f}")
         return reasons
 
     def _sensors_ready(self, check_limits=True):
+        feedback_lower = getattr(self, "joint_feedback_lower", FEEDBACK_LIMITS_LOWER)
+        feedback_upper = getattr(self, "joint_feedback_upper", FEEDBACK_LIMITS_UPPER)
         now = time.monotonic()
         return (self.imu_received and self.joints_received
                 and now - self.last_imu_time <= 0.25 and now - self.last_joints_time <= 0.25
                 and np.all(np.isfinite(self.joint_pos))
-                and np.all(self.joint_pos >= FEEDBACK_LIMITS_LOWER - (0.0 if check_limits else 0.2))
-                and np.all(self.joint_pos <= FEEDBACK_LIMITS_UPPER + (0.0 if check_limits else 0.2)))
+                and np.all(self.joint_pos >= feedback_lower - (0.0 if check_limits else 0.2))
+                and np.all(self.joint_pos <= feedback_upper + (0.0 if check_limits else 0.2)))
 
     def _publish_sensor_wait_status(self):
+        feedback_lower = getattr(self, "joint_feedback_lower", FEEDBACK_LIMITS_LOWER)
+        feedback_upper = getattr(self, "joint_feedback_upper", FEEDBACK_LIMITS_UPPER)
         now = time.monotonic()
         if now - self.last_sensor_wait_report < 1.0:
             return
@@ -736,15 +744,15 @@ class NXPJaguarControllerNode(Node):
         imu_age = now - self.last_imu_time if self.last_imu_time else float("inf")
         joint_age = now - self.last_joints_time if self.last_joints_time else float("inf")
         finite = bool(np.all(np.isfinite(self.joint_pos)))
-        in_limits = bool(finite and np.all(self.joint_pos >= FEEDBACK_LIMITS_LOWER)
-                         and np.all(self.joint_pos <= FEEDBACK_LIMITS_UPPER))
+        in_limits = bool(finite and np.all(self.joint_pos >= feedback_lower)
+                         and np.all(self.joint_pos <= feedback_upper))
         bad_joints = []
         if finite:
             for index, value in enumerate(self.joint_pos):
-                if value < FEEDBACK_LIMITS_LOWER[index] or value > FEEDBACK_LIMITS_UPPER[index]:
+                if value < feedback_lower[index] or value > feedback_upper[index]:
                     bad_joints.append(
                         f"{getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]}={value:+.3f}"
-                        f"[{FEEDBACK_LIMITS_LOWER[index]:+.2f},{FEEDBACK_LIMITS_UPPER[index]:+.2f}]")
+                        f"[{feedback_lower[index]:+.2f},{feedback_upper[index]:+.2f}]")
         status_msg = String()
         status_msg.data = (
             f"WAITING_SENSORS state={self.state} imu={self.imu_received} "
@@ -756,6 +764,8 @@ class NXPJaguarControllerNode(Node):
         self.get_logger().warn(status_msg.data)
 
     def _joy_cb(self, msg: Joy):
+        target_lower = getattr(self, "joint_target_lower", ISAAC_LIMITS_LOWER)
+        target_upper = getattr(self, "joint_target_upper", ISAAC_LIMITS_UPPER)
         now = self.get_clock().now().nanoseconds / 1e9
         previous = self.previous_buttons
         self.previous_buttons = list(msg.buttons)
@@ -774,7 +784,7 @@ class NXPJaguarControllerNode(Node):
             self.transition_start_time = now
             with self.state_lock:
                 self.transition_start_pos = self.joint_pos.copy()
-                self.transition_target_pos = np.clip(self.stand_joint_pos.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                self.transition_target_pos = np.clip(self.stand_joint_pos.copy(), target_lower, target_upper)
                 self.cmd_vel[:] = 0.0
                 self.filtered_action[:] = 0.0
             self.get_logger().info("event=MODE_CHANGE source=start from=WALK to=STANDUP target=STAND_HOLD")
@@ -786,7 +796,7 @@ class NXPJaguarControllerNode(Node):
                 self.transition_start_time = now
                 with self.state_lock:
                     self.transition_start_pos = self.joint_pos.copy()
-                    self.transition_target_pos = np.clip(self.stand_joint_pos.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                    self.transition_target_pos = np.clip(self.stand_joint_pos.copy(), target_lower, target_upper)
                     self.cmd_vel[:] = 0.0
                     self.filtered_action[:] = 0.0
                 self.get_logger().info(f"[CONTROLLER] State transition -> STANDUP ({self.transition_duration:.1f}s smooth S-curve)")
@@ -819,7 +829,7 @@ class NXPJaguarControllerNode(Node):
                     self.transition_start_time = now
                     with self.state_lock:
                         self.transition_start_pos = self.joint_pos.copy()
-                        self.transition_target_pos = np.clip(SIT_JOINT_POS.copy(), ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+                        self.transition_target_pos = np.clip(SIT_JOINT_POS.copy(), target_lower, target_upper)
                         self.cmd_vel[:] = 0.0
                         self.filtered_action[:] = 0.0
                     self.get_logger().info(f"[CONTROLLER] State transition -> SITDOWN ({self.transition_duration:.1f}s smooth S-curve)")
@@ -958,6 +968,8 @@ class NXPJaguarControllerNode(Node):
         return super().destroy_node()
 
     def _run_control_cycle(self):
+        target_lower = getattr(self, "joint_target_lower", ISAAC_LIMITS_LOWER)
+        target_upper = getattr(self, "joint_target_upper", ISAAC_LIMITS_UPPER)
         t_start = time.perf_counter()
         dt = t_start - self.last_loop_time
         self.last_loop_time = t_start
@@ -980,8 +992,8 @@ class NXPJaguarControllerNode(Node):
         now = self.get_clock().now().nanoseconds / 1e9
 
         if self.state not in ["STANDBY", "DISABLED"]:
-            extra = np.maximum(np.maximum(ISAAC_LIMITS_LOWER - self.joint_pos,
-                                          self.joint_pos - ISAAC_LIMITS_UPPER), 0.0)
+            extra = np.maximum(np.maximum(target_lower - self.joint_pos,
+                                          self.joint_pos - target_upper), 0.0)
             limit = (np.maximum(POSITION_LIMIT_TOLERANCE, self.park_initial_extra + 0.05)
                      if self.state == "SAFE_PARK" else POSITION_LIMIT_TOLERANCE)
             if self._persistent_fault("position", bool(np.any(extra > limit))):
@@ -990,7 +1002,7 @@ class NXPJaguarControllerNode(Node):
                     bound = float(limit[index]) if np.ndim(limit) else float(limit)
                     faults.append(
                         f"code=POSITION_LIMIT joint={getattr(self, "joint_names", ISAAC_JOINT_NAMES)[index]} actual_rad={self.joint_pos[index]:.4f} "
-                        f"min_rad={ISAAC_LIMITS_LOWER[index]:.4f} max_rad={ISAAC_LIMITS_UPPER[index]:.4f} "
+                        f"min_rad={target_lower[index]:.4f} max_rad={target_upper[index]:.4f} "
                         f"excess_rad={extra[index]:.4f} limit_rad={bound:.4f} "
                         f"duration_s={time.monotonic() - self.soft_fault_times['position']:.3f} debounce_s=0.100")
                 previous_state = self.state
@@ -1100,13 +1112,15 @@ class NXPJaguarControllerNode(Node):
 
     def _publish_targets(self, target_pos, target_vel, cmd_kp, cmd_kd, now):
         """Clamp and check tracking before publishing motor targets."""
+        target_lower = getattr(self, "joint_target_lower", ISAAC_LIMITS_LOWER)
+        target_upper = getattr(self, "joint_target_upper", ISAAC_LIMITS_UPPER)
         # Publish passive zero-gain commands in standby and targets in active states
         if target_pos is not None:
             # Physical safety clamping to prevent exceeding mechanical limits
             unclamped_target = np.asarray(target_pos).copy()
             target_pos = np.clip(target_pos,
-                                 getattr(self, "joint_target_lower", ISAAC_LIMITS_LOWER),
-                                 getattr(self, "joint_target_upper", ISAAC_LIMITS_UPPER))
+                                 target_lower,
+                                 target_upper)
             if getattr(self, "_session_sample", None) is not None:
                 self._session_sample["target_before_limits_rad"] = unclamped_target.tolist()
                 self._session_sample["target_limit_clipped"] = (target_pos != unclamped_target).tolist()

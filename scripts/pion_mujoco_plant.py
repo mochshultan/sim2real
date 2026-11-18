@@ -66,8 +66,8 @@ class PionMujocoPlant:
         # Match the CAN manager's calibrated-coordinate guards after the shared
         # policy controller has applied its own limits. Do not infer these from
         # MuJoCo physical joint limits: desired PD targets have a separate guard.
-        self.target = np.clip(self.target, [-0.4] * 4 + [-3.14] * 4 + [-0.1] * 4,
-                              [0.4] * 4 + [3.14] * 4 + [2.8] * 4)
+        self.target = np.clip(self.target, [-0.7] * 4 + [-2.0] * 4 + [-0.05] * 4,
+                              [0.7] * 4 + [1.0] * 4 + [1.5] * 4)
         self.feedforward = np.zeros(12) if feedforward is None else np.asarray(feedforward).copy()
         if self.feedforward.shape != (12,) or not np.isfinite(self.feedforward).all():
             raise ValueError("Feedforward requires12 finite torques")

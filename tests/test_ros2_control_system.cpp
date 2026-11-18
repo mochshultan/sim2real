@@ -91,6 +91,19 @@ int main(int argc, char ** argv)
   assert(system.on_activate(lifecycle) == CallbackReturn::SUCCESS);
   write();
   assert(states[safety + 1].get_value() == 1.0);
+  // Exercise the configured per-axis mechanical guard through actual mock I/O.
+  const std::array<double, 3> lower{-0.7, -2.0, -0.05};
+  const std::array<double, 3> upper{0.7, 1.0, 1.5};
+  for (const double requested : {10.0, -10.0}) {
+    for (size_t i = 0; i < JOINT_COUNT; ++i) {
+      (void)commands[i * COMMAND_COUNT].set_value(requested);
+      (void)commands[i * COMMAND_COUNT + 2].set_value(45.0);
+    }
+    write();
+    for (size_t i = 0; i < JOINT_COUNT; ++i) {
+      assert(states[i * STATE_COUNT].get_value() == (requested > 0 ? upper[i % 3] : lower[i % 3]));
+    }
+  }
   system.on_shutdown(lifecycle);
   for (const auto invalid : {"missing_joint", "wrong_name", "missing_gain", "bad_cap"}) {
     auto broken = valid;
