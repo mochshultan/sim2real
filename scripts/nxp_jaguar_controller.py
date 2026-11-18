@@ -1104,7 +1104,9 @@ class NXPJaguarControllerNode(Node):
         if target_pos is not None:
             # Physical safety clamping to prevent exceeding mechanical limits
             unclamped_target = np.asarray(target_pos).copy()
-            target_pos = np.clip(target_pos, ISAAC_LIMITS_LOWER, ISAAC_LIMITS_UPPER)
+            target_pos = np.clip(target_pos,
+                                 getattr(self, "joint_target_lower", ISAAC_LIMITS_LOWER),
+                                 getattr(self, "joint_target_upper", ISAAC_LIMITS_UPPER))
             if getattr(self, "_session_sample", None) is not None:
                 self._session_sample["target_before_limits_rad"] = unclamped_target.tolist()
                 self._session_sample["target_limit_clipped"] = (target_pos != unclamped_target).tolist()

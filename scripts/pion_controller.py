@@ -32,6 +32,10 @@ class PionControllerNode(NXPJaguarControllerNode):
     ros_to_policy = ROS_TO_PION
     roll_trim_signs = (-1.0, 1.0, -1.0, 1.0)  # FL, FR, BL, BR
     joint_feedback_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+    # Final calibrated-coordinate target guard: intersection of the controller
+    # limits and the existing CAN-driver mechanical limits, in native Pion order.
+    joint_target_lower = np.array([-0.4] * 4 + [-2.5] * 4 + [-0.1] * 4, dtype=np.float32)
+    joint_target_upper = np.array([0.4] * 4 + [0.2] * 4 + [2.5] * 4, dtype=np.float32)
 
     def _configure_parameters(self):
         policy_path = super()._configure_parameters()

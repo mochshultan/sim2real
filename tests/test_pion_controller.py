@@ -8,6 +8,7 @@
 from pathlib import Path
 import sys
 import time
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -115,6 +116,16 @@ def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedba
         np.testing.assert_array_equal(pitch_trim[8:], np.zeros(4))
         node.last_imu_time = time.monotonic() - 1.0
         np.testing.assert_array_equal(node._compute_imu_stabilization(1.0, "STAND_HOLD"), np.zeros(12))
+        # A Pion command must already obey the final driver guard when published.
+        node.joint_cmd_pub = Mock()
+        node.safe_park_active_pub = Mock()
+        node.state = "WALK"
+        requested = np.array([-1., 1., -1., 1., -4., 1., -4., 1., -1., 4., -1., 4.])
+        assert node._publish_targets(requested, np.zeros(12), [45.] * 12, [4.5] * 12,
+                                     node.get_clock().now().nanoseconds / 1e9)
+        published = node.joint_cmd_pub.publish.call_args.args[0]
+        np.testing.assert_allclose(published.position,
+                                  [-0.4, 0.4, -0.4, 0.4, -2.5, 0.2, -2.5, 0.2, -0.1, 2.5, -0.1, 2.5])
     finally:
         if node is not None:
             node.destroy_node()

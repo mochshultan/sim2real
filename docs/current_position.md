@@ -141,6 +141,12 @@ guard after the shared controller guard, rather than omitting this second
 clipping stage. This changes simulator execution, not the policy export.
 See `data/sessions/curpos/README.md` for per-motor CAN reception-age telemetry.
 
+Pion's target guard is declared in `scripts/pion_controller.py` as
+`joint_target_lower` and `joint_target_upper`. The shared publication method
+applies these Pion-specific bounds before publishing `/joint_commands`, so
+recorded target-clipping masks now cover the driver bounds too. The effective
+hardware limits remain the same; this is not a change to trained policy weights.
+
 Both curpos launches select `policy_pion_current_height20_swing_native_14999_20261118.pt`.
 The controller verifies the paired `deployment_...json` filename and SHA-256.
 The previous native checkpoint9999 remains compatible when selected explicitly.
