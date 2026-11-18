@@ -27,7 +27,7 @@ def test_generated_resources_use_physical_urdf_names_and_five_impedance_commands
         assert {interface.attrib["name"] for interface in joint.findall("command_interface")} == {
             "position", "velocity", "effort", "kp", "kd"}
         assert {interface.attrib["name"] for interface in joint.findall("state_interface")} == {
-            "position", "velocity", "effort", "temperature"}
+            "position", "velocity", "effort", "temperature", "can_rx_time_s"}
     safety = control.find("gpio")
     assert safety.attrib["name"] == "jaguar_safety"
     assert {interface.attrib["name"] for interface in safety.findall("command_interface")} == {

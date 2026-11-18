@@ -40,7 +40,7 @@ def _robot_description(package_dir, hardware_parameters):
             joint = ET.SubElement(system, "joint", name=f"{leg}_{axis}_joint")
             for interface in ("position", "velocity", "kp", "kd", "effort"):
                 ET.SubElement(joint, "command_interface", name=interface)
-            for interface in ("position", "velocity", "effort", "temperature"):
+            for interface in ("position", "velocity", "effort", "temperature", "can_rx_time_s"):
                 state = ET.SubElement(joint, "state_interface", name=interface)
                 ET.SubElement(state, "param", name="initial_value").text = "25" if interface == "temperature" else "0"
     safety = ET.SubElement(system, "gpio", name="jaguar_safety")

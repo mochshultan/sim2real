@@ -9,6 +9,7 @@ import math
 import time
 import threading
 import numpy as np
+from control_msgs.msg import DynamicJointState
 import torch
 
 import rclpy
@@ -120,6 +121,10 @@ class NXPJaguarControllerNode(Node):
         self.joints_received = False
         self.last_imu_time = 0.0
         self.last_joints_time = 0.0
+        self.joints_source_ros_time_ns = None
+        self.can_rx_time_s = [None] * N_JOINTS
+        self.last_can_timing_time = None
+        self.can_timing_source_ros_time_ns = None
         self.previous_buttons = []
         self.last_safe_park_request = 0.0
         self.park_finish_time = 0.0
@@ -147,6 +152,7 @@ class NXPJaguarControllerNode(Node):
         self.create_subscription(Imu, "/imu/data", self._imu_cb, sensor_qos)
         self.create_subscription(Imu, "/Imu_data", self._imu_cb, sensor_qos)
         self.create_subscription(JointState, "/joint_states", self._joint_state_cb, getattr(self, "joint_feedback_qos", 10))
+        self.create_subscription(DynamicJointState, "/dynamic_joint_states", self._can_feedback_cb, sensor_qos)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, COMMAND_QOS)
         self.create_subscription(Twist, "/jaguar/benchmark_cmd_vel", self._benchmark_cmd_vel_cb, COMMAND_QOS)
         self.create_subscription(Joy, "/joy", self._joy_cb, 10)
@@ -188,10 +194,18 @@ class NXPJaguarControllerNode(Node):
                  "observation_scales": {"angular_velocity": 0.25, "command": [2, 2, 0.25],
                                         "joint_position": 1.0, "joint_velocity": 0.05},
                  "action_scale": ACTION_SCALE,
+                 "estimator_target_scale": getattr(self, "estimator_target_scale", None),
+                 "can_feedback_timing": {
+                     "field": "can_feedback_age_s",
+                     "order": "joint_names",
+                     "clock": "same-host Linux monotonic clock; CAN driver and policy must run on the same host",
+                     "origin": "CAN frame decoded by driver, not motor firmware encoder sampling time",
+                     "unknown": "null; zero timestamps from mock hardware are not real measurements",
+                     "sampling": "Latest dynamic_joint_states snapshot; compare its ROS stamp with the joint-state stamp"},
                  "inference_trace_fields": {
                      "policy_input": "5x45 time-major history, oldest to newest",
                      "estimator_input": "225 values packed per observation term across five frames",
-                     "estimator_output": "3D estimated body linear velocity (m/s)",
+                     "estimator_output": "3D velocity in training target units; divide by estimator_target_scale for m/s",
                      "actor_observation": "45D current observation + 3D estimated velocity",
                      "actor_input": "48D normalized actor observation",
                      "actor_output": "12D actor action before clipping",
@@ -608,6 +622,31 @@ class NXPJaguarControllerNode(Node):
                 self.joint_tau[target] = msg.effort[source]
             self.joints_received = True
             self.last_joints_time = time.monotonic()
+            self.joints_source_ros_time_ns = msg.header.stamp.sec * 1000000000 + msg.header.stamp.nanosec
+
+    def _can_feedback_cb(self, msg: DynamicJointState):
+        """Receive per-motor host-monotonic CAN timestamps without altering policy feedback."""
+        if len(msg.joint_names) != len(msg.interface_values):
+            return
+        times = [None] * N_JOINTS
+        found = False
+        mapping = getattr(self, "joint_name_to_index", ROS_NAME_TO_ISAAC_IDX)
+        for name, interfaces in zip(msg.joint_names, msg.interface_values):
+            index = mapping.get(name)
+            if index is None or "can_rx_time_s" not in interfaces.interface_names:
+                continue
+            found = True
+            field = interfaces.interface_names.index("can_rx_time_s")
+            if field >= len(interfaces.values):
+                continue
+            stamp = interfaces.values[field]
+            if math.isfinite(stamp) and 0.0 < stamp <= time.monotonic():
+                times[index] = stamp
+        if found:
+            with self.state_lock:
+                self.can_rx_time_s = times
+                self.last_can_timing_time = time.monotonic()
+                self.can_timing_source_ros_time_ns = msg.header.stamp.sec * 1000000000 + msg.header.stamp.nanosec
 
     def _compute_imu_stabilization(self, alpha: float, state: str) -> np.ndarray:
         """Return bounded standing trim in Isaac order; knee trim is always zero."""
@@ -875,6 +914,15 @@ class NXPJaguarControllerNode(Node):
                                    if not self.joints_received else "accepted"),
             "imu_age_s": time.monotonic() - self.last_imu_time if self.imu_received else None,
             "joints_age_s": time.monotonic() - self.last_joints_time if self.joints_received else None,
+            "joints_source_ros_time_ns": self.joints_source_ros_time_ns,
+            "can_rx_time_monotonic_s": self.can_rx_time_s.copy(),
+            "can_feedback_age_s": [
+                time.monotonic() - stamp if stamp is not None else None for stamp in self.can_rx_time_s
+            ],
+            "can_timing_message_age_s": (
+                time.monotonic() - self.last_can_timing_time if self.last_can_timing_time is not None else None
+            ),
+            "can_timing_source_ros_time_ns": self.can_timing_source_ros_time_ns,
             "feedback_position_rad": self.joint_pos.tolist(),
             "feedback_velocity_rad_s": self.joint_vel.tolist(),
             "feedback_torque_nm": self.joint_tau.tolist(),

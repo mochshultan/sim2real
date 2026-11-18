@@ -110,7 +110,8 @@ return_type JaguarSystem::read(const rclcpp::Time &, const rclcpp::Duration &)
     hardware_.readIncomingFeedbacks();
     const auto states = hardware_.getAllJointStates();
     for (size_t i = 0; i < JOINT_COUNT; ++i) {
-      states_[i] = {states[i].position, states[i].velocity, states[i].effort, states[i].temperature};
+      states_[i] = {states[i].position, states[i].velocity, states[i].effort, states[i].temperature,
+        std::chrono::duration<double>(states[i].last_feedback_time.time_since_epoch()).count()};
     }
   }
   update_safety_state();

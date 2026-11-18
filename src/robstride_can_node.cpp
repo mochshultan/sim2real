@@ -2,6 +2,7 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include "jaguar_control/cybergear_motor_config.hpp"
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <control_msgs/msg/dynamic_joint_state.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
@@ -88,6 +89,7 @@ public:
 
     // Publishers
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
+    timing_pub_ = this->create_publisher<control_msgs::msg::DynamicJointState>("/dynamic_joint_states", 1);
     diag_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/jaguar/motor_diagnostics", 10);
     status_pub_ = this->create_publisher<std_msgs::msg::String>("/jaguar/hardware_status", 10);
     torque_limit_pub_ = this->create_publisher<std_msgs::msg::Float32>(
@@ -149,9 +151,14 @@ public:
     feedback_msg_.position.resize(N_JOINTS);
     feedback_msg_.velocity.resize(N_JOINTS);
     feedback_msg_.effort.resize(N_JOINTS);
+    timing_msg_.joint_names.resize(N_JOINTS);
+    timing_msg_.interface_values.resize(N_JOINTS);
     const auto & configs = hw_manager_.getJointConfigs();
     for (size_t i = 0; i < N_JOINTS; ++i) {
       feedback_msg_.name[i] = configs[i].name;
+      timing_msg_.joint_names[i] = configs[i].name;
+      timing_msg_.interface_values[i].interface_names = {"can_rx_time_s"};
+      timing_msg_.interface_values[i].values.resize(1);
     }
     feedback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     feedback_timer_ = this->create_wall_timer(
@@ -360,12 +367,16 @@ private:
     }
     const auto states = hw_manager_.getAllJointStates();
     feedback_msg_.header.stamp = this->get_clock()->now();
+    timing_msg_.header = feedback_msg_.header;
     for (size_t i = 0; i < N_JOINTS; ++i) {
       feedback_msg_.position[i] = states[i].position;
       feedback_msg_.velocity[i] = states[i].velocity;
       feedback_msg_.effort[i] = states[i].effort;
+      timing_msg_.interface_values[i].values[0] =
+        std::chrono::duration<double>(states[i].last_feedback_time.time_since_epoch()).count();
     }
     joint_state_pub_->publish(feedback_msg_);
+    timing_pub_->publish(timing_msg_);
   }
 
   void publishDiagnostics()
@@ -430,6 +441,8 @@ private:
   rclcpp::CallbackGroup::SharedPtr feedback_group_;
   rclcpp::TimerBase::SharedPtr feedback_timer_;
   sensor_msgs::msg::JointState feedback_msg_;
+  control_msgs::msg::DynamicJointState timing_msg_;
+  rclcpp::Publisher<control_msgs::msg::DynamicJointState>::SharedPtr timing_pub_;
   std::thread rt_thread_;
 };
 

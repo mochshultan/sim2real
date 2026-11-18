@@ -46,6 +46,7 @@ def test_current_sessions_have_separate_run_folders(tmp_path):
 
 
 def test_pion_session_records_actual_estimator_and_actor_tensors(tmp_path):
+    from control_msgs.msg import DynamicJointState, InterfaceValue
     import rclpy
     import torch
     from pion_controller import PionControllerNode
@@ -69,6 +70,18 @@ def test_pion_session_records_actual_estimator_and_actor_tensors(tmp_path):
         node._control_loop()
         node.state = 'WALK'
         node.last_imu_time = node.last_joints_time = time.monotonic()
+        # Deliberately shuffled physical names and one missing CAN timestamp.
+        # Delivery of a new DDS packet must not hide an old CAN reception.
+        timing = DynamicJointState()
+        timing.joint_names = list(reversed(node.joint_names))
+        timing.header.stamp.sec = 123
+        stamps = [time.monotonic() - 0.030 - index * 0.001 for index in range(12)]
+        stamps[0] = 0.0
+        timing.interface_values = [
+            InterfaceValue(interface_names=['can_rx_time_s'], values=[stamps[node.joint_names.index(name)]])
+            for name in timing.joint_names
+        ]
+        node._can_feedback_cb(timing)
         node._control_loop()
     finally:
         if node is not None:
@@ -79,6 +92,13 @@ def test_pion_session_records_actual_estimator_and_actor_tensors(tmp_path):
     assert samples[0]['estimator_input'] is None
     assert samples[1]['actor_output'] is None
     walk = samples[2]
+    assert samples[0]['can_feedback_age_s'] == [None] * 12
+    assert walk['can_feedback_age_s'][0] is None
+    assert walk['can_timing_source_ros_time_ns'] == 123000000000
+    for index in range(1, 12):
+        assert walk['can_rx_time_monotonic_s'][index] == stamps[index]
+        assert walk['can_feedback_age_s'][index] >= 0.030 + index * 0.001
+    assert walk['can_timing_message_age_s'] < min(walk['can_feedback_age_s'][1:])
     history = torch.tensor([walk['policy_input']])
     network = node.policy.policy
     expected_packing = torch.cat([history[:, :, a:b].flatten(1)

@@ -8,7 +8,7 @@ namespace jaguar_control
 {
 constexpr size_t JOINT_COUNT = 12;
 constexpr size_t COMMAND_COUNT = 5;
-constexpr size_t STATE_COUNT = 4;
+constexpr size_t STATE_COUNT = 5;
 inline const std::array<std::string, JOINT_COUNT> JOINT_NAMES = {
   "Bl_roll_joint", "Bl_hip_pitch_joint", "Bl_knee_joint",
   "Br_roll_joint", "Br_hip_pitch_joint", "Br_knee_joint",
@@ -22,7 +22,7 @@ inline const std::array<std::string, JOINT_COUNT> LEGACY_NAMES = {
 inline const std::array<std::string, COMMAND_COUNT> COMMAND_NAMES = {
   "position", "velocity", "kp", "kd", "effort"};
 inline const std::array<std::string, STATE_COUNT> STATE_NAMES = {
-  "position", "velocity", "effort", "temperature"};
+  "position", "velocity", "effort", "temperature", "can_rx_time_s"};
 inline const std::array<std::string, 3> SAFETY_COMMANDS = {
   "emergency_stop", "safe_park_active", "reset_fault"};
 inline const std::array<std::string, 5> SAFETY_STATES = {

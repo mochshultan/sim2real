@@ -26,6 +26,7 @@ from pion_policy import NAME_TO_PION, ROS_TO_PION, STANDING, PionObservationBuil
 
 class PionControllerNode(NXPJaguarControllerNode):
     controller_node_name = "pion_controller"
+    estimator_target_scale = 2.0
     joint_names = JOINT_NAMES
     joint_name_to_index = NAME_TO_PION
     ros_to_policy = ROS_TO_PION

@@ -22,6 +22,7 @@ find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(control_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(Threads REQUIRED)
@@ -71,6 +72,7 @@ target_include_directories(robstride_can_node PUBLIC
 )
 
 ament_target_dependencies(robstride_can_node
+  control_msgs
   rclcpp
   ament_index_cpp
   std_msgs

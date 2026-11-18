@@ -45,7 +45,7 @@ joint_state_broadcaster:
              Br_roll_joint, Br_hip_pitch_joint, Br_knee_joint,
              Fl_roll_joint, Fl_hip_pitch_joint, Fl_knee_joint,
              Fr_roll_joint, Fr_hip_pitch_joint, Fr_knee_joint]
-    interfaces: [position, velocity, effort]
+    interfaces: [position, velocity, effort, can_rx_time_s]
 
 jaguar_impedance_controller:
   ros__parameters:
