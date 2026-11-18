@@ -10,6 +10,7 @@ import sys
 import time
 
 import numpy as np
+import pytest
 import rclpy
 import torch
 from sensor_msgs.msg import JointState, Joy
@@ -40,9 +41,13 @@ def test_native_export_preserves_the_existing_verified_actor_for_named_joint_his
     assert native.clip_actions == 10.0
 
 
-def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedback():
+@pytest.mark.parametrize("policy_path", [
+    NATIVE,
+    ROOT / "models/policy_pion_current_height20_swing_native_14999_20261118.pt",
+])
+def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedback(policy_path):
     rclpy.init(args=["--ros-args", "--params-file", str(ROOT / "config/sim2real_pion.yaml"),
-                     "-p", f"policy_path:={NATIVE}", "-p", "policy_reference:=current",
+                     "-p", f"policy_path:={policy_path}", "-p", "policy_reference:=current",
                      "-p", "history_initialization:=repeat", "-p", "record_session:=false"])
     node = None
     try:

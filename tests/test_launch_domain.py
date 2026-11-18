@@ -76,7 +76,7 @@ class LaunchPolicyTests(unittest.TestCase):
         self.assertEqual(parameters[1]["policy_reference"], "current")
         self.assertEqual(parameters[1]["history_initialization"], "repeat")
         self.assertEqual(parameters[1]["policy_path"],
-                         str(root / "models/policy_pion_current_native_9999_20261117.pt"))
+                         str(root / "models/policy_pion_current_height20_swing_native_14999_20261118.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
         self.assertEqual(context.launch_configurations["domain_id"], "17")
 

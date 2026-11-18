@@ -1,15 +1,15 @@
 # Pion Current position deployment
 
-This is the Pion Current baseline checkpoint9999 (10000 fresh PPO updates), not
-the new MoE model. The source run is:
+The current default is Pion Current Height20 + Swing checkpoint14999, using the
+single MLP actor and velocity estimator. The source run is:
 
 ```text
-pion_current_baseline/2026-11-16_21-19-57_baseline-current-v2-yaw035-clearance-nospeed-10k-20261116-seed42-6000env/model_9999.pt
+pion_current_baseline_height20/2026-11-17_21-05-43_pion-height20-swing-final-to15k-20261117-512env/model_14999.pt
 ```
 
-`origin/main` was pulled at `c2c83b4` before these changes, retaining the latest
-sitting calibration and invalid-feedback reporting. The ordinary nominal launch
-and its model remain separate.
+`origin/main` was pulled at `d7739c6` on 2026-11-18 before this model update.
+The ordinary nominal launch and its model remain separate. The previous
+checkpoint9999 export is retained for explicit selection.
 
 ## Build and run
 
@@ -61,7 +61,7 @@ node exits. It never launches the physical CAN/hardware or serial-IMU stack.
 
 | Item | Value |
 |---|---|
-| Checkpoint/export | `model_pion_current_baseline_9999_20261117.pt` / matching `policy_...pt` |
+| Checkpoint/export | `model_pion_current_height20_swing_native_14999_20261118.pt` / matching `policy_...pt` |
 | Actor | MLP48 ->512 ->256 ->128 ->12 |
 | Velocity estimator |225 ->128 ->64 ->3 |
 | Export input | Time-major history `[B,5,45]`; internally repacked term-major225 |
@@ -72,8 +72,8 @@ node exits. It never launches the physical CAN/hardware or serial-IMU stack.
 | Physical standing | Collar0, hip-1.25, knee+1.25rad |
 | Gains | Kp45, Kd4.5 |
 | Motor torque cap |14 Nm through the driver/firmware; sim uses the saved linear32V torque-speed approximation |
-| Training base height |22cm, weight-10 |
-| Training clearance |3cm squared error per airborne foot, no XY-speed multiplier |
+| Training base height |20cm from the base-link origin perpendicular to the local ground plane, weight-100 |
+| Training clearance |Contact-derived swing arc 0 ->3cm ->0, weight-1; hip alignment near the swing apex, weight-0.1 |
 | Runtime inference | Estimator-only; no privileged critic or simulator velocity input |
 
 The dedicated runtime is `scripts/pion_controller.py`, with its native contract
@@ -117,9 +117,18 @@ an approximation rather than a measured motor model. Sim2sim is useful for
 checking the actual deployment controller against a physical simulation, but
 cannot establish numerical equivalence or guarantee real-robot stability.
 
-## Native Pion update
+## Current Height20 model update on 2026-11-18
 
-`sim2real_curpos` now selects `pion_controller.py`, `sim2real_pion.yaml`, and
+Both curpos launches select `policy_pion_current_height20_swing_native_14999_20261118.pt`.
+The controller verifies the paired `deployment_...json` filename and SHA-256.
+The previous native checkpoint9999 remains compatible when selected explicitly.
+Strict loading into the training actor and 128 randomized five-frame histories
+gave a maximum export error of 0.0. Physical hardware motion has not been tested
+with this new model. The checks and source hashes are stored in its manifest.
+
+## Historical native Pion update on 2026-11-17
+
+`sim2real_curpos` selected `pion_controller.py`, `sim2real_pion.yaml`, and
 `policy_pion_current_native_9999_20261117.pt`. The selected export hash and contract
 are checked at startup. The main nominal launch keeps the Jaguar controller.
 

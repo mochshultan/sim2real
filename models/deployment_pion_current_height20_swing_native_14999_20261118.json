@@ -1,0 +1,463 @@
+{
+  "source_checkpoint_pc2": "/home/shultan/IsaacLab/logs/rsl_rl/pion_current_baseline_height20/2026-11-17_21-05-43_pion-height20-swing-final-to15k-20261117-512env/model_14999.pt",
+  "checkpoint_file": "model_pion_current_height20_swing_native_14999_20261118.pt",
+  "checkpoint_sha256": "33a48640272b6ebe711e5167f881b5cc31fcb4b6238695c3fae26613d8b32379",
+  "iteration": 14999,
+  "completed_updates": 15000,
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_joint_reference_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "policy_file": "policy_pion_current_height20_swing_native_14999_20261118.pt",
+  "policy_sha256": "0129ff334dee0f273f9cbdb2f31628daef346a4239330335d5f78f4751ae652e",
+  "controller": "pion_controller.py",
+  "controller_joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "joint_order_adapter": false,
+  "history_initialization": "repeat",
+  "export_input": "time-major[batch,5,45]",
+  "estimator_history": "term-major225",
+  "control_dt": 0.02,
+  "physics_dt": 0.005,
+  "kp": 45.0,
+  "kd": 4.5,
+  "clip_actions": 10.0,
+  "action_ema_alpha": 0.0,
+  "walk_ramp_duration": 0.0,
+  "standing_imu_trim": true,
+  "standing_position_rad": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -1.25,
+    -1.25,
+    -1.25,
+    -1.25,
+    1.25,
+    1.25,
+    1.25,
+    1.25
+  ],
+  "hardware_torque_cap_Nm": 14.0,
+  "training_torque_cap_range_Nm": [
+    12.6,
+    13.5
+  ],
+  "actuator": "RS00 32V linear approximation in training and MuJoCo; physical firmware impedance on hardware",
+  "safety_target_limits": "Collar [-0.5,0.5], hip [-2.5,0.2], knee [-0.25,2.5] rad; retained hardware guard",
+  "remaining_gap": [
+    "Hardware feedback age and asynchronous transport",
+    "Measured actuator dynamics not identified; training curve is an approximation",
+    "Mechanical position guards can clip targets; recorded in session logs",
+    "Training randomization is sampled; hardware parameters are fixed"
+  ],
+  "torque_limit_selection": "User requested the motor driver/firmware 14 Nm ceiling; no additional 13.5 Nm deployment ceiling",
+  "standing_imu_trim_states": [
+    "STANDUP",
+    "STAND_HOLD"
+  ],
+  "standing_imu_trim_policy": "Outside WALK policy; native Pion left/right signs; hip limit 0.15 rad, collar limit 0.12 rad, no knee correction",
+  "validation": {
+    "training_actor_strict_state_load": true,
+    "sample_histories": 128,
+    "export_max_abs_error": 0.0,
+    "physical_robot_tested": false,
+    "python_tests_passed": 11,
+    "ros_build": "passed",
+    "sim2sim_smoke": {
+      "controller": "pion_controller.py",
+      "can_opened": false,
+      "policy_in_bridge": false,
+      "controller_states_seen": [
+        "STANDBY",
+        "STANDUP",
+        "STAND_HOLD",
+        "WALK"
+      ],
+      "joint_commands_received": 980,
+      "walk_commands_received": 748,
+      "minimum_base_height": 0.20132119504508375,
+      "final_base_position": [
+        0.03637939474254254,
+        -0.0024953597365607013,
+        0.20132119504508375
+      ],
+      "maximum_torque_nm": 7.438043409577732,
+      "simulation_seconds": 18.985000000000507
+    },
+    "sim2sim_scope": "20 second ROS/MuJoCo smoke; plumbing and finite execution only, not a locomotion evaluation"
+  },
+  "training_rewards": {
+    "base_height_l2": {
+      "func": "isaaclab_tasks.core.velocity.config.pion_current_baseline.ground_normal_height:base_origin_ground_normal_l2",
+      "params": {
+        "target_height": "0.2",
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "base_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "sensor_cfg": {
+          "name": "height_scanner",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "radius": "0.3"
+      },
+      "weight": "-100.0"
+    },
+    "directional_foot_clearance": {
+      "func": "isaaclab_tasks.core.velocity.config.pion_current_baseline.swing_rewards:swing_arc_clearance_l2",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "fl_tibia_link",
+            "fr_tibia_link",
+            "bl_tibia_link",
+            "br_tibia_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "true"
+        },
+        "hip_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "fl_femur_link",
+            "fr_femur_link",
+            "bl_femur_link",
+            "br_femur_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "true"
+        },
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "fl_tibia_link",
+            "fr_tibia_link",
+            "bl_tibia_link",
+            "br_tibia_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "true"
+        },
+        "tip_offsets_by_name": {
+          "fl_tibia_link": [
+            "-0.018",
+            "0.118",
+            "-0.154"
+          ],
+          "fr_tibia_link": [
+            "-0.018",
+            "-0.118",
+            "-0.154"
+          ],
+          "bl_tibia_link": [
+            "-0.018",
+            "0.118",
+            "-0.154"
+          ],
+          "br_tibia_link": [
+            "-0.018",
+            "-0.118",
+            "-0.154"
+          ]
+        },
+        "command_name": "base_velocity",
+        "target_height": "0.03",
+        "nominal_lateral": [
+          "0.072",
+          "-0.072",
+          "0.072",
+          "-0.072"
+        ],
+        "apex_position_scale": "0.05"
+      },
+      "weight": "-1.0"
+    },
+    "swing_apex_hip_alignment": {
+      "func": "isaaclab_tasks.core.velocity.config.pion_current_baseline.swing_rewards:swing_apex_hip_alignment",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "fl_tibia_link",
+            "fr_tibia_link",
+            "bl_tibia_link",
+            "br_tibia_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "true"
+        },
+        "hip_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "fl_femur_link",
+            "fr_femur_link",
+            "bl_femur_link",
+            "br_femur_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "true"
+        },
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "fl_tibia_link",
+            "fr_tibia_link",
+            "bl_tibia_link",
+            "br_tibia_link"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "true"
+        },
+        "tip_offsets_by_name": {
+          "fl_tibia_link": [
+            "-0.018",
+            "0.118",
+            "-0.154"
+          ],
+          "fr_tibia_link": [
+            "-0.018",
+            "-0.118",
+            "-0.154"
+          ],
+          "bl_tibia_link": [
+            "-0.018",
+            "0.118",
+            "-0.154"
+          ],
+          "br_tibia_link": [
+            "-0.018",
+            "-0.118",
+            "-0.154"
+          ]
+        },
+        "command_name": "base_velocity",
+        "target_height": "0.03",
+        "nominal_lateral": [
+          "0.072",
+          "-0.072",
+          "0.072",
+          "-0.072"
+        ],
+        "apex_position_scale": "0.05"
+      },
+      "weight": "-0.1"
+    }
+  },
+  "source_config_sha256": {
+    "agent.yaml": "bac51343e3e0315ac511e738e633d23085ab942030d472e9564dfd81ea34ea11",
+    "env.yaml": "5b7b67cf043e50c0173c0450069b6ed90cc85090858206f64e8e2b388b240056"
+  }
+}

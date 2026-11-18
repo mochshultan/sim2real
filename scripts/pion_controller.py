@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Native Pion Current controller with the model_9999 training contract.
+"""Native Pion Current controller with a verified checkpoint deployment contract.
 
 The existing hardware state machine and stop guards are shared; policy state,
 feedback indexing, observation history and actions stay in native Pion order.
@@ -21,7 +21,6 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from nxp_jaguar_controller import NXPJaguarControllerNode
 from pion_policy import ACTION_SCALE, CLIP_ACTIONS, CONTROL_DT, JOINT_NAMES, KD, KP
 from pion_policy import NAME_TO_PION, ROS_TO_PION, STANDING, PionObservationBuilder
-from project_paths import package_file
 
 
 class PionControllerNode(NXPJaguarControllerNode):
@@ -57,10 +56,16 @@ class PionControllerNode(NXPJaguarControllerNode):
             f"q_target=q_measured+{ACTION_SCALE}*action; Kp={KP}; Kd={KD}; "
             "WALK ramp=off; EMA=off; observation reference=0; history=repeat"
         )
-        manifest = json.loads(package_file("models", "deployment_pion_current_native_9999_20261117.json").read_text())
-        actual_hash = hashlib.sha256(Path(policy_path).read_bytes()).hexdigest()
+        policy_file = Path(policy_path)
+        if not policy_file.name.startswith("policy_"):
+            raise ValueError("Pion export must have a versioned policy filename and paired deployment manifest")
+        manifest_file = policy_file.with_name("deployment_" + policy_file.stem[len("policy_"):] + ".json")
+        manifest = json.loads(manifest_file.read_text())
+        if manifest["policy_file"] != policy_file.name:
+            raise ValueError("Pion deployment manifest names a different policy file")
+        actual_hash = hashlib.sha256(policy_file.read_bytes()).hexdigest()
         if actual_hash != manifest["policy_sha256"]:
-            raise ValueError("Policy hash differs from the audited Pion model_9999 deployment manifest")
+            raise ValueError("Policy hash differs from the paired Pion deployment manifest")
 
 
 def main(args=None):
