@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Pion Height20 checkpoint14999: measured-position anchor, zero observation reference."""
+"""Pion Go2 tracking checkpoint5000: measured-position anchor, zero observation reference."""
 
 from pathlib import Path
 
@@ -22,8 +22,8 @@ def generate_launch_description():
             DeclareLaunchArgument("controller_name", default_value="pion_controller", choices=["pion_controller"]),
             DeclareLaunchArgument(
                 "policy_path",
-                default_value=str(package / "models/policy_pion_current_height20_swing_native_14999_20261118.pt"),
-                description="Pion Height20 Swing15k TorchScript, native Pion training joint order",
+                default_value=str(package / "models/policy_pion_go2_tracking_native_5000_20261119.pt"),
+                description="Pion Go2 tracking5k TorchScript, native Pion training joint order",
             ),
             DeclareLaunchArgument("policy_reference", default_value="current", choices=["current"]),
             DeclareLaunchArgument("history_initialization", default_value="repeat", choices=["repeat"]),

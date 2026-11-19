@@ -1,0 +1,81 @@
+seed: 42
+device: cuda:1
+num_steps_per_env: 24
+init_at_random_ep_len: true
+max_iterations: 6000
+obs_groups:
+  actor:
+  - policy
+  - base_lin_vel_target
+  critic:
+  - critic
+clip_actions: 10.0
+check_for_nan: true
+save_interval: 100
+experiment_name: pion_current_go2_tracking_adaptive
+run_name: go2tracking-resume4000-dt25-airborne1-physicsguard-to10k-seed42-4096env-20261119
+logger: tensorboard
+neptune_project: isaaclab
+wandb_project: isaaclab
+resume: false
+load_run: .*
+load_checkpoint: /home/shultan/IsaacLab/logs/rsl_rl/pion_current_go2_tracking_adaptive/2026-11-19_11-59-07_go2tracking-resume3200-stand-airborne01-to10k-seed42-4096env-20261119/model_4000.pt
+class_name: OnPolicyRunner
+actor:
+  class_name: isaaclab_tasks.core.velocity.config.nxp_jaguar_baseline_tibia_adaboot.velocity_estimator:VelocityEstimatorActor
+  hidden_dims:
+  - 512
+  - 256
+  - 128
+  activation: elu
+  obs_normalization: true
+  distribution_cfg:
+    class_name: GaussianDistribution
+    init_std: 1.0
+    std_type: log
+    std_range: !!python/tuple
+    - 0.05
+    - 1.0
+critic:
+  class_name: MLPModel
+  hidden_dims:
+  - 512
+  - 256
+  - 128
+  activation: elu
+  obs_normalization: true
+  distribution_cfg: null
+algorithm:
+  class_name: isaaclab_tasks.core.velocity.config.pion_current_baseline.algorithm:PionCurrentBaselinePPO
+  num_learning_epochs: 5
+  num_mini_batches: 4
+  learning_rate: 0.001
+  schedule: adaptive
+  gamma: 0.99
+  lam: 0.95
+  entropy_coef: 0.01
+  desired_kl: 0.01
+  max_grad_norm: 1.0
+  optimizer: adam
+  value_loss_coef: 1.0
+  use_clipped_value_loss: true
+  clip_param: 0.2
+  normalize_advantage_per_mini_batch: false
+  share_cnn_encoders: false
+  use_mixed_precision: false
+  rnd_cfg: null
+  symmetry_cfg: null
+  estimator_loss_coef: 1.0
+  l2c2_lambda_min: 0.01
+  l2c2_lambda_max: 1.0
+  l2c2_sigma: 1.0
+  l2c2_beta: 0.1
+  max_learning_rate: 0.001
+torch_compile_mode: null
+entropy_adaptive: true
+entropy_coef_initial: 0.01
+entropy_coef_final: 0.001
+entropy_success_ema_alpha: 0.05
+entropy_success_metric: Metrics/success_rate
+reset_action_std_on_resume: false
+resume_action_std: 1.0

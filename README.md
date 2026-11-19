@@ -59,7 +59,7 @@ Choose one launcher per controller session:
 # Nominal Jaguar policy39996 (unchanged)
 ros2 launch jaguar_control sim2real.launch.py
 
-# Pion Current baseline, fresh10k checkpoint9999
+# Pion Go2 tracking checkpoint5000
 ./scripts/sim2real_curpos
 # Same controller with a Pion MuJoCo plant, browser visualization, no CAN
 ./scripts/sim2sim_curpos
@@ -67,12 +67,11 @@ ros2 launch jaguar_control sim2real.launch.py
 
 `sim2real_curpos.launch.py` replaces the former `sim2real_zero.launch.py` entrypoint.
 It selects `pion_controller.py`, `config/sim2real_pion.yaml`,
-`policy_pion_current_native_9999_20261117.pt`, and `policy_reference=current`,
+`policy_pion_go2_tracking_native_5000_20261119.pt`, and `policy_reference=current`,
 and repeat-initialized five-frame history. Position observations remain calibrated
 `q` relative to0rad. Actions now use **q_target=q_measured+0.25*clipped_action**,
 anchored once per50Hz policy step and held by the200Hz motor loop. They do not
-integrate from the preceding target. Standing remains collar0, hip-1.25 and
-knee+1.25rad on all four legs.
+integrate from the preceding target. Standing uses collar0, hip-1.1 and knee+1.1rad on all four legs.
 
 Pion training and the dedicated controller both use FL/FR/BL/BR within each
 joint group. The native export needs no joint permutation and clips actions
@@ -86,7 +85,7 @@ the matching action-reference contract, so an old absolute-zero policy cannot
 silently be used with a measured-position action anchor. Earlier zero policies
 remain archived under their versioned filenames.
 
-Sim2sim runs **the same `nxp_jaguar_controller.py` ROS node**, including history,
+Sim2sim runs **the same `pion_controller.py` ROS node**, including history,
 inference, current-position targets, standing/walk ramp, mechanical target limits,
 and controller safety checks. The MuJoCo node only publishes calibrated joint/IMU
 feedback and consumes `/joint_commands`; it does not contain a policy. It uses
@@ -99,7 +98,7 @@ paused until the first active impedance command.
 See [the current-position guide](docs/current_position.md) for setup, headless
 runs, model provenance and interpretation limits. Real hardware motion with this
 new checkpoint has not been tested. Export and training contracts are recorded
-in `models/deployment_pion_current_baseline_9999_20261117.json`.
+in `models/deployment_pion_go2_tracking_native_5000_20261119.json`.
 
 For archived model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with
