@@ -171,6 +171,8 @@ install(DIRECTORY config launch urdf meshes sim2sim
   PATTERN "__pycache__" EXCLUDE
 )
 install(FILES models/policy.pt
+  models/policy_pion_go2_plane_orient_native_9000_20261119.pt
+  models/deployment_pion_go2_plane_orient_native_9000_20261119.json
   models/policy_pion_go2_tracking_native_5000_20261119.pt
   models/deployment_pion_go2_tracking_native_5000_20261119.json
   models/policy_pion_current_height20_swing_native_14999_20261118.pt

@@ -1,17 +1,17 @@
 # Pion Current position deployment
 
-The current default is Pion Go2 tracking checkpoint **5000**, exported from PC2
+The current default is Pion Go2 plane orientation checkpoint **9000**, exported from PC2
 while its training continued. The source run is:
 
 ```text
-pion_current_go2_tracking_adaptive/2026-11-19_13-14-48_go2tracking-resume4000-dt25-airborne1-physicsguard-to10k-seed42-4096env-20261119/model_5000.pt
+pion_current_go2_support_plane_adaptive/2026-11-19_18-47-59_supportplane3-resume7100-orient5-height25-keepstd-to10k-seed42-4096env-20261119/model_9000.pt
 ```
 
 The export uses the single MLP actor and velocity estimator in native Pion joint
-order. Its [deployment manifest](../models/deployment_pion_go2_tracking_native_5000_20261119.json)
+order. Its [deployment manifest](../models/deployment_pion_go2_plane_orient_native_9000_20261119.json)
 records hashes and exact CPU parity checks; the original `env.yaml` and
-`agent.yaml` are archived in `models/pion_go2_tracking_native_5000_20261119/`.
-The previous Height20 Swing14999 and native9999 policies remain available by
+`agent.yaml` are archived in `models/pion_go2_plane_orient_native_9000_20261119/`.
+The previous Go2 tracking5000, Height20 Swing14999 and native9999 policies remain available by
 explicit `policy_path` selection. Physical robot motion with this checkpoint
 has not been tested.
 
@@ -70,7 +70,7 @@ node exits. It never launches the physical CAN/hardware or serial-IMU stack.
 
 | Item | Value |
 |---|---|
-| Checkpoint/export | `model_pion_go2_tracking_native_5000_20261119.pt` / matching `policy_...pt` |
+| Checkpoint/export | `model_pion_go2_plane_orient_native_9000_20261119.pt` / matching `policy_...pt` |
 | Actor | MLP48 ->512 ->256 ->128 ->12 |
 | Velocity estimator |225 ->128 ->64 ->3 |
 | Export input | Time-major history `[B,5,45]`; internally repacked term-major225 |
@@ -81,7 +81,8 @@ node exits. It never launches the physical CAN/hardware or serial-IMU stack.
 | Physical standing | Collar0, hip-1.1, knee+1.1rad |
 | Gains | Kp45, Kd4.5 |
 | Motor torque cap |14 Nm through the driver/firmware; sim uses the saved linear32V torque-speed approximation |
-| Training base height | Go2 terrain-scan height reward, target 20 cm, weight -30 |
+| Training base height | Go2 terrain-scan height reward, target 20 cm, weight -25 |
+| Training orientation | Support-plane relative, weight -5; update with at least 3 contacts, hold with at most 2 |
 | Training gait rewards | Go2 feet air time; standing airborne penalty weight -1 |
 | Training physics | Newton MJWarp, dt 0.0025 s, decimation 8, 4096 envs, seed 42 |
 | Runtime inference | Estimator-only; no privileged critic or simulator velocity input |
@@ -107,6 +108,10 @@ and model reference are distinct from the standing pose. Zero action holds the
 measured position at the policy sampling instant; it does not request0rad or a previous
 target. Existing absolute-zero exports can still be used explicitly with the
 shared main launch and `policy_reference:=zero`, but are not the curpos default.
+
+The support plane is used only by the training reward. It is not a policy input
+and no plane sensor is required by the robot controller. The archived reward
+name is `support_plane_orientation_l2`; future training uses `plane_orient`.
 
 ## Recording and limits
 

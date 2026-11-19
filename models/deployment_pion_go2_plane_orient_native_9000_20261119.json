@@ -1,0 +1,190 @@
+{
+  "source_host": "shultan@192.168.50.114",
+  "source_checkpoint_pc2": "/home/shultan/IsaacLab/logs/rsl_rl/pion_current_go2_support_plane_adaptive/2026-11-19_18-47-59_supportplane3-resume7100-orient5-height25-keepstd-to10k-seed42-4096env-20261119/model_9000.pt",
+  "checkpoint_file": "model_pion_go2_plane_orient_native_9000_20261119.pt",
+  "checkpoint_iteration": 9000,
+  "checkpoint_sha256": "cc0c62785add8b8c0742bcedd42bcc4b5f6f3caa3b3382cbc5d5150fb88091d8",
+  "policy_file": "policy_pion_go2_plane_orient_native_9000_20261119.pt",
+  "policy_sha256": "8f05eb509676369fdaf6c4a26de9343fa9280f8508329cad3b26a03e943c95d4",
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_contract": {
+    "version": 1,
+    "actor_dim": 48,
+    "critic_dim": 259,
+    "history_dim": 225,
+    "march_mode": false
+  },
+  "export_input": [
+    "batch",
+    5,
+    45
+  ],
+  "export_output": [
+    "batch",
+    12
+  ],
+  "estimator_history": "term-major, oldest frame first within each observation term",
+  "joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "clip_actions": 10.0,
+  "control_dt": 0.02,
+  "training_physics_dt": 0.0025,
+  "training_decimation": 8,
+  "training_backend": "newton_mjwarp",
+  "training_num_envs": 4096,
+  "training_seed": 42,
+  "runtime_gains": {
+    "kp": 45.0,
+    "kd": 4.5
+  },
+  "runtime_standing_pose": {
+    "collar": 0.0,
+    "hip": -1.1,
+    "knee": 1.1
+  },
+  "training_rewards": {
+    "track_lin_vel_xy_exp": {
+      "func": "isaaclab.envs.mdp.rewards:track_lin_vel_xy_exp",
+      "weight": 1.5
+    },
+    "track_ang_vel_z_exp": {
+      "func": "isaaclab.envs.mdp.rewards:track_ang_vel_z_exp",
+      "weight": 0.75
+    },
+    "lin_vel_z_l2": {
+      "func": "isaaclab.envs.mdp.rewards:lin_vel_z_l2",
+      "weight": -2.0
+    },
+    "ang_vel_xy_l2": {
+      "func": "isaaclab.envs.mdp.rewards:ang_vel_xy_l2",
+      "weight": -0.05
+    },
+    "dof_torques_l2": {
+      "func": "isaaclab.envs.mdp.rewards:joint_torques_l2",
+      "weight": -0.0002
+    },
+    "dof_acc_l2": {
+      "func": "isaaclab.envs.mdp.rewards:joint_acc_l2",
+      "weight": -2.5e-07
+    },
+    "action_rate_l2": {
+      "func": "isaaclab.envs.mdp.rewards:action_rate_l2",
+      "weight": -0.005
+    },
+    "feet_air_time": {
+      "func": "isaaclab_tasks.core.velocity.mdp.rewards:feet_air_time",
+      "weight": 0.01
+    },
+    "dof_pos_limits": {
+      "func": "isaaclab.envs.mdp.rewards:joint_pos_limits",
+      "weight": -10.0
+    },
+    "base_height_l2": {
+      "func": "isaaclab.envs.mdp.rewards:base_height_l2",
+      "weight": -25.0
+    },
+    "track_lin_vel_xy_l2": {
+      "func": "isaaclab_tasks.core.velocity.config.nxp_jaguar_baseline.nxp_jaguar_mdp:track_lin_vel_xy_error_l2",
+      "weight": -1.0
+    },
+    "track_ang_vel_z_l2": {
+      "func": "isaaclab_tasks.core.velocity.config.nxp_jaguar_baseline.nxp_jaguar_mdp:track_ang_vel_z_error_l2",
+      "weight": -0.5
+    },
+    "stand_airborne": {
+      "func": "isaaclab_tasks.core.velocity.config.pion_current_baseline.standing_contact:standing_airborne_feet",
+      "weight": -1.0
+    },
+    "support_plane_orientation_l2": {
+      "func": "isaaclab_tasks.core.velocity.config.pion_current_baseline.support_plane:FourFootSupportPlaneOrientation",
+      "weight": -5.0
+    }
+  },
+  "training_env_sha256": "5d9668a59597ed6ff9588b64a47e1bd3187ee438af0e87baee00c10fc161a412",
+  "training_agent_sha256": "03a2ca9b00030ed40f6fb8f444fea9ff5bd4d3ddc3fad77467cb524997bbe74b",
+  "validation": {
+    "checkpoint_actor_parity": [
+      {
+        "batch": 1,
+        "input": "zero",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 1,
+        "input": "random",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 1,
+        "input": "stress",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 16,
+        "input": "zero",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 16,
+        "input": "random",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 16,
+        "input": "stress",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 64,
+        "input": "zero",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 64,
+        "input": "random",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 64,
+        "input": "stress",
+        "max_abs_diff": 0.0
+      }
+    ],
+    "controller_infer_with_trace_parity_max_abs_diff": 0.0,
+    "hardware_motion_tested": false,
+    "simulation_rollout_tested": false,
+    "physical_motion_tested": false,
+    "ros2_jazzy_build": "colcon build jaguar_control passed; existing ROS API deprecation warnings",
+    "installed_launcher_and_policy": "installed curpos default resolves to checkpoint9000 export; paired manifest hash and CPU inference passed"
+  },
+  "limitations": [
+    "Newton training and MuJoCo/hardware physics are not numerically equivalent.",
+    "Offline inference parity does not validate physical robot motion."
+  ],
+  "training_config_directory": "pion_go2_plane_orient_native_9000_20261119",
+  "training_orientation_reference": {
+    "reward_name_at_training": "support_plane_orientation_l2",
+    "next_run_reward_name": "plane_orient",
+    "weight": -5.0,
+    "minimum_contacting_feet": 3,
+    "partial_support": "Hold last valid world-frame plane for at most two contacts; clear on episode reset",
+    "runtime_plane_sensor_required": false
+  }
+}

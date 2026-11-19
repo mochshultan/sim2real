@@ -59,7 +59,7 @@ Choose one launcher per controller session:
 # Nominal Jaguar policy39996 (unchanged)
 ros2 launch jaguar_control sim2real.launch.py
 
-# Pion Go2 tracking checkpoint5000
+# Pion Go2 plane orientation checkpoint9000
 ./scripts/sim2real_curpos
 # Same controller with a Pion MuJoCo plant, browser visualization, no CAN
 ./scripts/sim2sim_curpos
@@ -67,7 +67,7 @@ ros2 launch jaguar_control sim2real.launch.py
 
 `sim2real_curpos.launch.py` replaces the former `sim2real_zero.launch.py` entrypoint.
 It selects `pion_controller.py`, `config/sim2real_pion.yaml`,
-`policy_pion_go2_tracking_native_5000_20261119.pt`, and `policy_reference=current`,
+`policy_pion_go2_plane_orient_native_9000_20261119.pt`, and `policy_reference=current`,
 and repeat-initialized five-frame history. Position observations remain calibrated
 `q` relative to0rad. Actions now use **q_target=q_measured+0.25*clipped_action**,
 anchored once per50Hz policy step and held by the200Hz motor loop. They do not
@@ -98,7 +98,7 @@ paused until the first active impedance command.
 See [the current-position guide](docs/current_position.md) for setup, headless
 runs, model provenance and interpretation limits. Real hardware motion with this
 new checkpoint has not been tested. Export and training contracts are recorded
-in `models/deployment_pion_go2_tracking_native_5000_20261119.json`.
+in `models/deployment_pion_go2_plane_orient_native_9000_20261119.json`.
 
 For archived model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with
