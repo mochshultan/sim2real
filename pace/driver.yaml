@@ -1,0 +1,12 @@
+# Isolated standalone CAN driver only; never launch the policy controller with PACE.
+robstride_can_hardware:
+  ros__parameters:
+    rate_hz: 200
+    default_coxa_kp: 45.0
+    default_coxa_kd: 4.5
+    default_kp: 45.0
+    default_kd: 4.5
+    default_knee_kp: 45.0
+    default_knee_kd: 4.5
+    control_torque_limit_nm: 3.0
+    startup_clear_faults: false
