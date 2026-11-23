@@ -1,0 +1,95 @@
+{
+  "checkpoint_file": "model_5000.pt",
+  "checkpoint_iteration": 5000,
+  "checkpoint_sha256": "71d23af08587f3a82a29c1aa761b3273a586a5acc0d13d523de4b07b02c8529f",
+  "policy_file": "policy_pion_qr1_dreamwaq_vhip_native_5000_20261123.pt",
+  "policy_sha256": "6657216cb2630b7c221f1612ae0a23bb743cd2dc7c1c6d171a0ca76c3bd17fca",
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_contract": {
+    "version": 1,
+    "actor_dim": 64,
+    "critic_dim": 259,
+    "history_dim": 225,
+    "march_mode": false,
+    "estimator": "dreamwaq_cenet19",
+    "latent_dim": 16,
+    "actor_order": "policy45,velocity3,context16"
+  },
+  "export_input": [
+    "batch",
+    5,
+    45
+  ],
+  "export_output": [
+    "batch",
+    12
+  ],
+  "estimator_history": "term-major, oldest frame first within each observation term",
+  "joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "clip_actions": 10.0,
+  "control_dt": 0.02,
+  "runtime_gains": {
+    "kp": 45.0,
+    "kd": 4.5
+  },
+  "runtime_standing_pose": {
+    "collar": 0.0,
+    "hip": -1.1,
+    "knee": 1.1
+  },
+  "runtime_profile": "config/sim2real_pion.yaml",
+  "training_run": "2026-11-23_16-41-21_dreamwaq-vhip-entropy002-clearance3cm-no_l2c2-fresh10k-seed42-8192env-gpu0-20261123-164119",
+  "training_task": "Isaac-Velocity-Rough-Pion-QR1-DreamWaQ-VHIP-Adaptive",
+  "l2c2": false,
+  "training_config_available": true,
+  "raw_export": "policy.pt",
+  "raw_export_inputs": {
+    "policy": [
+      "batch",
+      45
+    ],
+    "estimator_history": [
+      "batch",
+      225
+    ]
+  },
+  "inference": {
+    "context": "deterministic cenet.mean_head",
+    "history_normalization_epsilon": 0.01,
+    "actor_normalization_epsilon": 0.01
+  },
+  "validation": {
+    "checkpoint_raw_export_state_tensors_exact_match": 26,
+    "native_training_export_cases": 6,
+    "native_training_export_max_abs_diff": 0.0,
+    "hardware_motion_tested": false
+  },
+  "copied_at_utc": "2026-11-23T11:45:59.073355+00:00",
+  "file_sha256": {
+    "policy.onnx": "d3c8e88ef909eb42fe93ce2c0becd6018e621a9fae5d3b3c24278fb92885989b",
+    "policy.onnx.data": "e11332d48932805d133c370bc6180fe6bf987999d81496b98648de61fff296a5",
+    "agent.yaml": "0e07bc7d59adf0dbeb695880b9d402a7e6268a6d6da0bfb630944852d0d1e3df",
+    "policy.pt": "3a53d97391542c15dece42ee8cbd4d8a64932dc350df9a87a948078a9d95d4a0",
+    "env.yaml": "ad7e8c3265286bb80fc28cd1c541dce3efd8d3cec03776242e3f2ad0e4b6ceaa",
+    "model_5000.pt": "71d23af08587f3a82a29c1aa761b3273a586a5acc0d13d523de4b07b02c8529f",
+    "policy_pion_qr1_dreamwaq_vhip_native_5000_20261123.pt": "6657216cb2630b7c221f1612ae0a23bb743cd2dc7c1c6d171a0ca76c3bd17fca"
+  }
+}

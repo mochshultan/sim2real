@@ -208,4 +208,11 @@ install(FILES models/policy.pt
   DESTINATION share/${PROJECT_NAME}/models
 )
 
+# Install only the native VHIP runtime pair; checkpoints and training CFG stay in source.
+install(FILES
+  models/history/dreamwaq_vhip/policy_pion_qr1_dreamwaq_vhip_native_5000_20261123.pt
+  models/history/dreamwaq_vhip/deployment_pion_qr1_dreamwaq_vhip_native_5000_20261123.json
+  DESTINATION share/${PROJECT_NAME}/models/history/dreamwaq_vhip
+)
+
 ament_package()

@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Pion QR1 DreamWaQ L2C2 height19 checkpoint9999: native history and current-position actions."""
+"""Pion QR1 DreamWaQ VHIP checkpoint5000: native history and current-position actions."""
 
 from pathlib import Path
 
@@ -22,8 +22,8 @@ def generate_launch_description():
             DeclareLaunchArgument("controller_name", default_value="pion_controller", choices=["pion_controller"]),
             DeclareLaunchArgument(
                 "policy_path",
-                default_value=str(package / "models/policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt"),
-                description="Pion QR1 DreamWaQ L2C2 height19 checkpoint9999 with complete CENet inference",
+                default_value=str(package / "models/history/dreamwaq_vhip/policy_pion_qr1_dreamwaq_vhip_native_5000_20261123.pt"),
+                description="Pion QR1 DreamWaQ VHIP checkpoint5000 with complete CENet inference",
             ),
             DeclareLaunchArgument("policy_reference", default_value="current", choices=["current"]),
             DeclareLaunchArgument("history_initialization", default_value="repeat", choices=["repeat"]),
