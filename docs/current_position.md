@@ -1,6 +1,56 @@
 # Pion Current position deployment
 
-The current default is Pion Go2 plane orientation checkpoint **9000**, exported from PC2
+`sim2real` / `bash scripts/run.sh` now defaults to current-position48D.
+
+| Command | ROS launch | Actor/model |
+|---|---|---|
+| `sim2real` or `sim2real --48d` | `sim2real_48d.launch.py` |48D plane orient9999 resume (`20261120b`) |
+| `sim2real --64d` | `sim2real_64d.launch.py` |64D DreamWaQ L2C2 height19_9999 |
+
+Both use measured-position actions, repeated history and the native Pion
+controller. External input remains `[B,5,45]`;48D/64D denotes the internal actor
+input. Startup rejects an export whose actor dimension differs from the preset.
+The48D manifest is
+[here](../models/deployment_pion_qr1_plane_orient_9999_20261120b.json).
+`./scripts/sim2real_curpos` remains an alias for the64D preset.
+
+The 64D launcher selects **checkpoint 9999** from repository commit `0a5cc4b`:
+`models/model_pion_qr1_dreamwaq_l2c2_height19_9999_20261120.pt`.
+The local native export is
+`models/policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt`, with its paired
+[deployment manifest](../models/deployment_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.json).
+It uses the existing current-position Pion runtime profile and named hardware mapping.
+The checkpoint embeds a matching current-position action contract. The new actor
+uses 64D: current observation45 + estimated velocity3 + deterministic context16.
+CENet receives normalized term-major history225. The native export computes both
+heads from the checkpoint; the supplied actor-only exports cannot consume history45.
+Telemetry records the context and normalized CENet input as well as the actor input.
+Training `env.yaml` and `agent.yaml` were not supplied, so full training configuration
+parity (including joint order, observation scales, normalization epsilon, gains and
+physics settings, CENet history epsilon and deterministic mean-context inference) has not been independently verified. Export parity checks use
+the existing Pion exporter conventions. Robot motion and simulation rollout have
+not been tested with this checkpoint.
+
+To reproduce the complete export into a new output path:
+
+```bash
+python3 scripts/export_dreamwaq_policy.py \
+  --checkpoint models/model_pion_qr1_dreamwaq_l2c2_height19_9999_20261120.pt \
+  --output /tmp/policy_dreamwaq_native_9999.pt
+```
+
+The supplied actor export confirms actor normalization epsilon0.01. CENet history
+normalization uses epsilon0.01 and context uses `cenet.mean_head` without random
+sampling; those two training inference conventions still need confirmation from
+the source training implementation. The offline tests independently reconstruct
+this inference graph from checkpoint tensors, compare its actor against the
+supplied actor export, and verify both controller recording paths.
+
+The 9000 training details below document the previous deployment; they do not
+establish the training settings of checkpoint 9999. The launch examples apply
+to the current default.
+
+The previous deployment is Pion Go2 plane orientation checkpoint **9000**, exported from PC2
 while its training continued. The source run is:
 
 ```text

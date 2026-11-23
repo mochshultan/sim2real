@@ -12,8 +12,8 @@ Control nodes, teleoperation tools, calibration utilities, diagnostics, and brin
 | [`parameters.py`](./parameters.py) | Module | CAN IDs, motor directions, calibration offsets, joint names, and nominal standing angles. |
 | [`robstride_motor_lib.py`](./robstride_motor_lib.py) | Module | SocketCAN communication library for RobStride RS actuators with MIT impedance control (`p_des`, `v_des`, `kp`, `kd`, `tau_ff`). |
 
-Current-position entrypoints: `./scripts/sim2real_curpos` runs Pion Current10k
-on hardware; `./scripts/sim2sim_curpos` runs the same controller against MuJoCo
+Current-position entrypoints: `bash scripts/run.sh` defaults to48D;
+`bash scripts/run.sh --64d` and `./scripts/sim2real_curpos` select64D on hardware; `./scripts/sim2sim_curpos` runs the same controller against MuJoCo
 with Viser. `runtime_python.sh` selects the policy interpreter; the MuJoCo bridge
 contains no policy inference. See [the guide](../docs/current_position.md).
 

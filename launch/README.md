@@ -6,12 +6,14 @@ ROS 2 launch files for robot bringup, simulation, sensors, and visualization.
 
 | Launch File | Description | Command |
 | :--- | :--- | :--- |
-| [`sim2real.launch.py`](./sim2real.launch.py) | Starts the serial IMU driver, ros2_control Jaguar hardware (200 Hz), and NXP Jaguar RL controller (50 Hz). | `ros2 launch jaguar_control sim2real.launch.py` |
-| [`sim2real_curpos.launch.py`](./sim2real_curpos.launch.py) | Pion Current10k: measured-position action anchor, clipped actions and repeated history. | `ros2 launch jaguar_control sim2real_curpos.launch.py` |
+| [`sim2real.launch.py`](./sim2real.launch.py) | Default current-position48D profile and shared hardware stack. | `ros2 launch jaguar_control sim2real.launch.py` |
+| [`sim2real_48d.launch.py`](./sim2real_48d.launch.py) | Current-position48D, plane orient9999 resume20261120b. | `ros2 launch jaguar_control sim2real_48d.launch.py` |
+| [`sim2real_64d.launch.py`](./sim2real_64d.launch.py) | Current-position64D, complete DreamWaQ L2C2 height19_9999. | `ros2 launch jaguar_control sim2real_64d.launch.py` |
+| [`sim2real_curpos.launch.py`](./sim2real_curpos.launch.py) | Existing alias for the64D preset. | `ros2 launch jaguar_control sim2real_curpos.launch.py` |
 
-The curpos launcher selects Pion baseline checkpoint9999 and
-`policy_reference=current` before including the shared stack. Sim2sim uses the
-same controller with a Pion MuJoCo feedback bridge and starts no CAN/serial IMU:
+Both presets enforce their actor dimension and select current-position actions
+with repeated history. The policy interface remains `[B,5,45]` in both cases.
+Sim2sim uses the64D preset with a Pion MuJoCo bridge and no CAN/serial IMU:
 
 ```bash
 ros2 launch jaguar_control sim2sim_curpos.launch.py
@@ -23,9 +25,10 @@ has been replaced; old exports remain archived.
 
 ### Arguments for `sim2real.launch.py`
 
-- `policy_reference` (default: `nominal`): Joint reference for observations and action targets. The curpos launcher selects `current`; positions are observed relative to0rad and actions anchor to measured q.
-- `policy_path` (default: `models/policy.pt`): Path to TorchScript policy model.
-- `history_initialization` (default: `zeros`): History cold start; the curpos launcher uses `repeat` for Pion Current10k.
+- `policy_reference` (default: `current`): Joint reference for observations and action targets. The curpos launcher selects `current`; positions are observed relative to0rad and actions anchor to measured q.
+- `policy_path` (default: `models/policy_pion_qr1_plane_orient_9999_20261120b.pt`): Path to TorchScript policy model.
+- `history_initialization` (default: `repeat`): History cold start; the curpos launcher uses `repeat` for Pion Current10k.
+- `actor_input_dim` (default: `48`): Expected internal actor dimension; the64D preset selects64.
 - `with_imu` (default: `true`): Launch serial IMU node.
 - `with_teleop` (default: `true`): Launch the Xbox input source. Xbox has priority while its heartbeat is active.
 - `with_joy` (default: `false`): Launch optional ROS 2 `joy_node`, remapped to `/joy_raw` for the teleop hub.

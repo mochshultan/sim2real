@@ -6,60 +6,43 @@ The robot runtime targets **Ubuntu 24.04 LTS / ROS 2 Jazzy / Python 3.12**.
 For an existing Ubuntu 22.04/Humble installation, follow the
 [Jazzy migration guide](docs/upgrade_jazzy.md) before rebuilding.
 
-### Current policy
+### Current-position deployment
 
-The normal launcher loads `models/policy.pt`, the estimator-only TorchScript
-export of nominal checkpoint **39996**. It continues checkpoint 29996 for
-10,000 updates using the original nominal rewards with 5 cm clearance,
-15% standing commands, and the linear 32 V RS00 actuator approximation.
-The base-height target remains 21 cm with weight -1; the original coxa-standing
-and feet-contact-standing rewards remain active.
+`sim2real` (`bash scripts/run.sh`) defaults to current-position actions with the
+48D actor. Both presets use native Pion joint order, repeat-initialized history,
+Kp45/Kd4.5, action clip10 and `q_target = q_measured + 0.25 * action` at50Hz.
 
-The source checkpoint is
-`models/model_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt`.
-The identical named export is
-`models/policy_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.pt`.
-Its SHA-256 is `bc37ca24b38f2d659cfcccb9d1101219cdc5dc576003ebcd2dd5a4049d48ddcb`.
-The export embeds action clipping at +/-10 before target and previous-action
-feedback. CPU comparisons against the native training actor matched exactly
-for zero/random/stress histories and batches 1/16/64 (maximum difference 0.0).
-The export takes five proprioceptive frames and uses estimated velocity only;
-the privileged critic is not deployed.
+| Preset | Actor input | Default model | Launch file |
+|---|---|---|---|
+| `sim2real` or `sim2real --48d` |45D observation +3D estimated velocity | QR1 plane orient9999 resume (`20261120b`) | `sim2real_48d.launch.py` |
+| `sim2real --64d` |45D observation +3D velocity +16D context | DreamWaQ L2C2 height19_9999 | `sim2real_64d.launch.py` |
 
-Hashes, validation, and actuator assumptions are in
-`models/deployment_adaboot_l2c2_nominal32v_clearance5cm_39996_20261112.json`;
-training snapshots are in the matching model directory. Model 29996 remains
-archived under its versioned filename. No live hardware motion was tested.
+Both exports accept history `[B,5,45]` and return12 actions. The selected actor
+dimension is checked at controller startup. `sim2real.launch.py` also defaults
+to the48D current-position profile. `sim2real_curpos.launch.py` remains the64D
+preset for existing commands and simulation. To change models, select the
+matching dimension launcher and pass an explicit `policy_path:=...`.
 
-Normal and transition gains are Kp 45 / Kd 4.5. The nominal reference remains
-Jaguar's: front hip/knee -1.51/+1.22 rad, rear -1.49/+1.20 rad, rolls 0 rad.
-Observations contain `q - q0`; actions use `q_des = q0 + 0.25 * action`.
-Joint groups retain FR/FL/BR/BL order, without a Pion joint-order adapter.
-The Pion policy and deployment artifacts previously added here were removed.
+The48D checkpoint/export contract is recorded in
+`models/deployment_pion_qr1_plane_orient_9999_20261120b.json`; the64D contract is in
+`models/deployment_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.json`.
+Training configuration snapshots were not supplied for these checkpoints, so
+full training configuration parity and physical motion remain unverified.
 
-### Selecting either Jaguar policy
-
-Use `bash scripts/run.sh` (or the local `sim2real` shortcut) for the current
-nominal model 39996. Add `--old` to use the previous nominal model 29996:
-
-```bash
-sim2real --old
-# Equivalent from the repository:
-bash scripts/run.sh --old
-```
-
-Additional ROS launch arguments are forwarded, for example
-`sim2real --old with_hardware:=false`. Explicit `policy_path:=...`,
-`policy_reference:=...`, or `history_initialization:=...` arguments override
-the preset. Encoder calibration remains the latest local calibration.
+The archived nominal Jaguar29996 profile is available via `sim2real --old`.
+That option selects its legacy controller, configuration and nominal action
+reference. Additional ROS launch arguments are forwarded to all presets.
 
 Choose one launcher per controller session:
 
 ```bash
-# Nominal Jaguar policy39996 (unchanged)
-ros2 launch jaguar_control sim2real.launch.py
+# Default current-position48D
+bash scripts/run.sh
+# Explicit48D /64D current-position launchers
+ros2 launch jaguar_control sim2real_48d.launch.py
+ros2 launch jaguar_control sim2real_64d.launch.py
 
-# Pion Go2 plane orientation checkpoint9000
+# Pion QR1 DreamWaQ L2C2 height19 checkpoint9999
 ./scripts/sim2real_curpos
 # Same controller with a Pion MuJoCo plant, browser visualization, no CAN
 ./scripts/sim2sim_curpos
@@ -67,19 +50,23 @@ ros2 launch jaguar_control sim2real.launch.py
 
 `sim2real_curpos.launch.py` replaces the former `sim2real_zero.launch.py` entrypoint.
 It selects `pion_controller.py`, `config/sim2real_pion.yaml`,
-`policy_pion_go2_plane_orient_native_9000_20261119.pt`, and `policy_reference=current`,
+`policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt`, and `policy_reference=current`,
 and repeat-initialized five-frame history. Position observations remain calibrated
 `q` relative to0rad. Actions now use **q_target=q_measured+0.25*clipped_action**,
 anchored once per50Hz policy step and held by the200Hz motor loop. They do not
 integrate from the preceding target. Standing uses collar0, hip-1.1 and knee+1.1rad on all four legs.
 
-Pion training and the dedicated controller both use FL/FR/BL/BR within each
-joint group. The native export needs no joint permutation and clips actions
+DreamWaQ CENet normalizes history225 and estimates velocity3 plus context16.
+The actor receives observation45 + velocity3 + context16 =64D. The complete
+native export uses the deterministic context mean; supplied actor-only exports
+require augmented64D input and are not the curpos default.
+
+The native export and dedicated controller use FL/FR/BL/BR within each
+joint group, following the established Pion deployment convention. The export applies no joint permutation and clips actions
 to +/-10. Named messages map the native Pion joints to the CAN hardware. The original actor checkpoint and export
 matched exactly for zero/random/stress histories and batches1/16/64.
 
-The normal `sim2real.launch.py` retains its nominal Jaguar policy and 14 Nm
-cap. Pion Current also uses the driver/firmware 14 Nm ceiling, as requested.
+Both current-position presets use the driver/firmware14Nm ceiling.
 Motor calibration remains shared with the physical hardware. The current-position launcher requires an export carrying
 the matching action-reference contract, so an old absolute-zero policy cannot
 silently be used with a measured-position action anchor. Earlier zero policies
@@ -97,8 +84,10 @@ paused until the first active impedance command.
 
 See [the current-position guide](docs/current_position.md) for setup, headless
 runs, model provenance and interpretation limits. Real hardware motion with this
-new checkpoint has not been tested. Export and training contracts are recorded
-in `models/deployment_pion_go2_plane_orient_native_9000_20261119.json`.
+new checkpoint has not been tested. The 9999 checkpoint did not include training
+configuration snapshots; its runtime profile follows the existing Pion deployment.
+Export hashes, checkpoint contracts and verification limits are recorded
+in `models/deployment_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.json`.
 
 For archived model 29996, clearance target is 8 cm, base height target 21 cm, and orientation weight -0.02.
 The training soft torque penalty starts at 13.775 Nm (95% of 14.5 Nm), with

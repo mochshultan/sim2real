@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Pion Go2 plane orientation checkpoint9000: measured-position anchor, zero observation reference."""
+"""Pion QR1 DreamWaQ L2C2 height19 checkpoint9999: native history and current-position actions."""
 
 from pathlib import Path
 
@@ -22,11 +22,12 @@ def generate_launch_description():
             DeclareLaunchArgument("controller_name", default_value="pion_controller", choices=["pion_controller"]),
             DeclareLaunchArgument(
                 "policy_path",
-                default_value=str(package / "models/policy_pion_go2_plane_orient_native_9000_20261119.pt"),
-                description="Pion Go2 plane orientation9k TorchScript, native Pion training joint order",
+                default_value=str(package / "models/policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt"),
+                description="Pion QR1 DreamWaQ L2C2 height19 checkpoint9999 with complete CENet inference",
             ),
             DeclareLaunchArgument("policy_reference", default_value="current", choices=["current"]),
             DeclareLaunchArgument("history_initialization", default_value="repeat", choices=["repeat"]),
+            DeclareLaunchArgument("actor_input_dim", default_value="64", choices=["64"]),
             IncludeLaunchDescription(PythonLaunchDescriptionSource(str(package / "launch/sim2real.launch.py"))),
         ]
     )

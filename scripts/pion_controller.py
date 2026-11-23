@@ -41,6 +41,10 @@ class PionControllerNode(NXPJaguarControllerNode):
     joint_feedback_upper = joint_target_upper + POSITION_LIMIT_TOLERANCE
 
     def _configure_parameters(self):
+        self.declare_parameter("actor_input_dim", 0)
+        self.expected_actor_dim = int(self.get_parameter("actor_input_dim").value)
+        if self.expected_actor_dim not in (0, 48, 64):
+            raise ValueError("actor_input_dim must be 0, 48 or 64")
         policy_path = super()._configure_parameters()
         if self.policy_reference != "current" or self.history_initialization != "repeat":
             raise ValueError("Pion Current requires current reference and repeat history initialization")
@@ -71,6 +75,9 @@ class PionControllerNode(NXPJaguarControllerNode):
             raise ValueError("Pion controller requires the native Pion export; Jaguar-order exports are incompatible")
         if getattr(self.policy, "clip_actions", None) != CLIP_ACTIONS:
             raise ValueError("Pion export must clip actions to [-10,10], matching training")
+        actual_actor_dim = self.policy.policy.mean.numel()
+        if self.expected_actor_dim and actual_actor_dim != self.expected_actor_dim:
+            raise ValueError(f"Actor dimension mismatch: launch expects {self.expected_actor_dim}D, policy uses {actual_actor_dim}D")
         self.get_logger().info(
             f"Pion contract: joints={','.join(JOINT_NAMES)}; dt={CONTROL_DT}; "
             f"q_target=q_measured+{ACTION_SCALE}*action; Kp={KP}; Kd={KD}; "

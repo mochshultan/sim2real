@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from launch import LaunchContext
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable
 from launch_ros.utilities import evaluate_parameters, normalize_parameters
 
 
@@ -49,22 +49,22 @@ class LaunchDomainTests(unittest.TestCase):
 
 
 class LaunchPolicyTests(unittest.TestCase):
-    def curpos_controller_parameters(self, **overrides):
+    def curpos_controller_parameters(self, entrypoint="sim2real_curpos.launch.py", **overrides):
         root = Path(__file__).parents[1]
-        zero_spec = importlib.util.spec_from_file_location("zero_launch", root / "launch/sim2real_curpos.launch.py")
+        zero_spec = importlib.util.spec_from_file_location("zero_launch", root / "launch" / entrypoint)
         zero_module = importlib.util.module_from_spec(zero_spec)
         zero_spec.loader.exec_module(zero_module)
         context = LaunchContext()
         context.launch_configurations.update(with_hardware="false", domain_id="17")
         context.launch_configurations.update(overrides)
         with patch("launch.logging.get_logger"):
-            for action in zero_module.generate_launch_description().entities:
-                if isinstance(action, DeclareLaunchArgument):
-                    action.execute(context)
-            actions = module.generate_launch_description().entities
-            for action in actions:
-                if isinstance(action, DeclareLaunchArgument):
-                    action.execute(context)
+            def declarations(description):
+                for action in description.entities:
+                    if isinstance(action, DeclareLaunchArgument):
+                        action.execute(context)
+                    elif isinstance(action, IncludeLaunchDescription):
+                        declarations(action.launch_description_source.get_launch_description(context))
+            declarations(zero_module.generate_launch_description())
             with patch.object(module, "Node") as node:
                 module._launch_controller(context)
         parameters = evaluate_parameters(context, normalize_parameters(node.call_args.kwargs["parameters"]))
@@ -77,7 +77,7 @@ class LaunchPolicyTests(unittest.TestCase):
         self.assertEqual(parameters[1]["history_initialization"], "repeat")
         self.assertEqual(parameters[1]["session_log_dir"], str(root / "data/sessions/curpos"))
         self.assertEqual(parameters[1]["policy_path"],
-                         str(root / "models/policy_pion_current_height20_swing_native_14999_20261118.pt"))
+                         str(root / "models/policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt"))
         self.assertEqual(context.launch_configurations["with_hardware"], "false")
         self.assertEqual(context.launch_configurations["domain_id"], "17")
 
@@ -90,8 +90,27 @@ class LaunchPolicyTests(unittest.TestCase):
             "policy_path": "/tmp/custom_current.pt", "policy_reference": "current",
             "history_initialization": "repeat",
             "session_log_dir": "/tmp/custom_sessions",
+            "actor_input_dim": 64,
         })
         self.assertEqual(context.launch_configurations["domain_id"], "23")
+
+    def test_default_and_explicit_launchers_match_model_dimensions(self):
+        cases = [("sim2real.launch.py", 48, "policy_pion_qr1_plane_orient_9999_20261120b.pt"),
+                 ("sim2real_48d.launch.py", 48, "policy_pion_qr1_plane_orient_9999_20261120b.pt"),
+                 ("sim2real_64d.launch.py", 64, "policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt")]
+        for entrypoint, dim, filename in cases:
+            context, parameters = self.curpos_controller_parameters(entrypoint=entrypoint)
+            self.assertEqual(parameters[1]["actor_input_dim"], dim)
+            self.assertEqual(parameters[1]["policy_reference"], "current")
+            self.assertEqual(parameters[1]["history_initialization"], "repeat")
+            self.assertEqual(Path(parameters[1]["policy_path"]).name, filename)
+            self.assertEqual(context.launch_configurations["controller_executable"], "pion_controller.py")
+            self.assertEqual(parameters[0].name, "sim2real_pion.yaml")
+
+    def test_dimension_specific_launchers_reject_incompatible_overrides(self):
+        for entrypoint, dim in [("sim2real_48d.launch.py", "64"), ("sim2real_64d.launch.py", "48")]:
+            with self.assertRaises(RuntimeError):
+                self.curpos_controller_parameters(entrypoint=entrypoint, actor_input_dim=dim)
 
     def test_curpos_launcher_rejects_nominal_reference(self):
         with self.assertRaises(RuntimeError):

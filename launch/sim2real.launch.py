@@ -17,6 +17,7 @@ def _launch_controller(context):
         "policy_reference": LaunchConfiguration("policy_reference"),
         "history_initialization": LaunchConfiguration("history_initialization"),
         "session_log_dir": LaunchConfiguration("session_log_dir"),
+        "actor_input_dim": LaunchConfiguration("actor_input_dim"),
     }
     return [Node(
         package="jaguar_control",
@@ -83,8 +84,8 @@ def _launch_hardware(context):
 
 def generate_launch_description():
     pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    default_policy = os.path.join(pkg_dir, "models", "policy.pt")
-    default_config = os.path.join(pkg_dir, "config", "sim2real.yaml")
+    default_policy = os.path.join(pkg_dir, "models", "policy_pion_qr1_plane_orient_9999_20261120b.pt")
+    default_config = os.path.join(pkg_dir, "config", "sim2real_pion.yaml")
 
     # Launch arguments
     domain_id_arg = DeclareLaunchArgument(
@@ -100,16 +101,16 @@ def generate_launch_description():
     policy_path_arg = DeclareLaunchArgument(
         "policy_path",
         default_value=default_policy,
-        description="Path to TorchScript policy; defaults to models/policy.pt",
+        description="Complete 48D actor export; input history remains 5x45D",
     )
     policy_reference_arg = DeclareLaunchArgument(
         "policy_reference",
-        default_value="nominal",
+        default_value="current",
         choices=["nominal", "zero", "current"],
         description="Policy reference; current uses zero-observation reference and measured-position action anchor",
     )
     history_initialization_arg = DeclareLaunchArgument(
-        "history_initialization", default_value="zeros", choices=["zeros", "repeat"],
+        "history_initialization", default_value="repeat", choices=["zeros", "repeat"],
         description="History cold start required by the selected policy",
     )
     with_imu_arg = DeclareLaunchArgument(
@@ -216,9 +217,10 @@ def generate_launch_description():
         LogInfo(msg=["Jaguar DDS domain: ", LaunchConfiguration("domain_id"),
                      "; all remote nodes and CLI terminals must use this domain and matching ROS distro."]),
         config_file_arg,
-        DeclareLaunchArgument("session_log_dir", default_value="~/.ros/jaguar_control/sessions"),
-        DeclareLaunchArgument("controller_executable", default_value="nxp_jaguar_controller.py"),
-        DeclareLaunchArgument("controller_name", default_value="nxp_jaguar_controller"),
+        DeclareLaunchArgument("session_log_dir", default_value=os.path.join(pkg_dir, "data/sessions/curpos")),
+        DeclareLaunchArgument("controller_executable", default_value="pion_controller.py"),
+        DeclareLaunchArgument("controller_name", default_value="pion_controller"),
+        DeclareLaunchArgument("actor_input_dim", default_value="48", choices=["0", "48", "64"]),
         policy_path_arg,
         policy_reference_arg,
         history_initialization_arg,

@@ -46,7 +46,7 @@ class DeploymentContractTests(unittest.TestCase):
         launch_source = (ROOT / "launch/sim2real.launch.py").read_text()
         controller_source = (ROOT / "scripts/nxp_jaguar_controller.py").read_text()
 
-        self.assertIn('os.path.join(pkg_dir, "models", "policy.pt")', launch_source)
+        self.assertIn('os.path.join(pkg_dir, "models", "policy_pion_qr1_plane_orient_9999_20261120b.pt")', launch_source)
         self.assertNotIn("policy_*.pt", launch_source)
         self.assertNotIn("policy_*.pt", controller_source)
 

@@ -1,0 +1,120 @@
+{
+  "checkpoint_file": "model_pion_qr1_plane_orient_9999_20261120b.pt",
+  "checkpoint_iteration": 9999,
+  "checkpoint_sha256": "b1855ef8926ebd0268364fe6f16835b1df355c903a47e17c0747940a222f27e1",
+  "policy_file": "policy_pion_qr1_plane_orient_9999_20261120b.pt",
+  "policy_sha256": "7fcc46737a62a377e04cb6087898311771b4c0599c492f260976a287841afde3",
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_contract": {
+    "version": 1,
+    "actor_dim": 48,
+    "critic_dim": 259,
+    "history_dim": 225,
+    "march_mode": false
+  },
+  "export_input": [
+    "batch",
+    5,
+    45
+  ],
+  "export_output": [
+    "batch",
+    12
+  ],
+  "estimator_history": "term-major, oldest frame first within each observation term",
+  "joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "clip_actions": 10.0,
+  "control_dt": 0.02,
+  "runtime_gains": {
+    "kp": 45.0,
+    "kd": 4.5
+  },
+  "runtime_standing_pose": {
+    "collar": 0.0,
+    "hip": -1.1,
+    "knee": 1.1
+  },
+  "runtime_profile": "config/sim2real_pion.yaml",
+  "provenance": {
+    "repository_commit": "9134c90",
+    "training_config_available": false
+  },
+  "validation": {
+    "checkpoint_actor_parity": [
+      {
+        "batch": 1,
+        "input": "zero",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 1,
+        "input": "random",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 1,
+        "input": "stress",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 16,
+        "input": "zero",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 16,
+        "input": "random",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 16,
+        "input": "stress",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 64,
+        "input": "zero",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 64,
+        "input": "random",
+        "max_abs_diff": 0.0
+      },
+      {
+        "batch": 64,
+        "input": "stress",
+        "max_abs_diff": 0.0
+      }
+    ],
+    "hardware_motion_tested": false,
+    "simulation_rollout_tested": false,
+    "ros_controller_named_feedback_and_target_guards": "passed with expected actor dimension48",
+    "actor_dimension_mismatch_rejection": "passed for48D and64D launch profiles",
+    "ros2_jazzy_build": "jaguar_control and serial_imu passed",
+    "targeted_pytest": "82 passed"
+  },
+  "limitations": [
+    "Training env.yaml and agent.yaml were not included with this checkpoint.",
+    "Native Pion joint order, observation scales, normalization epsilon 0.01, action clipping and runtime profile follow the existing Pion deployment; full training configuration parity is not independently verified.",
+    "Offline inference parity does not validate physical robot motion."
+  ]
+}

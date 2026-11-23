@@ -37,8 +37,15 @@ def infer_with_trace(native_policy, history):
     estimator_input = torch.cat(
         [history[:, :, start:end].reshape(history.shape[0], -1)
          for start, end in ((0, 3), (3, 6), (6, 9), (9, 21), (21, 33), (33, 45))], dim=1)
-    velocity = network.estimator(estimator_input)
-    actor_observation = torch.cat((history[:, -1, :], velocity), dim=1)
+    extra_trace = {}
+    if hasattr(network, "context_head"):
+        normalized_history, velocity, context = network.encode(estimator_input)
+        actor_observation = torch.cat((history[:, -1, :], velocity, context), dim=1)
+        extra_trace = {"estimator_normalized_input": normalized_history[0].tolist(),
+                       "estimator_context": context[0].tolist()}
+    else:
+        velocity = network.estimator(estimator_input)
+        actor_observation = torch.cat((history[:, -1, :], velocity), dim=1)
     actor_input = (actor_observation - network.mean) / (network.std + network.eps)
     actor_output = network.actor(actor_input)
     action = (actor_output.clamp(-network.clip_actions, network.clip_actions)
@@ -51,6 +58,7 @@ def infer_with_trace(native_policy, history):
         "actor_output": actor_output[0].tolist(),
         "policy_output": action[0].tolist(),
     }
+    trace.update(extra_trace)
     return action, trace
 
 

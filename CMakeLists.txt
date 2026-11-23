@@ -171,6 +171,20 @@ install(DIRECTORY config launch urdf meshes sim2sim
   PATTERN "__pycache__" EXCLUDE
 )
 install(FILES models/policy.pt
+  models/policy_pion_qr1_plane_orient_9999_20261120b.pt
+  models/deployment_pion_qr1_plane_orient_9999_20261120b.json
+  models/policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt
+  models/deployment_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.json
+  models/policy_pion_qr1_dreamwaq_clearance_native_6600_20261123.pt
+  models/deployment_pion_qr1_dreamwaq_clearance_native_6600_20261123.json
+  models/policy_pion_qr1_plane_orient_9999_20261120.pt
+  models/deployment_pion_qr1_plane_orient_9999_20261120.json
+  models/policy_pion_qr1_plane_orient_9200_20261120.pt
+  models/deployment_pion_qr1_plane_orient_9200_20261120.json
+  models/policy_pion_current_go2_plane_smooth_4999_20261120.pt
+  models/deployment_pion_current_go2_plane_smooth_4999_20261120.json
+  models/policy_pion_current_go2_plane_orient_1500_20261119.pt
+  models/deployment_pion_current_go2_plane_orient_1500_20261119.json
   models/policy_pion_go2_plane_orient_native_9000_20261119.pt
   models/deployment_pion_go2_plane_orient_native_9000_20261119.json
   models/policy_pion_go2_tracking_native_5000_20261119.pt

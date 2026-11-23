@@ -22,9 +22,51 @@ from pion_policy import JOINT_NAMES, STANDING, infer_with_trace
 
 ROOT = Path(__file__).parents[1]
 NATIVE = ROOT / "models/policy_pion_current_native_9999_20261117.pt"
+CURRENT = ROOT / "models/policy_pion_qr1_dreamwaq_l2c2_height19_native_9999_20261120.pt"
+PREVIOUS = ROOT / "models/policy_pion_qr1_plane_orient_9999_20261120b.pt"
+
+
+@pytest.mark.parametrize("policy_path,expected_dim", [(CURRENT, 48), (PREVIOUS, 64)])
+def test_controller_rejects_model_from_other_actor_dimension(policy_path, expected_dim):
+    rclpy.init(args=["--ros-args", "--params-file", str(ROOT / "config/sim2real_pion.yaml"),
+                     "-p", f"policy_path:={policy_path}", "-p", "policy_reference:=current",
+                     "-p", "history_initialization:=repeat", "-p", "record_session:=false",
+                     "-p", f"actor_input_dim:={expected_dim}"])
+    try:
+        with pytest.raises(ValueError, match="Actor dimension mismatch"):
+            PionControllerNode()
+    finally:
+        rclpy.shutdown()
+
+
+def test_dreamwaq_recording_path_matches_direct_policy_and_describes_context(tmp_path):
+    import json
+    rclpy.init(args=["--ros-args", "--params-file", str(ROOT / "config/sim2real_pion.yaml"),
+                     "-p", f"policy_path:={CURRENT}", "-p", "policy_reference:=current",
+                     "-p", "history_initialization:=repeat", "-p", f"session_log_dir:={tmp_path}",
+                     "-p", "record_session:=true"])
+    node = None
+    try:
+        node = PionControllerNode()
+        history = torch.randn(1, 5, 45, generator=torch.Generator().manual_seed(12))
+        node._session_sample = {}
+        with torch.inference_mode():
+            torch.testing.assert_close(node._infer_temporal_policy(history), node.policy(history), rtol=0, atol=0)
+        assert len(node._session_sample['actor_input']) == 64
+        assert len(node._session_sample['estimator_context']) == 16
+        path = node.session_recorder.path
+        assert node.session_recorder.close()
+        metadata = json.loads(path.read_text().splitlines()[0])
+        assert '64D DreamWaQ' in metadata['inference_trace_fields']['actor_input']
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
 
 
 @pytest.mark.parametrize("policy_path", [
+    CURRENT,
+    PREVIOUS,
     NATIVE, ROOT / "models/policy_pion_current_height20_swing_native_14999_20261118.pt",
 ])
 def test_recorded_inference_matches_export_for_varied_histories(policy_path):
@@ -37,7 +79,10 @@ def test_recorded_inference_matches_export_for_varied_histories(policy_path):
             torch.testing.assert_close(action, policy(history), rtol=0, atol=0)
             assert len(trace['estimator_input']) == 225
             assert len(trace['estimator_output']) == 3
-            assert len(trace['actor_input']) == 48
+            assert len(trace['actor_input']) == policy.policy.mean.numel()
+            if policy_path == CURRENT:
+                assert len(trace['estimator_context']) == 16
+                assert len(trace['actor_input']) == 64
             assert len(trace['actor_output']) == 12
 
 
@@ -60,13 +105,17 @@ def test_native_export_preserves_the_existing_verified_actor_for_named_joint_his
 
 
 @pytest.mark.parametrize("policy_path", [
+    CURRENT,
+    PREVIOUS,
     NATIVE,
     ROOT / "models/policy_pion_current_height20_swing_native_14999_20261118.pt",
 ])
 def test_native_ros_controller_anchors_each_policy_step_to_named_measured_feedback(policy_path):
+    expected_dim = torch.jit.load(str(policy_path)).policy.mean.numel()
     rclpy.init(args=["--ros-args", "--params-file", str(ROOT / "config/sim2real_pion.yaml"),
                      "-p", f"policy_path:={policy_path}", "-p", "policy_reference:=current",
-                     "-p", "history_initialization:=repeat", "-p", "record_session:=false"])
+                     "-p", "history_initialization:=repeat", "-p", "record_session:=false",
+                     "-p", f"actor_input_dim:={expected_dim}"])
     node = None
     try:
         node = PionControllerNode()
