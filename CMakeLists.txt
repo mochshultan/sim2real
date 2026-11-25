@@ -215,4 +215,11 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/models/history/dreamwaq_vhip
 )
 
+# Native mean-context VHIP runtime pair; preserve previous model bundles.
+install(FILES
+  models/history/dreamwaq_vhip_mean_10k/policy_pion_qr1_dreamwaq_vhip_mean_native_9999_20261125.pt
+  models/history/dreamwaq_vhip_mean_10k/deployment_pion_qr1_dreamwaq_vhip_mean_native_9999_20261125.json
+  DESTINATION share/${PROJECT_NAME}/models/history/dreamwaq_vhip_mean_10k
+)
+
 ament_package()

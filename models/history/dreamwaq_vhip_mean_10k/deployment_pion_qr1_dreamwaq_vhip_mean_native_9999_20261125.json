@@ -1,0 +1,90 @@
+{
+  "checkpoint_file": "model_9999.pt",
+  "checkpoint_iteration": 9999,
+  "checkpoint_sha256": "aa57b9d4d5509cf173b79d2ef5cf8bb1a7525c9ddb71b5279ee24eba8dac7e2a",
+  "policy_file": "policy_pion_qr1_dreamwaq_vhip_mean_native_9999_20261125.pt",
+  "policy_sha256": "13d2a92d7d9fa19d8c54e5a59c8ecb719f1aa0973422bf9fc752ccc67ffa5f64",
+  "training_run": "2026-11-24_23-31-42_ppo-vhip-contextmean-fresh10000-seed42-8192env-gpu0-20261124-175956",
+  "training_task": "Isaac-Velocity-Rough-Pion-QR1-DreamWaQ-VHIP-Adaptive",
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_contract": {
+    "version": 1,
+    "actor_dim": 64,
+    "critic_dim": 259,
+    "history_dim": 225,
+    "march_mode": false,
+    "estimator": "dreamwaq_cenet19",
+    "latent_dim": 16,
+    "actor_order": "policy45,velocity3,context16",
+    "context_mode": "mean"
+  },
+  "export_input": [
+    "batch",
+    5,
+    45
+  ],
+  "export_output": [
+    "batch",
+    12
+  ],
+  "estimator_history": "term-major, oldest frame first within each observation term",
+  "joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "clip_actions": 10.0,
+  "control_dt": 0.02,
+  "runtime_gains": {
+    "kp": 45.0,
+    "kd": 4.5
+  },
+  "runtime_standing_pose": {
+    "collar": 0.0,
+    "hip": -1.1,
+    "knee": 1.1
+  },
+  "runtime_profile": "config/sim2real_pion.yaml",
+  "l2c2": false,
+  "context_mode": "mean",
+  "raw_export": "policy.pt",
+  "raw_export_inputs": {
+    "policy": [
+      "batch",
+      45
+    ],
+    "estimator_history": [
+      "batch",
+      225
+    ]
+  },
+  "validation": {
+    "raw_export_state_tensors_equal_checkpoint": 26,
+    "native_training_export_cases": 12,
+    "native_training_export_max_abs_diff": 0.0,
+    "hardware_motion_tested": false,
+    "ros_controller_loader_manifest_64d_trace": "passed in isolated ROS domain; node not spun"
+  },
+  "copied_at_utc": "2026-11-25T13:28:22.112457+00:00",
+  "file_sha256": {
+    "model_9999.pt": "aa57b9d4d5509cf173b79d2ef5cf8bb1a7525c9ddb71b5279ee24eba8dac7e2a",
+    "policy_pion_qr1_dreamwaq_vhip_mean_native_9999_20261125.pt": "13d2a92d7d9fa19d8c54e5a59c8ecb719f1aa0973422bf9fc752ccc67ffa5f64",
+    "agent.yaml": "e1f1b85058215cb0562af33eab7d6df711236259a0c7e7c249ea63a65748a976",
+    "policy.pt": "a6d71b57a6c03ddd3d8f10dd9177d636a0178c2934ecdace86464a6be2a6b1ea",
+    "env.yaml": "f190be853a0622c3619c90e97cae6bd656229b1a6a63cb90d4b2af65e117b7e6"
+  }
+}
