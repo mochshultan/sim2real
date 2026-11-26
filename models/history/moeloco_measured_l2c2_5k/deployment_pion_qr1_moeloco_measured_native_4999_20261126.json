@@ -1,0 +1,108 @@
+{
+  "policy_file": "policy_pion_qr1_moeloco_measured_native_4999_20261126.pt",
+  "policy_sha256": "5b53d77c3ec11991997f1eda8a7a8453efd05fb3d09ed1415ab989cbe3663fc4",
+  "checkpoint_file": "model_4999.pt",
+  "checkpoint_iteration": 4999,
+  "checkpoint_sha256": "51d123325a8433f25741abedc1e2571fc502759f1f8017038c753c1a9fc946bc",
+  "training_run": "2026-11-25_17-44-28_moeloco-measured-vhip-oracleprior-ramp01-contextmean-l2c2-oracle2k-adapt3k-fresh-seed42-8192env-gpu0-20261125-174426",
+  "training_task": "Isaac-Velocity-Rough-Pion-QR1-Measured-MoELoco-L2C2-Adaptive",
+  "action_contract": {
+    "version": 1,
+    "reference": "current_joint_position",
+    "scale": 0.25,
+    "anchor": "policy_step"
+  },
+  "observation_contract": {
+    "version": 1,
+    "actor_dim": 64,
+    "critic_dim": 259,
+    "history_dim": 225,
+    "march_mode": false,
+    "estimator": "moeloco_cenet19_contact_oracle",
+    "latent_dim": 16,
+    "actor_order": "policy45,velocity3,context16",
+    "actor_experts": 4,
+    "critic_experts": 4,
+    "shared_router": true,
+    "context_mode": "mean",
+    "context_prior_mode": "oracle",
+    "adaboot_max_increase": 0.01
+  },
+  "training_stages": {
+    "oracle_iterations": 2000,
+    "completed_updates": 5000,
+    "oracle": "velocity3,encoded_tibia_contact_forces16",
+    "context_loss_coef": 1.0
+  },
+  "l2c2": true,
+  "export_input": [
+    "batch",
+    5,
+    45
+  ],
+  "export_output": [
+    "batch",
+    12
+  ],
+  "joint_order": [
+    "FL_collar_joint",
+    "FR_collar_joint",
+    "BL_collar_joint",
+    "BR_collar_joint",
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "BL_hip_joint",
+    "BR_hip_joint",
+    "FL_knee_joint",
+    "FR_knee_joint",
+    "BL_knee_joint",
+    "BR_knee_joint"
+  ],
+  "estimator_history": "term-major, oldest frame first within term",
+  "context_mode": "mean",
+  "actor_experts": 4,
+  "shared_router": true,
+  "clip_actions": 10.0,
+  "control_dt": 0.02,
+  "runtime_gains": {
+    "kp": 45.0,
+    "kd": 4.5
+  },
+  "runtime_standing_pose": {
+    "collar": 0.0,
+    "hip": -1.1,
+    "knee": 1.1
+  },
+  "runtime_profile": "config/sim2real_pion.yaml",
+  "robot": "Pion QR1 measured URDF20261124, total mass10.69kg",
+  "raw_export": "policy.pt",
+  "raw_export_inputs": {
+    "policy": [
+      "batch",
+      45
+    ],
+    "estimator_history": [
+      "batch",
+      225
+    ]
+  },
+  "validation": {
+    "raw_export_state_tensors_equal_checkpoint": 56,
+    "training_actor_export_equal_on_zero_observation": true,
+    "native_training_export_cases": 12,
+    "native_training_export_max_abs_diff": 0.0,
+    "hardware_motion_tested": false,
+    "ros_controller_loader_manifest_and_trace": "passed in isolated ROS domain; node not spun",
+    "regression_tests": "3 passed: MoE re-export/trace, dedicated launcher selection, unchanged PPO re-export"
+  },
+  "copied_at_utc": "2026-11-26T01:27:20.135786+00:00",
+  "file_sha256": {
+    "policy_pion_qr1_moeloco_measured_native_4999_20261126.pt": "5b53d77c3ec11991997f1eda8a7a8453efd05fb3d09ed1415ab989cbe3663fc4",
+    "agent.yaml": "f7ac801b84922bc3561b0f649891bb1c4229931182c7c5cddfbabcc471f8ef19",
+    "model_4999.pt": "51d123325a8433f25741abedc1e2571fc502759f1f8017038c753c1a9fc946bc",
+    "policy.pt": "38ae469c29fe9190ebd450ed5822ceb4b4c3971ae88659097bcc2827e2e3e12d",
+    "asset_validation_report.json": "1e6d6033f6e18ab3ac30c60f9157f0e044c276b3581b5670ada6fb4a5902a372",
+    "env.yaml": "ca36d8c36dc0979dc2ddaab8955fc99393a8b37d74192af4f1f0af1ad33b0361",
+    "asset_source_manifest.json": "dc41639eb1bd77e952d18573def5dd71dd830eea958c0843ee81e0fe7c7b2fb6"
+  }
+}

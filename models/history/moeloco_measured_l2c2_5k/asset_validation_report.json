@@ -1,0 +1,25 @@
+{
+  "entrypoint": "/home/shultan/IsaacLab-upgrade/resources/pion_qr1_measured_20261124.usd/pion_qr1_train.usda",
+  "colors_mesh_counts": {
+    "red": 16,
+    "black": 10
+  },
+  "collision_convex_hulls": 13,
+  "rigid_bodies": 13,
+  "total_mass_kg": 10.689999788999557,
+  "revolute_joints": 12,
+  "unresolved_assets": [],
+  "physics_variant": "physx (parsed by Newton MJWarp)",
+  "inertial_frame_note": "URDF masses/COM/inertias retained; agreement with re-exported mesh frames unverified in canonical URDF",
+  "joint_drives": "none: importer warning about missing gains intentional; task supplies explicit RS00 PD",
+  "newton_smoke": {
+    "host": "PC2",
+    "num_envs": 4,
+    "updates": 2,
+    "oracle_updates": 1,
+    "stage_transition": "passed",
+    "invalid_physics_fraction": 0.0,
+    "fallen_fraction": 0.0,
+    "scope": "asset integration smoke using existing MoE L2C2 rewards; final new pipeline reward still awaiting user selection"
+  }
+}

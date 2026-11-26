@@ -222,4 +222,11 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/models/history/dreamwaq_vhip_mean_10k
 )
 
+# Complete native MoE policy and paired manifest for the dedicated launcher.
+install(FILES
+  models/history/moeloco_measured_l2c2_5k/policy_pion_qr1_moeloco_measured_native_4999_20261126.pt
+  models/history/moeloco_measured_l2c2_5k/deployment_pion_qr1_moeloco_measured_native_4999_20261126.json
+  DESTINATION share/${PROJECT_NAME}/models/history/moeloco_measured_l2c2_5k
+)
+
 ament_package()

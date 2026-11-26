@@ -15,9 +15,10 @@ Kp45/Kd4.5, action clip10 and `q_target = q_measured + 0.25 * action` at50Hz.
 | Preset | Actor input | Default model | Launch file |
 |---|---|---|---|
 | `sim2real` or `sim2real --48d` |45D observation +3D estimated velocity | QR1 plane orient9999 resume (`20261120b`) | `sim2real_48d.launch.py` |
-| `sim2real --64d` |45D observation +3D velocity +16D context | DreamWaQ L2C2 height19_9999 | `sim2real_64d.launch.py` |
+| `sim2real --64d` |45D observation +3D velocity +16D context | PPO VHIP mean-context9999 | `sim2real_64d.launch.py` |
+| MoE (ROS launch directly) |45D observation +3D velocity +16D context | Measured-URDF MoE-Loco L2C2_4999, four experts | `sim2real_moe.launch.py` |
 
-Both exports accept history `[B,5,45]` and return12 actions. The selected actor
+All presets accept history `[B,5,45]` and return12 actions. The selected actor
 dimension is checked at controller startup. `sim2real.launch.py` also defaults
 to the48D current-position profile. `sim2real_curpos.launch.py` remains the64D
 preset for existing commands and simulation. To change models, select the
@@ -336,3 +337,34 @@ by normal bringup. Their roles and commands are listed in
 
 This repository deploys ROS 2 control. ROS 1 nodes/launches and the incomplete
 MuJoCo launch have been removed; simulation belongs to the training workspace.
+
+
+### Pion MoE-Loco launcher
+
+```bash
+colcon build --packages-select jaguar_control --symlink-install
+source install/setup.bash
+ros2 launch jaguar_control sim2real_moe.launch.py
+```
+
+The dedicated launcher selects the complete native MoE/CENet export in
+`models/history/moeloco_measured_l2c2_5k/`. It includes the current-position
+controller settings and accepts the same launch arguments. The existing PPO
+launcher/default model is unchanged. The selected MoE was trained with the
+measured Pion URDF, VHIP rewards, L2C2, oracle-centred KL, context mean and
+AdaBoot max increase0.01: 2000 oracle +3000 adaptation updates, checkpoint4999.
+
+Controller input remains `[B,5,45]`, actor/router input64, output12 native Pion
+actions. The export includes velocity/context estimation, four action experts
+and their softmax router, with no privileged contact input, critic or LSTM.
+The paired manifest records the checkpoint, saved config, asset provenance,
+hashes and offline validation; hardware motion is not validated here.
+
+To export another compatible checkpoint from this repository:
+
+```bash
+python scripts/export_moeloco_policy.py --checkpoint /path/model_4999.pt --output /path/native_moe.pt
+```
+
+The standalone exporter does not overwrite files. A deployed versioned policy
+also needs its matching `deployment_*.json` manifest, as checked by the controller.

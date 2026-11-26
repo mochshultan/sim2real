@@ -17,7 +17,7 @@ class DreamWaQPolicy(nn.Module):
     Training configuration is required to independently confirm that convention.
     """
 
-    def __init__(self, state):
+    def __init__(self, state, actor=None):
         super().__init__()
         self.eps = 0.01
         self.clip_actions = 10.0
@@ -30,7 +30,7 @@ class DreamWaQPolicy(nn.Module):
                                      nn.Linear(128, 64), nn.ELU())
         self.velocity_head = nn.Linear(64, 3)
         self.context_head = nn.Linear(64, 16)
-        self.actor = nn.Sequential(nn.Linear(64, 512), nn.ELU(),
+        self.actor = actor if actor is not None else nn.Sequential(nn.Linear(64, 512), nn.ELU(),
                                    nn.Linear(512, 256), nn.ELU(),
                                    nn.Linear(256, 128), nn.ELU(), nn.Linear(128, 12))
         for module, prefix in ((self.encoder, "cenet.encoder."),

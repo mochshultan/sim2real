@@ -1,0 +1,11 @@
+{
+  "canonical_urdf": "/home/shultan/workspace/pion_qr1_ws/src/pion_qr1_ros2/pion_qr1_mechanical/pion_qr1_description/urdf/pion_qr1.urdf",
+  "source_sha256": "adeccb66a1a9c2e2c48f85c5a788496e743cce705b8e3db8225d25959fc56a60",
+  "training_changes": [
+    "coxa/tibia red; base/femur black",
+    "visual meshes copied to collision shapes",
+    "simulation joint limits inherited from existing Pion task; new URDF provides no physical limits",
+    "zero joint drives; explicit RS00 actuator used by task"
+  ],
+  "canonical_modified": false
+}
